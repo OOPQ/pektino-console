@@ -300,6 +300,12 @@ function Handle-Request {
                 Send-Json -Stream $Stream -Object ([pscustomobject]$r)
                 return
             }
+            '/api/refresh-url' {
+                $tokens = @()
+                if ($body.tokens) { $tokens = @($body.tokens | ForEach-Object { [string]$_ }) }
+                Send-Json -Stream $Stream -Object ([pscustomobject](Refresh-ItemUrls -Tokens $tokens))
+                return
+            }
             '/api/project/open' {
                 try { Start-Process explorer.exe $WS.ProjectRoot; Send-Json -Stream $Stream -Object @{ ok = $true; path = $WS.ProjectRoot } }
                 catch { Send-Json -Stream $Stream -Object @{ ok = $false; error = $_.Exception.Message } }

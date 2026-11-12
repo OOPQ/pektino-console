@@ -91,6 +91,7 @@ function ctxItemsFor(row) {
     { act: 'delete', label: '🗑 删除本地文件（回收站）', off: !hasFile },
     { act: 'purge', label: '🗑 删除文件并从台账移除' },
     { sep: true },
+    { act: 'refresh', label: '🔄 刷新源地址（下架/换源后重试用）' },
     { act: 'open', label: '在站点打开' }
   ];
 }
@@ -124,6 +125,13 @@ async function onCtxAction(act) {
     case 'copy': return copyText(row.url || '', 'URL 已复制');
     case 'thunder': return copyText(thunderUrl(row.url || ''), 'thunder:// 已复制');
     case 'copytoken': return copyText(tk, 'token 已复制');
+    case 'refresh': {
+      const r = await api('/api/refresh-url', { tokens: [tk] });
+      if (!r.ok) return toast('刷新失败：' + r.error, 4000);
+      toast(`源地址：更新 ${r.refreshed}，未变 ${r.unchanged}，已下架 ${r.removed}`, 4500);
+      load();
+      return;
+    }
     case 'open': return window.open(siteUrl(tk), '_blank');
     case 'download': {
       const r2 = await api('/api/download', { tokens: [tk] });

@@ -578,8 +578,24 @@ function Start-Download {
     } else {
         $targets = @($State.Ledger | Where-Object { $_.url -and -not $_.file_name -and $_.status -eq $Status })
     }
+    # 失败/下架的条目：先把源地址刷新一遍（站点可能换了 CDN 路径）
+    $stale = @($targets | Where-Object { $_.note -like 'dead:*' -or $_.note -like 'removed*' })
+    $skippedDead = 0
+    if ($stale.Count -gt 0) {
+        $null = Refresh-ItemUrls -Tokens @($stale | ForEach-Object { $_.token })
+        # 刷新后仍下架（removed）或源仍 404/403（dead:http:*）→ 本轮跳过，别反复撞墙
+        $still = @($targets | Where-Object { $_.note -eq 'removed' -or $_.note -like 'dead:http:*' })
+        if ($still.Count -gt 0) {
+            $skippedDead = $still.Count
+            $targets = @($targets | Where-Object { $_.note -ne 'removed' -and $_.note -notlike 'dead:http:*' })
+        }
+    }
+
     if ($Limit -gt 0) { $targets = @($targets | Select-Object -First $Limit) }
-    if (-not $targets.Count) { return @{ ok = $false; error = '没有可下载的条目' } }
+    if (-not $targets.Count) {
+        if ($skippedDead -gt 0) { return @{ ok = $false; error = "这些视频站点上已下架，无法下载（共 $skippedDead 条）" } }
+        return @{ ok = $false; error = '没有可下载的条目' }
+    }
 
     $queue = @($targets | ForEach-Object { [pscustomobject]@{ token = $_.token; url = $_.url } })
     (ConvertTo-Json -InputObject $queue -Depth 4) | Set-Content -Path $DlQueue -Encoding UTF8 -Force
@@ -606,7 +622,7 @@ function Start-Download {
 
     $proxyText = if ($proxy) { "，代理 $proxy" } else { '，代理跟随系统' }
     Write-Log 'download' "开始下载 $($queue.Count) 条（并发 $conc$proxyText）→ $dir"
-    [pscustomobject]@{ ok = $true; count = $queue.Count; dir = $dir; concurrent = $conc; proxy = $proxy }
+    [pscustomobject]@{ ok = $true; count = $queue.Count; dir = $dir; concurrent = $conc; proxy = $proxy; skipped = $skippedDead }
 }
 
 function Revert-Downloading {
@@ -839,4 +855,109 @@ function Test-UrlDeadNow {
         $code = ([string]$code).Trim()
         return ($code -eq '403' -or $code -eq '404' -or $code -eq '410')
     } catch { return $false }
+}
+
+# ---------------- 源地址刷新 ----------------
+
+function Get-DetailVideoInfo {
+    <#  抓详情页的 JSON-LD。返回 @{url;cover} 或 $null（页面在但没有 VideoObject = 已下架） #>
+    param([string]$Token)
+    try { Add-Type -AssemblyName System.Net.Http -ErrorAction SilentlyContinue } catch { }
+    $handler = New-Object System.Net.Http.HttpClientHandler
+    $handler.AutomaticDecompression = [System.Net.DecompressionMethods]::GZip -bor [System.Net.DecompressionMethods]::Deflate
+    if ($Config.proxy) {
+        $handler.Proxy = New-Object System.Net.WebProxy([string]$Config.proxy)
+        $handler.UseProxy = $true
+    }
+    $client = New-Object System.Net.Http.HttpClient($handler)
+    $client.Timeout = [TimeSpan]::FromSeconds(25)
+    $client.DefaultRequestHeaders.UserAgent.ParseAdd('Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0')
+    try {
+        $html = $client.GetStringAsync("https://pektino.com/zh-CN/movie/$Token").GetAwaiter().GetResult()
+    } catch {
+        $client.Dispose()
+        return @{ error = $_.Exception.Message }
+    } finally {
+        try { $client.Dispose() } catch { }
+    }
+    foreach ($m in [regex]::Matches($html, '<script type="application/ld\+json">(.*?)</script>', 'Singleline')) {
+        try {
+            $j = $m.Groups[1].Value | ConvertFrom-Json
+            if ($j.'@type' -eq 'VideoObject') {
+                return @{ url = [string]$j.contentUrl; cover = [string]$j.thumbnailUrl; duration = [string]$j.duration }
+            }
+        } catch { }
+    }
+    return $null
+}
+
+function Refresh-ItemUrls {
+    <#  重新抓详情页，更新 contentUrl/封面；返回 refreshed/unchanged/removed/error 计数
+        removed = 页面还在但已经没有视频（站点下架），重试也不会成功  #>
+    param([string[]]$Tokens)
+
+    if (-not $Tokens -or -not $Tokens.Count) { return @{ ok = $false; error = '没指定条目' } }
+    $refreshed = 0; $unchanged = 0; $removed = 0; $errors = 0
+
+    foreach ($tk in $Tokens) {
+        $row = $State.Ledger | Where-Object { $_.token -eq $tk } | Select-Object -First 1
+        if (-not $row) { continue }
+        $info = Get-DetailVideoInfo -Token $tk
+
+        if ($null -eq $info) {
+            $row.note = 'removed'
+            $removed++
+            continue
+        }
+        if ($info.error) { $errors++; continue }
+
+        $newUrl = [string]$info.url
+        if (-not $newUrl) { $row.note = 'removed'; $removed++; continue }
+
+        if ($newUrl -ne [string]$row.url) {
+            $row.url = $newUrl
+            $row.note = 'refresh:url'
+            $refreshed++
+        } else {
+            # URL 没变：再确认一次源文件是否真的还在
+            $code = Get-UrlStatusCode -Url $newUrl
+            if ($code -eq 200 -or $code -eq 206) {
+                if ($row.note -like 'dead:*' -or $row.note -eq 'removed') { $row.note = 'url-ok' }
+                $unchanged++
+            } else {
+                $row.note = "dead:http:$code"
+                $unchanged++
+            }
+        }
+    }
+
+    Save-Ledger -Rows $State.Ledger -Path $LedgerPath
+    Touch-State
+    Write-Log 'refresh' "刷新源地址：更新 $refreshed，未变 $unchanged，已下架 $removed，出错 $errors"
+    return @{ ok = $true; refreshed = $refreshed; unchanged = $unchanged; removed = $removed; errors = $errors }
+}
+
+function Get-UrlStatusCode {
+    <#  用 1 字节 Range GET 拿 HTTP 状态码；失败返回 0  #>
+    param([string]$Url)
+    if (-not $Url) { return 0 }
+    $curl = (Get-Command curl.exe -ErrorAction SilentlyContinue).Source
+    if (-not $curl) { $curl = 'C:\Windows\System32\curl.exe' }
+    $proxy = [string]$Config.proxy
+    if (-not $proxy) {
+        try {
+            $reg = Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Internet Settings' -ErrorAction Stop
+            if ($reg.ProxyEnable -eq 1 -and $reg.ProxyServer) {
+                $proxy = [string]$reg.ProxyServer
+                if ($proxy -notmatch '^[a-z]+://') { $proxy = 'http://' + $proxy }
+            }
+        } catch { }
+    }
+    try {
+        $a = @('-sS', '-o', 'NUL', '-w', '%{http_code}', '-r', '0-0', '--max-time', '15', '-L')
+        if ($proxy) { $a += @('-x', $proxy) }
+        $a += $Url
+        $code = (& $curl @a 2>$null)
+        return [int]([string]$code).Trim()
+    } catch { return 0 }
 }

@@ -1,13 +1,13 @@
 ﻿#Requires -Version 5.1
 <#
 .SYNOPSIS
-  整理工作区：把根目录下的 mp4 收进 videos\ 子目录，库/封面/日志保持在外层。
+  整理工作区：把根目录下的 mp4 收进 content\ 子目录，库/封面/日志保持在外层。
 .DESCRIPTION
   目标结构：
     <workspace>\
       data.db  ledger.csv
       covers\  thumbs\  logs\  exports\
-      videos\            ← 所有 mp4 放这里（下载目录指向它）
+      content\            ← 所有 mp4 放这里（内容目录指向它）
       其他自定义文件夹    ← 不动
 
   好处：文件名不和工作区里的配置/库混在一起，加新类型（音乐、字幕）也好扩展。
@@ -43,10 +43,10 @@ if (-not $Workspace) {
     }
 }
 $Workspace = [System.IO.Path]::GetFullPath($Workspace)
-$videosDir = Join-Path $Workspace 'videos'
+$contentDirPath = Join-Path $Workspace 'content'
 
 Write-Host "工作区: $Workspace" -ForegroundColor DarkGray
-Write-Host "视频目录: $videosDir" -ForegroundColor DarkGray
+Write-Host "视频目录: $contentDirPath" -ForegroundColor DarkGray
 
 $mp4 = @(Get-ChildItem -Path $Workspace -Filter '*.mp4' -File -ErrorAction SilentlyContinue)
 $part = @(Get-ChildItem -Path $Workspace -Filter '*.mp4.part' -File -ErrorAction SilentlyContinue)
@@ -56,35 +56,35 @@ if ($DryRun) {
     $mp4 | Select-Object -First 10 | ForEach-Object { Write-Host ("  [dry-run] {0}" -f $_.Name) }
     if ($mp4.Count -gt 10) { Write-Host ("  ... 还有 {0} 个" -f ($mp4.Count - 10)) }
     Write-Host ''
-    Write-Host '[dry-run] 将把 workspace.json 的 downloadDir 设为 videos' -ForegroundColor Yellow
+    Write-Host '[dry-run] 将把 workspace.json 的 contentDir 设为 videos' -ForegroundColor Yellow
     exit 0
 }
 
-if (-not (Test-Path $videosDir)) { New-Item -ItemType Directory -Path $videosDir -Force | Out-Null }
+if (-not (Test-Path $contentDirPath)) { New-Item -ItemType Directory -Path $contentDirPath -Force | Out-Null }
 
 $moved = 0; $skipped = 0
 foreach ($f in ($mp4 + $part)) {
-    $dest = Join-Path $videosDir $f.Name
+    $dest = Join-Path $contentDirPath $f.Name
     if (Test-Path -LiteralPath $dest) {
         # 目标已有同名文件：保留两个，加序号
         $base = [System.IO.Path]::GetFileNameWithoutExtension($f.Name)
         $ext = [System.IO.Path]::GetExtension($f.Name)
         $i = 1
         do {
-            $dest = Join-Path $videosDir ("{0} ({1}){2}" -f $base, $i, $ext)
+            $dest = Join-Path $contentDirPath ("{0} ({1}){2}" -f $base, $i, $ext)
             $i++
         } while (Test-Path -LiteralPath $dest)
     }
     Move-Item -LiteralPath $f.FullName -Destination $dest
     $moved++
 }
-Write-Host "已移动 $moved 个文件到 videos\" -ForegroundColor Green
+Write-Host "已移动 $moved 个文件到 content\" -ForegroundColor Green
 
 # 更新 workspace.json + config.json
 $cfg = $null
 if (Test-Path $wsFile) { $cfg = Get-Content $wsFile -Raw -Encoding UTF8 | ConvertFrom-Json }
 if (-not $cfg) { $cfg = [pscustomobject]@{ version = 1; name = 'pektino'; dataDir = $Workspace } }
-$cfg | Add-Member -NotePropertyName downloadDir -NotePropertyValue 'videos' -Force
+$cfg | Add-Member -NotePropertyName contentDir -NotePropertyValue 'content' -Force
 $cfg | Add-Member -NotePropertyName dataDir -NotePropertyValue ([string]$cfg.dataDir) -Force
 ($cfg | ConvertTo-Json -Depth 4) | Set-Content -Path $wsFile -Encoding UTF8 -Force
 
@@ -96,9 +96,9 @@ if (Test-Path $cfgFile) {
         foreach ($p in $old.PSObject.Properties) { $appCfg[$p.Name] = $p.Value }
     } catch { }
 }
-$appCfg['downloadDir'] = 'videos'     # 相对工作区，跟着目录走
+$appCfg['contentDir'] = 'content'     # 相对工作区，跟着目录走
 ($appCfg | ConvertTo-Json -Depth 4) | Set-Content -Path $cfgFile -Encoding UTF8 -Force
 
 Write-Host ''
-Write-Host "已更新配置：downloadDir = videos（相对工作区）" -ForegroundColor Green
+Write-Host "已更新配置：contentDir = videos（相对工作区）" -ForegroundColor Green
 Write-Host '重新启动控制台即可。' -ForegroundColor Cyan

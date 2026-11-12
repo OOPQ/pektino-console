@@ -6,6 +6,6 @@
     "logsDir":  "logs",
     "exportsDir":  "exports",
     "createdAt":  "2026-11-13T04:16:59",
-    "downloadDir":  "videos",
-    "dataDir":  "tools\\H"
+    "dataDir":  "tools\\H",
+    "contentDir":  "content"
 }

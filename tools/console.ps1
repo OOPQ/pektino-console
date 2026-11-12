@@ -80,17 +80,17 @@ $DlProgress = Join-Path $WS.DataDir 'download.json'
 $DlCancel = Join-Path $WS.DataDir '.dl-cancel.json'
 
 # ---------- 内存态 ----------
-$Config = Read-Config -Root $Root -DataDir $WS.DataDir -DefaultDownloadDir $WS.Downloads
+$Config = Read-Config -Root $Root -DataDir $WS.DataDir -DefaultContentDir $WS.Content
 # 配置里的相对路径按项目根解析（跟着项目走，方便整目录搬移）
-if ($Config.downloadDir -and -not [System.IO.Path]::IsPathRooted([string]$Config.downloadDir)) {
+if ($Config.contentDir -and -not [System.IO.Path]::IsPathRooted([string]$Config.contentDir)) {
     # 相对路径按「数据目录」解析（例如 videos → <workspace>\videos）
-    $Config.downloadDir = [System.IO.Path]::GetFullPath((Join-Path $WS.DataDir ([string]$Config.downloadDir)))
+    $Config.contentDir = [System.IO.Path]::GetFullPath((Join-Path $WS.DataDir ([string]$Config.contentDir)))
 }
 $State = @{
     Ledger = @(Read-Ledger -Path $LedgerPath)
     Log    = New-Object System.Collections.ArrayList
     Busy   = $false
-    Files  = @{ Files = @{}; Partial = @(); Dir = $Config.downloadDir; Exists = $false }
+    Files  = @{ Files = @{}; Partial = @(); Dir = $Config.contentDir; Exists = $false }
     Scan   = $null
     Job    = $null
     Rev    = 0
@@ -243,7 +243,7 @@ function Handle-Request {
                 log     = @($State.Log | Select-Object -Last 40)
                 job     = (Get-JobInfo)
                 download = (Get-DownloadInfo)
-                workspace = (Get-WorkspaceSummary -Paths $WS -Downloads $Config.downloadDir)
+                workspace = (Get-WorkspaceSummary -Paths $WS -Content $Config.contentDir)
                 settings = [pscustomobject]@{ proxy = [string]$Config.proxy; concurrent = $(if ($Config.concurrent) { [int]$Config.concurrent } else { 3 }) }
                 metrics = [pscustomobject]@{
                     total        = $State.Metrics.total
@@ -278,7 +278,7 @@ function Handle-Request {
     }
 
     if ($method -eq 'GET' -and $path -eq '/api/workspace') {
-        Send-Json -Stream $Stream -Object ([pscustomobject]@{ ok = $true; workspace = (Get-WorkspaceSummary -Paths $WS -Downloads $Config.downloadDir) })
+        Send-Json -Stream $Stream -Object ([pscustomobject]@{ ok = $true; workspace = (Get-WorkspaceSummary -Paths $WS -Content $Config.contentDir) })
         return
     }
 
@@ -456,19 +456,19 @@ function Handle-Request {
             '/api/config' {
                 if ($body.proxy -ne $null) { $Config | Add-Member -NotePropertyName proxy -NotePropertyValue ([string]$body.proxy) -Force }
                 if ($body.concurrent -ne $null) { $Config | Add-Member -NotePropertyName concurrent -NotePropertyValue ([int]$body.concurrent) -Force }
-                $dir = [string]$body.downloadDir
+                $dir = [string]$body.contentDir
                 if (-not $dir) {
                     if ($body.proxy -ne $null -or $body.concurrent -ne $null) { Save-Config -Config $Config -Root $Root -DataDir $WS.DataDir; Send-Json -Stream $Stream -Object @{ ok = $true; proxy = $Config.proxy; concurrent = $Config.concurrent }; return }
-                    Send-Json -Stream $Stream -Object @{ ok = $false; error = '缺少 downloadDir' }; return
+                    Send-Json -Stream $Stream -Object @{ ok = $false; error = '缺少 contentDir' }; return
                 }
                 $dir = $dir.Trim().Trim('"')
                 if (-not (Test-Path $dir)) {
                     try { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
                     catch { Send-Json -Stream $Stream -Object @{ ok = $false; error = "目录不存在且无法创建: $dir" }; return }
                 }
-                $Config.downloadDir = $dir
+                $Config.contentDir = $dir
                 Save-Config -Config $Config -Root $Root -DataDir $WS.DataDir
-                Write-Log 'config' "下载目录改为 $dir"
+                Write-Log 'config' "内容目录改为 $dir"
                 # 换目录只重扫，不因为“新目录里找不到文件”把已有状态打回待下载
                 $r = Invoke-Scan -KeepStatus
                 Send-Json -Stream $Stream -Object ([pscustomobject]@{ ok = $true; dir = $dir; downloaded = $r.downloaded; files = $r.files })
@@ -535,7 +535,7 @@ try {
     }
 } catch { Write-FileLog "workspace import failed: $($_.Exception.Message)" }
 
-# 启动先扫一遍下载目录，把“已经下完的”标成 done
+# 启动先扫一遍内容目录，把“已经下完的”标成 done
 # 顺手整理上次中断留下的 .part（已下完的改名，写坏的删掉）
 try {
     $pr = Repair-PartFiles
@@ -550,10 +550,10 @@ try {
     }
 } catch { Write-FileLog "workspace import failed: $($_.Exception.Message)" }
 
-# 启动先扫一遍下载目录，把“已经下完的”标成 done
+# 启动先扫一遍内容目录，把“已经下完的”标成 done
 try {
     $bootScan = Invoke-Scan -Silent
-    Write-FileLog "boot scan: dir=$($Config.downloadDir) files=$($bootScan.files) downloaded=$($bootScan.downloaded) changed=$($bootScan.changed)"
+    Write-FileLog "boot scan: dir=$($Config.contentDir) files=$($bootScan.files) downloaded=$($bootScan.downloaded) changed=$($bootScan.changed)"
 } catch {
     Write-FileLog "boot scan failed: $($_.Exception.Message)"
 }

@@ -1,14 +1,14 @@
 ﻿#Requires -Version 5.1
 <#
 .SYNOPSIS
-  台账（ledger）读写、去重合并、下载目录扫描。被 console.ps1 与命令行共用。
+  台账（ledger）读写、去重合并、内容目录扫描。被 console.ps1 与命令行共用。
 
 .DESCRIPTION
   out\ledger.csv 是唯一事实来源：
     - token 是唯一键；重复抓取只更新元数据，保留 status / first_seen / sent_at / fav
     - status: new(待下载) / sent(已投迅雷) / done(已完成) / ignored(忽略)
     - fav: '1' 表示收藏
-    - 扫描下载目录时，文件名 `<token>.mp4` 命中即写入 file_name/file_size/file_date 并置 done
+    - 扫描内容目录时，文件名 `<token>.mp4` 命中即写入 file_name/file_size/file_date 并置 done
 #>
 
 $script:LedgerColumns = @(
@@ -141,13 +141,17 @@ function Get-ConfigPath {
 }
 
 function Read-Config {
-    param([string]$Root = $PSScriptRoot, [string]$DataDir = '', [string]$DefaultDownloadDir = 'D:\Downloads')
-    $default = [pscustomobject]@{ downloadDir = $DefaultDownloadDir }
+    param([string]$Root = $PSScriptRoot, [string]$DataDir = '', [string]$DefaultContentDir = 'D:\Downloads')
+    $default = [pscustomobject]@{ contentDir = $DefaultContentDir }
     $p = Get-ConfigPath -Root $Root -DataDir $DataDir
     if (-not (Test-Path $p)) { return $default }
     try {
         $c = Get-Content $p -Raw -Encoding UTF8 | ConvertFrom-Json
-        if (-not $c.downloadDir) { $c | Add-Member -NotePropertyName downloadDir -NotePropertyValue $default.downloadDir -Force }
+        # 兼容旧配置字段（downloadDir → contentDir）
+        if (-not $c.contentDir -and $c.PSObject.Properties['downloadDir'] -and $c.downloadDir) {
+            $c | Add-Member -NotePropertyName contentDir -NotePropertyValue ([string]$c.downloadDir) -Force
+        }
+        if (-not $c.contentDir) { $c | Add-Member -NotePropertyName contentDir -NotePropertyValue $default.contentDir -Force }
         return $c
     } catch {
         return $default
@@ -162,7 +166,7 @@ function Save-Config {
     $Config | ConvertTo-Json -Depth 4 | Set-Content -Path $p -Encoding UTF8
 }
 
-# ---------------- 下载目录扫描 ----------------
+# ---------------- 内容目录扫描 ----------------
 
 function Get-DownloadIndex {
     param([string]$Dir)

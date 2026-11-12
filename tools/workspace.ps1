@@ -5,14 +5,14 @@
 .DESCRIPTION
   - 所有配置存 workspace.json 里的**相对路径**，项目目录整体拷到别的盘/移动硬盘后仍然可用
   - 首次使用自动初始化目录结构；已有文件会被识别并入库
-  - 也允许把某一项配成绝对路径（例如下载目录放另外一块磁盘）
+  - 也允许把某一项配成绝对路径（例如内容目录放另外一块磁盘）
 .NOTES
   workspace.json 结构：
   {
     "version": 1,
     "name": "pektino",
     "dataDir":     "out",              // 相对项目根，或绝对路径
-    "downloadDir": "out\\downloads",    // 相对项目根 / 相对 dataDir / 绝对路径
+    "contentDir": "out\\downloads",    // 相对项目根 / 相对 dataDir / 绝对路径
     "coversDir":   "out\\covers",
     "thumbsDir":   "out\\thumbs",
     "logsDir":     "out",
@@ -45,7 +45,7 @@ function New-WorkspaceLayout {
         version     = 1
         name        = 'pektino'
         dataDir     = $DataDir
-        downloadDir = 'videos'
+        contentDir = 'content'
         coversDir   = 'covers'
         thumbsDir   = 'thumbs'
         logsDir     = 'logs'
@@ -73,6 +73,10 @@ function Initialize-Workspace {
 
     if (Test-Path $file) {
         try { $cfg = Get-Content $file -Raw -Encoding UTF8 | ConvertFrom-Json } catch { $cfg = $null }
+        # 兼容旧字段名（downloadDir → contentDir）
+        if ($cfg -and -not $cfg.contentDir -and $cfg.PSObject.Properties['downloadDir'] -and $cfg.downloadDir) {
+            $cfg | Add-Member -NotePropertyName contentDir -NotePropertyValue ([string]$cfg.downloadDir) -Force
+        }
     }
 
     if (-not $cfg) {
@@ -110,14 +114,14 @@ function Initialize-Workspace {
         DataDir     = $absData
         Database    = (Join-Path $absData 'data.db')
         LedgerCsv   = (Join-Path $absData 'ledger.csv')
-        Downloads   = (Resolve-WorkspacePath -Value $cfg.downloadDir -ProjectRoot $ProjectRoot -DataDir $absData)
+        Content     = (Resolve-WorkspacePath -Value $cfg.contentDir -ProjectRoot $ProjectRoot -DataDir $absData)
         Covers      = (Resolve-WorkspacePath -Value $cfg.coversDir -ProjectRoot $ProjectRoot -DataDir $absData)
         Thumbs      = (Resolve-WorkspacePath -Value $cfg.thumbsDir -ProjectRoot $ProjectRoot -DataDir $absData)
         Logs        = (Resolve-WorkspacePath -Value $cfg.logsDir -ProjectRoot $ProjectRoot -DataDir $absData)
         Exports     = (Resolve-WorkspacePath -Value $cfg.exportsDir -ProjectRoot $ProjectRoot -DataDir $absData)
     }
 
-    foreach ($d in @($paths.DataDir, $paths.Downloads, $paths.Covers, $paths.Thumbs, $paths.Logs, $paths.Exports)) {
+    foreach ($d in @($paths.DataDir, $paths.Content, $paths.Covers, $paths.Thumbs, $paths.Logs, $paths.Exports)) {
         if ($d -and -not (Test-Path $d)) { New-Item -ItemType Directory -Path $d -Force | Out-Null }
     }
 
@@ -130,11 +134,11 @@ function Save-WorkspaceConfig {
 }
 
 function Get-WorkspaceSummary {
-    param($Paths, [string]$Downloads = '')
-    if ($Downloads) { $Paths.Downloads = $Downloads }
+    param($Paths, [string]$Content = '')
+    if ($Content) { $Paths.Content = $Content }
     $files = 0; $gb = 0
-    if (Test-Path $Paths.Downloads) {
-        $mp4 = @(Get-ChildItem -Path $Paths.Downloads -Filter '*.mp4' -File -ErrorAction SilentlyContinue)
+    if (Test-Path $Paths.Content) {
+        $mp4 = @(Get-ChildItem -Path $Paths.Content -Filter '*.mp4' -File -ErrorAction SilentlyContinue)
         $files = $mp4.Count
         $gb = [math]::Round((($mp4 | Measure-Object Length -Sum).Sum) / 1GB, 2)
     }
@@ -146,7 +150,7 @@ function Get-WorkspaceSummary {
         file         = $Paths.File
         projectRoot  = $Paths.ProjectRoot
         dataDir      = $Paths.DataDir
-        downloads    = $Paths.Downloads
+        content      = $Paths.Content
         covers       = $Paths.Covers
         thumbs       = $Paths.Thumbs
         database     = $Paths.Database
@@ -168,12 +172,12 @@ function Import-WorkspaceFiles {
     param($Paths)
 
     $added = 0; $skipped = 0
-    if (-not (Test-Path $Paths.Downloads)) { return [pscustomobject]@{ added = 0; skipped = 0 } }
+    if (-not (Test-Path $Paths.Content)) { return [pscustomobject]@{ added = 0; skipped = 0 } }
 
     $known = @{}
     foreach ($r in @($State.Ledger)) { if ($r.token) { $known[([string]$r.token).ToLower()] = $true } }
 
-    foreach ($f in @(Get-ChildItem -Path $Paths.Downloads -Filter '*.mp4' -File -ErrorAction SilentlyContinue)) {
+    foreach ($f in @(Get-ChildItem -Path $Paths.Content -Filter '*.mp4' -File -ErrorAction SilentlyContinue)) {
         $tk = [System.IO.Path]::GetFileNameWithoutExtension($f.Name)
         $tk = ($tk -replace '\s*\(\d+\)$', '').Trim()
         if (-not $tk) { continue }

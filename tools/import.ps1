@@ -1,7 +1,7 @@
 ﻿#Requires -Version 5.1
 <#
 .SYNOPSIS
-  把下载目录里已有的 mp4 反向录取进台账：按 token 去站点查详情，能查到的就入库。
+  把内容目录里已有的 mp4 反向录取进台账：按 token 去站点查详情，能查到的就入库。
 
 .DESCRIPTION
   只认文件名 `<token>.mp4`。对每个 token 请求 https://pektino.com/zh-CN/movie/<token>：

@@ -53,7 +53,7 @@ function paintKpis(S) {
 }
 
 function paintDir(S) {
-  if (!$('#dirInput').value) $('#dirInput').value = S.downloadDir || '';
+  if (!$('#dirInput').value) $('#dirInput').value = S.contentDir || '';
   $('#dirInfo').textContent =
     `${S.dirExists ? '目录 OK' : '目录不存在'} · mp4 ${S.fileCount} 个 / ${S.dirGB} GB` +
     ` · 下载中 ${S.partialCount} · 命中 ${S.downloaded} 条 · 扫描于 ${(S.lastScan || '').slice(11)}`;
@@ -106,7 +106,7 @@ function paintWorkspace(ws) {
   if (!el) return;
   if (!ws) { el.textContent = '–'; return; }
   el.innerHTML = `数据目录 <span class="mono">${ws.dataDir}</span><br>
-    下载 <span class="mono">${ws.downloads}</span> · ${ws.videoCount} 个视频 / ${ws.videoGB} GB<br>
+    内容 <span class="mono">${ws.content}</span> · ${ws.videoCount} 个视频 / ${ws.videoGB} GB<br>
     封面 ${ws.coverCount} 张 · 库 ${ws.dbMB} MB`;
 }
 
@@ -188,7 +188,7 @@ async function doScrape() {
 
 async function doImport() {
   const dir = $('#dirInput').value.trim();
-  if (!confirm(`扫描下载目录并入库？\n${dir}\n\n会逐个用文件名(token)去站点查证，能查到的才入库并标记为已完成。`)) return;
+  if (!confirm(`扫描内容目录并入库？\n${dir}\n\n会逐个用文件名(token)去站点查证，能查到的才入库并标记为已完成。`)) return;
   try {
     const r = await api('/api/import', {});
     if (!r.ok) return toast('失败：' + r.error, 5000);
@@ -238,7 +238,7 @@ async function saveDir() {
   const dir = $('#dirInput').value.trim();
   if (!dir) return toast('先填目录');
   try {
-    const r = await api('/api/config', { downloadDir: dir });
+    const r = await api('/api/config', { contentDir: dir });
     toast(r.ok ? `已保存：${r.dir}（${r.files} 个文件，命中 ${r.downloaded}）` : '失败：' + r.error, 4000);
   } catch (e) { toast('请求失败'); }
   load();
@@ -255,7 +255,7 @@ async function scanDir() {
 async function downloadNew() {
   const n = state.STATS.new || 0;
   if (!n) return toast('没有可下载的条目');
-  if (!confirm(`用内置下载器下载 ${n} 条？\n保存到：${state.STATS.downloadDir || ''}\n\n支持断点续传，可在进度条上取消。`)) return;
+  if (!confirm(`用内置下载器下载 ${n} 条？\n保存到：${state.STATS.contentDir || ''}\n\n支持断点续传，可在进度条上取消。`)) return;
   try {
     const r = await api('/api/download', { status: 'new' });
     if (!r.ok) return toast('失败：' + r.error, 5000);

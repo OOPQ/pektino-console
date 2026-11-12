@@ -43,7 +43,7 @@ function Get-Stats {
         watched     = $watched
         toWatch     = $onDisk - $watched
         diskGB      = [math]::Round($bytes / 1GB, 2)
-        downloadDir = $Config.downloadDir
+        contentDir = $Config.contentDir
         dirExists   = [bool]$State.Files.Exists
         fileCount   = @($State.Files.Files.Keys).Count
         partialCount = @($State.Files.Partial).Count
@@ -56,7 +56,7 @@ function Get-Stats {
 
 function Invoke-Scan {
     param([switch]$Silent, [switch]$KeepStatus)
-    $idx = Get-DownloadIndex -Dir $Config.downloadDir
+    $idx = Get-DownloadIndex -Dir $Config.contentDir
     $State.Files = $idx
     $changed = 0
     $found = 0
@@ -105,7 +105,7 @@ function Invoke-Scan {
         changed    = $changed
         files      = @($idx.Files.Keys).Count
         partial    = @($idx.Partial).Count
-        dir        = $Config.downloadDir
+        dir        = $Config.contentDir
         exists     = [bool]$idx.Exists
         totalGB    = [math]::Round((($idx.Files.Values | Measure-Object -Property size -Sum).Sum) / 1GB, 2)
         orphans    = $orphans
@@ -113,7 +113,7 @@ function Invoke-Scan {
     }
 
     if (-not $Silent) {
-        Write-Log 'scan' "扫描 $($Config.downloadDir)：已下载 $found / 台账 $(@($State.Ledger).Count)，变更 $changed，孤立文件 $($orphans.Count)"
+        Write-Log 'scan' "扫描 $($Config.contentDir)：已下载 $found / 台账 $(@($State.Ledger).Count)，变更 $changed，孤立文件 $($orphans.Count)"
     }
     return $State.Scan
 }
@@ -184,7 +184,7 @@ function Start-Import {
     Remove-Item $ProgressFile -Force -ErrorAction SilentlyContinue
 
     $script = Join-Path $Root 'import.ps1'
-    $dl = $Config.downloadDir; $out = $TmpCsv; $prog = $ProgressFile; $cov = $CoverDir; $thm = $ThumbDir
+    $dl = $Config.contentDir; $out = $TmpCsv; $prog = $ProgressFile; $cov = $CoverDir; $thm = $ThumbDir
     $job = Start-Job -ScriptBlock {
         param($script, $dl, $tokens, $out, $prog, $cov, $thm, $threads)
         $p = @{ Dir = $dl; Out = $out; CoverDir = $cov; ThumbDir = $thm; Threads = $threads; ProgressFile = $prog }
@@ -350,11 +350,11 @@ function Invoke-DeleteFiles {
     foreach ($r in $rows) {
         $file = Resolve-RowFile $r
         if (-not $file -or -not (Test-Path $file)) { continue }
-        # 只允许删下载目录内的文件
-        $rootFull = [System.IO.Path]::GetFullPath($Config.downloadDir).TrimEnd('\')
+        # 只允许删内容目录内的文件
+        $rootFull = [System.IO.Path]::GetFullPath($Config.contentDir).TrimEnd('\')
         $fileFull = [System.IO.Path]::GetFullPath($file)
         if (-not $fileFull.StartsWith($rootFull, [System.StringComparison]::OrdinalIgnoreCase)) {
-            $failed += "$($r.token): 不在下载目录内，已跳过"
+            $failed += "$($r.token): 不在内容目录内，已跳过"
             continue
         }
         try {
@@ -564,8 +564,8 @@ function Start-Download {
     }
 
     # 必须和启动时同一份配置（数据目录下的 config.json），否则下载会落到旧路径
-    $cfg = Read-Config -Root $Root -DataDir $WS.DataDir -DefaultDownloadDir $WS.Downloads
-    $dir = if ($cfg.downloadDir) { [string]$cfg.downloadDir } else { $WS.Downloads }
+    $cfg = Read-Config -Root $Root -DataDir $WS.DataDir -DefaultContentDir $WS.Content
+    $dir = if ($cfg.contentDir) { [string]$cfg.contentDir } else { $WS.Content }
     # 配置里可能是相对路径（videos），按数据目录解析，避免落到进程当前目录
     if (-not [System.IO.Path]::IsPathRooted($dir)) {
         $dir = [System.IO.Path]::GetFullPath((Join-Path $WS.DataDir $dir))
@@ -675,7 +675,7 @@ function Step-Download {
         return
     }
 
-    $dir = if ($State.Download.Dir) { $State.Download.Dir } else { (Read-Config -Root $Root -DataDir $WS.DataDir -DefaultDownloadDir $WS.Downloads).downloadDir }
+    $dir = if ($State.Download.Dir) { $State.Download.Dir } else { (Read-Config -Root $Root -DataDir $WS.DataDir -DefaultContentDir $WS.Content).contentDir }
     $count = $State.Download.Count
     $runStarted = $State.Download.Started
     $State.Download = $null
@@ -698,7 +698,7 @@ function Repair-PartFiles {
     #>
     param([int]$Limit = 20)
 
-    $dir = $Config.downloadDir
+    $dir = $Config.contentDir
     if (-not $dir -or -not (Test-Path $dir)) { return [pscustomobject]@{ ok = $true; renamed = 0; deleted = 0; kept = 0 } }
 
     $curl = (Get-Command curl.exe -ErrorAction SilentlyContinue).Source

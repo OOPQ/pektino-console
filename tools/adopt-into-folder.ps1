@@ -3,7 +3,7 @@
 .SYNOPSIS
   把数据（库/封面/缩略图/日志）搬进指定文件夹，让「一个文件夹装下所有东西」。
 .DESCRIPTION
-  典型场景：把 tools\H 这种下载目录直接变成工作区 —— 里面既有 mp4，也有 data.db、covers、thumbs。
+  典型场景：把 tools\H 这种内容目录直接变成工作区 —— 里面既有 mp4，也有 data.db、covers、thumbs。
   搬完之后整个文件夹拷到移动硬盘 / 换盘符，改一次路径即可继续用。
 
   注意：必须在控制台停止时运行（数据库不能在被占用时搬）。
@@ -76,7 +76,7 @@ $report = foreach ($it in $items) {
 }
 $report | Format-Table -AutoSize | Out-String | Write-Host
 
-# 3. 更新 workspace.json：数据目录 = 目标，下载目录 = 该目录本身
+# 3. 更新 workspace.json：数据目录 = 目标，内容目录 = 该目录本身
 $wsFile = Join-Path $projectRoot 'workspace.json'
 $dataDir = $Target
 $absRoot = [System.IO.Path]::GetFullPath($projectRoot).TrimEnd('\')
@@ -88,7 +88,7 @@ $cfg = [ordered]@{
     version     = 1
     name        = 'pektino'
     dataDir     = $dataDir
-    downloadDir = 'videos'
+    contentDir = 'content'
     coversDir   = 'covers'
     thumbsDir   = 'thumbs'
     logsDir     = 'logs'
@@ -104,6 +104,6 @@ if ($DryRun) {
 ($cfg | ConvertTo-Json -Depth 4) | Set-Content -Path $wsFile -Encoding UTF8 -Force
 Write-Host "已更新工作区配置: $wsFile" -ForegroundColor Green
 Write-Host "  数据目录 = $Target" -ForegroundColor Green
-Write-Host "  下载目录 = <workspace>\videos（mp4 放子目录，避免和库/封面混在一起）" -ForegroundColor Green
+Write-Host "  内容目录 = <workspace>\videos（mp4 放子目录，避免和库/封面混在一起）" -ForegroundColor Green
 Write-Host ''
 Write-Host '下一步：重新启动控制台，确认台账条数与封面正常。旧数据没有删除，确认无误后可手动清理。' -ForegroundColor Cyan

@@ -43,6 +43,7 @@
     <option value="sent">已投递</option>
     <option value="done">已完成</option>
     <option value="ignored">忽略</option>
+    <option value="downloading">下载中</option>
     <option value="have">已在磁盘</option>
     <option value="miss">未下载</option>
     <option value="towatch">待看（在盘未播）</option>
@@ -201,6 +202,14 @@
     <div class="logbox" id="slowList" style="margin-top:6px"></div>
     <h3 style="margin-top:14px">前端错误（最近 20 条）</h3>
     <div class="logbox" id="errList"></div>
+
+    <h3 style="margin-top:16px">下载任务</h3>
+    <div class="sub" id="dlInfo">–</div>
+    <div class="logbox" id="dlList" style="margin-top:6px"></div>
+    <div style="display:flex;gap:8px;margin-top:8px">
+      <button class="ghost" id="btnCancelAll">全部取消</button>
+      <button class="ghost" id="btnRepairParts" title="把已完成但还残留 .part 后缀的文件改名">整理 .part</button>
+    </div>
 
     <h3 style="margin-top:16px">孤立文件</h3>
     <div class="sub" id="orphanInfo">–</div>

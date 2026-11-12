@@ -32,7 +32,7 @@ function passFilter(r) {
     const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
     if ((r.first_seen || '').slice(0, 10) !== iso) return false;
   }
-  if (['new', 'sent', 'done', 'ignored'].includes(st) && r.status !== st) return false;
+  if (['new', 'sent', 'done', 'ignored', 'downloading'].includes(st) && r.status !== st) return false;
   if (state.FILTER.res !== 'all') {
     const w = parseInt((r.res || '').split('x')[0]) || 0;
     const h = parseInt((r.res || '').split('x')[1]) || 0;
@@ -60,7 +60,7 @@ const SORTS = {
   plays: r => (+r.play_count || 0),
   rating: r => (+r.rating || 0),
   token: r => (r.token || ''),
-  status: r => ['new', 'sent', 'done', 'ignored'].indexOf(r.status),
+  status: r => ['downloading', 'new', 'sent', 'done', 'ignored'].indexOf(r.status),
   disk: r => (+r.file_size || 0),
   first_seen: r => (r.first_seen || '')
 };
@@ -119,7 +119,9 @@ export function render() {
         <td>
           ${r.file_name
             ? `<button class="ghost rowbtn" data-play="${r.token}">播放</button>`
-            : `<button class="ghost rowbtn" data-dl="${r.token}" title="用内置下载器下载这一条">下载</button>`}
+            : (r.status === 'downloading'
+              ? `<button class="ghost rowbtn" data-dl-cancel="${r.token}" title="取消这一条下载">取消</button>`
+              : `<button class="ghost rowbtn" data-dl="${r.token}" title="用内置下载器下载这一条">下载</button>`)}
           <button class="ghost rowbtn" data-reveal="${r.token}">定位</button>
           <button class="ghost rowbtn" data-copy="${r.url || ''}">复制</button>
           <button class="ghost rowbtn" data-th="${r.url || ''}">thunder</button>

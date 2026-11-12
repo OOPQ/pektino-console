@@ -71,6 +71,35 @@ function paintMetrics(m) {
     : '<div>没有前端错误</div>';
 }
 
+function paintDownload(dl) {
+  const el = $('#dlInfo'), list = $('#dlList');
+  if (!el || !list) return;
+  if (!dl || (!dl.running && !(dl.items && dl.items.length))) {
+    el.textContent = '没有进行中的任务';
+    list.innerHTML = '';
+    return;
+  }
+  const mb = (n) => ((+n || 0) / 1048576).toFixed(1);
+  const items = dl.items || [];
+  const activeCount = items.filter(i => i.state === 'downloading').length;
+  const queued = items.filter(i => i.state === 'queued').length;
+  el.textContent = dl.running
+    ? `进行中 · 下载 ${activeCount} · 排队 ${queued} · ${dl.done || 0}/${dl.total || 0} 完成 · ${mb(dl.bytes)} MB · ${dl.speed || 0} MB/s`
+    : `已结束 · 成功 ${dl.done || 0} · 失败 ${dl.failed || 0}`;
+  const show = items.filter(i => i.state === 'downloading' || i.state === 'queued' || i.state === 'failed').slice(0, 30);
+  list.innerHTML = show.map(i => {
+    const pct = i.expected ? Math.round(100 * i.bytes / i.expected) : 0;
+    const right = i.state === 'downloading'
+      ? `${mb(i.bytes)} MB（${pct}%）`
+      : i.state === 'failed' ? (i.error || '失败') : '排队中';
+    return `<div style="display:flex;gap:8px;align-items:center">
+      <span class="mono" style="flex:1;overflow:hidden;text-overflow:ellipsis">${i.token}</span>
+      <span class="sub">${right}</span>
+      ${i.state !== 'failed' ? `<button class="ghost rowbtn" data-dl-cancel="${i.token}" title="取消这一条">取消</button>` : ''}
+    </div>`;
+  }).join('');
+}
+
 function paintCovers(S) {
   const n = +S.coverMissing || 0;
   const el = $('#coverInfo');
@@ -101,6 +130,7 @@ async function load() {
     paintMetrics(s.metrics || {});
     paintOrphans(S);
     paintCovers(S);
+    paintDownload(s.download);
 
     $('#logbox').innerHTML = (s.log || []).slice().reverse()
       .map(l => `<div><span class="t">${l.time}</span> [${l.kind}] ${l.message}</div>`).join('')
@@ -223,6 +253,34 @@ async function saveNet() {
   } catch (e) { toast('请求失败'); }
 }
 
+async function cancelAllDownloads() {
+  if (!confirm('取消全部下载？已下载的部分会保留，下次可续传。')) return;
+  try {
+    const r = await api('/api/download/cancel', {});
+    toast(r.ok ? '已取消全部下载' : (r.error || '取消失败'), 3500);
+  } catch (e) { toast('请求失败：' + e.message); }
+  load();
+}
+
+async function onCancelOne(e) {
+  const btn = e.target.closest('[data-dl-cancel]');
+  if (!btn) return;
+  const tk = btn.dataset.dlCancel;
+  try {
+    const r = await api('/api/download/cancel', { tokens: [tk] });
+    toast(r.ok ? `已取消 ${tk}` : (r.error || '取消失败'), 3000);
+  } catch (err) { toast('请求失败'); }
+  load();
+}
+
+async function repairParts() {
+  try {
+    const r = await api('/api/download/repair', {});
+    toast(r.ok ? `.part 整理：改名 ${r.renamed}，删除 ${r.deleted}，保留 ${r.kept}` : '失败', 5000);
+  } catch (e) { toast('请求失败'); }
+  load();
+}
+
 async function repairCovers() {
   const btn = $('#btnRepairCovers');
   btn.disabled = true;
@@ -248,6 +306,9 @@ function initToolbar() {
   $('#btnSaveDir').onclick = saveDir;
   $('#btnScan').onclick = scanDir;
   $('#btnRepairCovers').onclick = repairCovers;
+  $('#btnCancelAll').onclick = cancelAllDownloads;
+  $('#btnRepairParts').onclick = repairParts;
+  $('#dlList').addEventListener('click', onCancelOne);
   $('#btnRefresh').onclick = () => load();
 }
 

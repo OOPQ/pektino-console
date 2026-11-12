@@ -56,6 +56,7 @@ $ClientLog = Join-Path $Root 'out\client.log'
 $DlScript = Join-Path $Root 'download.ps1'
 $DlQueue = Join-Path $Root 'out\.queue.json'
 $DlProgress = Join-Path $Root 'out\download.json'
+$DlCancel = Join-Path $Root 'out\.dl-cancel.json'
 
 # ---------- 内存态 ----------
 $Config = Read-Config -Root $Root
@@ -287,7 +288,14 @@ function Handle-Request {
                 return
             }
             '/api/download/cancel' {
-                Send-Json -Stream $Stream -Object ([pscustomobject](Stop-Download))
+                $tokens = @()
+                if ($body.tokens) { $tokens = @($body.tokens | ForEach-Object { [string]$_ }) }
+                if ($tokens.Count) { Send-Json -Stream $Stream -Object ([pscustomobject](Cancel-DownloadItems -Tokens $tokens)) }
+                else { Send-Json -Stream $Stream -Object ([pscustomobject](Stop-Download)) }
+                return
+            }
+            '/api/download/repair' {
+                Send-Json -Stream $Stream -Object ([pscustomobject](Repair-PartFiles))
                 return
             }
             '/api/scrape' {
@@ -476,6 +484,13 @@ try {
 } catch {
     Write-FileLog "thumb backfill failed: $($_.Exception.Message)"
 }
+
+# 启动先扫一遍下载目录，把“已经下完的”标成 done
+# 顺手整理上次中断留下的 .part（已下完的改名，写坏的删掉）
+try {
+    $pr = Repair-PartFiles
+    if ($pr.renamed -gt 0 -or $pr.deleted -gt 0) { Write-FileLog "part repair: renamed=$($pr.renamed) deleted=$($pr.deleted) kept=$($pr.kept)" }
+} catch { Write-FileLog "part repair failed: $($_.Exception.Message)" }
 
 # 启动先扫一遍下载目录，把“已经下完的”标成 done
 try {

@@ -200,6 +200,13 @@ async function onRowClick(e) {
     return;
   }
 
+  const dlCancel = e.target.closest('[data-dl-cancel]');
+  if (dlCancel) {
+    const r = await api('/api/download/cancel', { tokens: [dlCancel.dataset.dlCancel] });
+    toast(r.ok ? '已取消这条下载（进度已保留）' : (r.error || '取消失败'), 3000);
+    return emit('reload');
+  }
+
   const dlBtn = e.target.closest('[data-dl]');
   if (dlBtn) {
     const r = await api('/api/download', { tokens: [dlBtn.dataset.dl] });

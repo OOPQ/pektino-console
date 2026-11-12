@@ -101,6 +101,8 @@ tbody td:last-child{white-space:nowrap}
 .tag.sent{color:var(--sent);border-color:#4b3a75;background:#211a33}
 .tag.done{color:var(--ok);border-color:#2c5c33;background:#13241a}
 .tag.ignored{color:var(--dim);border-color:#3a434f;background:#1a1f26}
+.tag.downloading{color:#7fd4ff;border-color:#2b6c8f;background:#0f2633;animation:pulse 1.6s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.55}}
 
 /* 封面 */
 .covbox{position:relative;width:84px;height:118px;border-radius:6px;overflow:hidden;background:var(--panel3);cursor:zoom-in}

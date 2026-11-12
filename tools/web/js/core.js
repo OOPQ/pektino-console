@@ -2,7 +2,7 @@
 
 export const $ = s => document.querySelector(s);
 const KEY = 'pektino.ui.v3';
-export const STATUS_LABEL = { new: '待下载', sent: '已投递', done: '已完成', ignored: '忽略' };
+export const STATUS_LABEL = { new: '待下载', sent: '已投递', done: '已完成', ignored: '忽略', downloading: '下载中' };
 
 /* ---------- 偏好（localStorage） ---------- */
 export const PREFS = Object.assign({

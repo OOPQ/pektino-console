@@ -1,14 +1,15 @@
-#Requires -Version 5.1
+﻿#Requires -Version 5.1
 <#
 .SYNOPSIS
-  内置下载器：按队列把 mp4 拉到本地目录（支持断点续传、并发、进度文件）。
+  内置下载器：按队列把 mp4 拉到本地目录（断点续传 / 并发 / 可单条取消 / 进度文件）。
 .DESCRIPTION
-  由 console.ps1 以独立进程方式启动，读队列 JSON，写进度 JSON。
-  - 优先用 curl.exe（Windows 10+ 自带）：支持 -C - 续传、重定向、代理
-  - 若 PATH 上有 aria2c.exe，则用它（-x8 -s8 -c，多连接更快）
-  - 单个文件先写 .part，完成后改名为 .mp4，避免把半个文件当成品
+  由 console.ps1 以独立进程启动，读队列 JSON，写进度 JSON。
+  - 优先 curl.exe（Win10+ 自带）：-C - 续传、重定向、代理
+  - 有 aria2c.exe 时优先用它（-x8 -s8，多连接）
+  - 先写 <token>.mp4.part，确认完整（大小 == 远端 Content-Length）才改名
+  - 取消：向取消文件写 token，本进程检测到后 kill 对应 curl，保留 .part 供续传
 .NOTES
-  退出码：0 = 队列跑完（允许个别失败）；2 = 队列文件缺失/为空
+  退出码：0 = 跑完；2 = 队列缺失/为空
 #>
 param(
     [Parameter(Mandatory = $true)][string]$QueueFile,
@@ -16,16 +17,18 @@ param(
     [string]$Proxy = '',
     [int]$Concurrent = 3,
     [Parameter(Mandatory = $true)][string]$ProgressFile,
+    [string]$CancelFile = '',
     [int]$Retries = 3
 )
 
 $ErrorActionPreference = 'Stop'
 $startAt = (Get-Date).ToString('s')
-$ProgressIntervalMs = 700
+$PollMs = 600
 
 $curl = (Get-Command curl.exe -ErrorAction SilentlyContinue).Source
 if (-not $curl) { $curl = 'C:\Windows\System32\curl.exe' }
 $aria = (Get-Command aria2c.exe -ErrorAction SilentlyContinue).Source
+$workDir = Split-Path $ProgressFile -Parent
 
 function Write-ProgressFile($obj) {
     $tmp = "$ProgressFile.tmp"
@@ -35,27 +38,9 @@ function Write-ProgressFile($obj) {
     } catch { }
 }
 
-if (-not (Test-Path $QueueFile)) { Write-Error "队列文件不存在: $QueueFile"; exit 2 }
-$queue = @()
-try {
-    $parsed = ConvertFrom-Json -InputObject (Get-Content $QueueFile -Raw -Encoding UTF8)
-    $queue = @()
-    foreach ($x in @($parsed)) {
-        if ($x -is [array]) { foreach ($y in $x) { $queue += $y } } else { $queue += $x }
-    }
-} catch { }
-if (-not $queue.Count) { Write-Error '队列为空'; exit 2 }
-if (-not (Test-Path $Dir)) { New-Item -ItemType Directory -Path $Dir -Force | Out-Null }
-
-$jobs = @{}          # token -> @{ proc; part; total; started; lastBytes; lastTime; speed }
-$done = 0; $failed = 0; $errors = @()
-$totalBytes = 0; $doneBytes = 0
-$queueTotal = $queue.Count
-
 function Get-ProxyArg {
     param([string]$p)
     if ($p) { return $p }
-    # 没显式配置时读系统代理（Clash/V2Ray 等一般会写这里）
     try {
         $reg = Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Internet Settings' -ErrorAction Stop
         if ($reg.ProxyEnable -eq 1 -and $reg.ProxyServer) {
@@ -67,7 +52,38 @@ function Get-ProxyArg {
     return ''
 }
 
+# ---------------- 读队列 ----------------
+if (-not (Test-Path $QueueFile)) { Write-Error "队列文件不存在: $QueueFile"; exit 2 }
+$queue = @()
+try {
+    $parsed = ConvertFrom-Json -InputObject (Get-Content $QueueFile -Raw -Encoding UTF8)
+    foreach ($x in @($parsed)) {
+        if ($x -is [array]) { foreach ($y in $x) { $queue += $y } } else { $queue += $x }
+    }
+} catch { }
+if (-not $queue.Count) { Write-Error '队列为空'; exit 2 }
+if (-not (Test-Path $Dir)) { New-Item -ItemType Directory -Path $Dir -Force | Out-Null }
+
 $proxyArg = Get-ProxyArg -p $Proxy
+
+# ---------------- 状态表 ----------------
+$states = @{}   # token -> @{ state; bytes; expected; error }
+$queueMap = @{}
+foreach ($it in $queue) {
+    $states[[string]$it.token] = @{ state = 'queued'; bytes = 0; expected = 0; error = '' }
+}
+
+function Get-RemoteSize([string]$url) {
+    try {
+        $a = @('-sS', '-I', '-L', '--max-time', '20')
+        if ($proxyArg) { $a += @('-x', $proxyArg) }
+        $a += $url
+        foreach ($line in (& $curl @a 2>$null)) {
+            if ($line -match '(?i)^content-length:\s*(\d+)') { return [int64]$Matches[1] }
+        }
+    } catch { }
+    return [int64]0
+}
 
 function Build-Args($item, $outFile) {
     if ($aria) {
@@ -84,157 +100,184 @@ function Build-Args($item, $outFile) {
     return @{ exe = $curl; args = $a }
 }
 
-function Get-RemoteSize {
-    <#  用 HEAD 拿 Content-Length；拿不到返回 0  #>
-    param([string]$url)
-    try {
-        $a = @('-sS', '-I', '-L', '--max-time', '20')
-        if ($proxyArg) { $a += @('-x', $proxyArg) }
-        $a += $url
-        $out = & $curl @a 2>$null
-        foreach ($line in $out) {
-            if ($line -match '(?i)^content-length:\s*(\d+)') { return [int64]$Matches[1] }
-        }
-    } catch { }
-    return [int64]0
-}
-
-function Start-One($item) {
-    $tk = $item.token
-    $final = Join-Path $Dir ($tk + '.mp4')
-    $part = Join-Path $Dir ($tk + '.mp4.part')
-    if (Test-Path $final) {
-        $script:done++
-        $script:doneBytes += (Get-Item $final).Length
-        return
-    }
-    $expected = Get-RemoteSize -url $item.url
-    # 已经下满（上次 curl 退出码异常但文件其实完整）→ 直接收尾
-    if ($expected -gt 0 -and (Test-Path $part) -and (Get-Item $part).Length -eq $expected) {
-        Move-Item -Path $part -Destination $final -Force
-        $script:done++
-        $script:doneBytes += (Get-Item $final).Length
-        return
-    }
+function Start-Curl($item, $part, $log) {
     $spec = Build-Args -item $item -outFile $part
-    $log = Join-Path (Split-Path $ProgressFile -Parent) ('.dl-' + $tk + '.log')
-    $proc = Start-Process -FilePath $spec.exe -ArgumentList $spec.args -NoNewWindow -PassThru `
+    return Start-Process -FilePath $spec.exe -ArgumentList $spec.args -NoNewWindow -PassThru `
         -RedirectStandardError $log -RedirectStandardOutput ($log + '.out') -ErrorAction Stop
-    $script:jobs[$tk] = @{
-        proc = $proc; part = $part; final = $final; log = $log; expected = $expected
-        bytes = 0; lastBytes = 0; lastTime = Get-Date; speed = 0; retries = 0
+}
+
+function Complete-Item($tk) {
+    $s = $states[$tk]
+    $part = Join-Path $Dir ($tk + '.mp4.part')
+    $final = Join-Path $Dir ($tk + '.mp4')
+    if (-not (Test-Path $part)) { $s.state = 'failed'; $s.error = '缺少 .part'; return }
+    try {
+        if (Test-Path $final) { Remove-Item $final -Force }
+        Move-Item -Path $part -Destination $final -Force
+        $s.state = 'done'
+        $s.bytes = (Get-Item $final).Length
+    } catch {
+        $s.state = 'failed'
+        $s.error = "改名失败: $($_.Exception.Message)"
     }
 }
 
-function Total-Bytes {
-    $sum = 0
-    foreach ($k in $script:jobs.Keys) {
-        $j = $script:jobs[$k]
-        if (Test-Path $j.part) { $sum += (Get-Item $j.part).Length }
-    }
-    return $sum
+# ---------------- 主循环 ----------------
+$jobs = @{}          # token -> @{ proc; part; final; log; expected; lastBytes; lastTime; speed; retries }
+$pending = New-Object System.Collections.Queue
+foreach ($it in $queue) { $pending.Enqueue($it) }
+
+function Read-CancelTokens {
+    if (-not $CancelFile -or -not (Test-Path $CancelFile)) { return @() }
+    try {
+        $raw = Get-Content $CancelFile -Raw -Encoding UTF8
+        if (-not $raw) { return @() }
+        $list = @($raw | ConvertFrom-Json)
+        Remove-Item $CancelFile -Force -ErrorAction SilentlyContinue
+        return @($list | ForEach-Object { [string]$_ })
+    } catch { return @() }
 }
 
 try {
-    Write-ProgressFile @{ running = $true; phase = 'start'; total = $queueTotal; done = 0; failed = 0; bytes = 0; speed = 0; items = @(); startedAt = (Get-Date).ToString('s') }
-    $pending = New-Object System.Collections.Queue
-    foreach ($it in $queue) { $pending.Enqueue($it) }
-
     while ($pending.Count -gt 0 -or $jobs.Count -gt 0) {
-        # 补满并发
-        while ($jobs.Count -lt $Concurrent -and $pending.Count -gt 0) {
-            $item = $pending.Dequeue()
-            try { Start-One $item } catch {
-                $failed++
-                $errors += @{ token = $item.token; error = $_.Exception.Message }
+        # 取消请求
+        foreach ($tk in (Read-CancelTokens)) {
+            if ($jobs.ContainsKey($tk)) {
+                $j = $jobs[$tk]
+                try { & taskkill.exe /PID $j.proc.Id /T /F 2>&1 | Out-Null } catch { }
+                try { $j.proc.Kill() } catch { }
+                $states[$tk].state = 'cancelled'
+                $jobs.Remove($tk)
+            } elseif ($states.ContainsKey($tk) -and $states[$tk].state -eq 'queued') {
+                $states[$tk].state = 'cancelled'
+                # 从待跑队列里剔除
+                $keep = @()
+                while ($pending.Count -gt 0) { $x = $pending.Dequeue(); if ([string]$x.token -ne $tk) { $keep += $x } }
+                foreach ($x in $keep) { $pending.Enqueue($x) }
             }
         }
 
-        Start-Sleep -Milliseconds $ProgressIntervalMs
+        # 补满并发
+        while ($jobs.Count -lt $Concurrent -and $pending.Count -gt 0) {
+            $item = $pending.Dequeue()
+            $tk = [string]$item.token
+            if ($states[$tk].state -eq 'cancelled') { continue }
 
-        # 轮询进度
+            $final = Join-Path $Dir ($tk + '.mp4')
+            $part = Join-Path $Dir ($tk + '.mp4.part')
+            if (Test-Path $final) {
+                $states[$tk].state = 'done'
+                $states[$tk].bytes = (Get-Item $final).Length
+                continue
+            }
+
+            $expected = Get-RemoteSize -url $item.url
+            $states[$tk].expected = $expected
+            # 上次其实已经下满（curl 退出码异常/进程被杀）→ 直接收尾
+            if ($expected -gt 0 -and (Test-Path $part) -and (Get-Item $part).Length -eq $expected) {
+                Complete-Item $tk
+                continue
+            }
+            $log = Join-Path $workDir ('.dl-' + $tk + '.log')
+            try {
+                $proc = Start-Curl -item $item -part $part -log $log
+                $states[$tk].state = 'downloading'
+                $jobs[$tk] = @{
+                    proc = $proc; part = $part; final = $final; log = $log; expected = $expected
+                    lastBytes = 0; lastTime = Get-Date; speed = 0; retries = 0
+                }
+            } catch {
+                $states[$tk].state = 'failed'
+                $states[$tk].error = $_.Exception.Message
+            }
+        }
+
+        Start-Sleep -Milliseconds $PollMs
         $now = Get-Date
+
+        # 轮询
         foreach ($tk in @($jobs.Keys)) {
             $j = $jobs[$tk]
-            if (Test-Path $j.part) { $j.bytes = (Get-Item $j.part).Length }
+            $size = if (Test-Path $j.part) { (Get-Item $j.part).Length } else { [int64]0 }
+            $states[$tk].bytes = $size
             $dt = ($now - $j.lastTime).TotalSeconds
             if ($dt -ge 1) {
-                $j.speed = [math]::Round(($j.bytes - $j.lastBytes) / 1MB / $dt, 2)
-                $j.lastBytes = $j.bytes; $j.lastTime = $now
+                $j.speed = [math]::Round(($size - $j.lastBytes) / 1MB / $dt, 2)
+                $j.lastBytes = $size; $j.lastTime = $now
             }
 
             if ($j.proc.HasExited) {
-                $size = if (Test-Path $j.part) { (Get-Item $j.part).Length } else { [int64]0 }
-                # 判定成功：退出码 0，或者文件大小正好等于远端 Content-Length
-                # （curl 在连接末尾被重置时会给非 0 退出码，但数据其实是完整的）
+                # 成功判定：退出码 0 或 大小正好等于远端 Content-Length
                 $complete = ($j.proc.ExitCode -eq 0) -or ($j.expected -gt 0 -and $size -eq $j.expected)
                 if ($complete -and $size -gt 0) {
-                    try {
-                        if (Test-Path $j.final) { Remove-Item $j.final -Force }
-                        Move-Item -Path $j.part -Destination $j.final -Force
-                        $done++
-                        $doneBytes += (Get-Item $j.final).Length
-                    } catch {
-                        $failed++
-                        $errors += @{ token = $tk; error = "改名失败: $($_.Exception.Message)" }
-                    }
+                    Complete-Item $tk
                 } else {
                     $j.retries++
                     $errText = ''
                     if (Test-Path $j.log) { $errText = (Get-Content $j.log -Tail 2 -ErrorAction SilentlyContinue) -join ' ' }
-                    if ($size -gt $j.expected -and $j.expected -gt 0) {
-                        # 比远端还大：文件坏了，删掉重下
+                    if ($j.expected -gt 0 -and $size -gt $j.expected) {
                         Remove-Item $j.part -Force -ErrorAction SilentlyContinue
+                        $size = 0
                     }
                     if ($j.retries -le $Retries) {
-                        # 保留 .part 续传，稍后重试
                         Start-Sleep -Seconds 2
                         try {
-                            $item = $queue | Where-Object { $_.token -eq $tk } | Select-Object -First 1
-                            $spec = Build-Args -item $item -outFile $j.part
-                            $j.proc = Start-Process -FilePath $spec.exe -ArgumentList $spec.args -NoNewWindow -PassThru `
-                                -RedirectStandardError $j.log -RedirectStandardOutput ($j.log + '.out') -ErrorAction Stop
-                            $j.lastTime = Get-Date; $j.lastBytes = $j.bytes
-                            $j.bytes = $size
+                            $j.proc = Start-Curl -item $queueMap[$tk] -part $j.part -log $j.log
+                            $j.lastTime = Get-Date; $j.lastBytes = $size
                             continue
                         } catch { }
                     }
-                    $failed++
-                    $errors += @{ token = $tk; error = ($errText -replace '\s+', ' ').Trim() }
+                    $states[$tk].state = 'failed'
+                    $states[$tk].error = ($errText -replace '\s+', ' ').Trim()
                 }
                 $jobs.Remove($tk)
             }
         }
 
-        $bytes = $doneBytes + (Total-Bytes)
-        $speedSum = 0
-        foreach ($k in $jobs.Keys) { $speedSum += $jobs[$k].speed }
+        # 汇总进度
+        $bytes = 0; $speed = 0; $doneCount = 0; $failCount = 0; $active = @()
+        foreach ($tk in $states.Keys) {
+            $st = $states[$tk]
+            $bytes += [int64]$st.bytes
+            switch ($st.state) {
+                'done' { $doneCount++ }
+                'failed' { $failCount++ }
+                'downloading' { $active += $tk }
+            }
+        }
+        foreach ($tk in $jobs.Keys) { $speed += $jobs[$tk].speed }
+
         Write-ProgressFile @{
-            running    = $true
-            phase      = 'download'
-            total      = $queueTotal
-            done       = $done
-            failed     = $failed
-            bytes      = $bytes
-            speed      = [math]::Round($speedSum, 2)
-            active     = @($jobs.Keys)
-            errors     = @($errors | Select-Object -Last 10)
-            startedAt  = $startAt
-            updatedAt  = (Get-Date).ToString('s')
+            running   = $true
+            phase     = 'download'
+            total     = $queue.Count
+            done      = $doneCount
+            failed    = $failCount
+            bytes     = $bytes
+            speed     = [math]::Round($speed, 2)
+            active    = @($active)
+            items     = @($states.Keys | ForEach-Object {
+                    [pscustomobject]@{ token = $_; state = $states[$_].state; bytes = $states[$_].bytes; expected = $states[$_].expected; error = $states[$_].error }
+                })
+            startedAt = $startAt
+            updatedAt = (Get-Date).ToString('s')
         }
     }
 
+    $doneCount = 0; $failCount = 0; $bytes = 0; $errs = @()
+    foreach ($tk in $states.Keys) {
+        if ($states[$tk].state -eq 'done') { $doneCount++; $bytes += [int64]$states[$tk].bytes }
+        elseif ($states[$tk].state -eq 'failed') { $failCount++; $errs += @{ token = $tk; error = $states[$tk].error } }
+    }
     Write-ProgressFile @{
-        running = $false; phase = 'done'; total = $queueTotal; done = $done; failed = $failed;
-        bytes = $doneBytes; speed = 0; errors = @($errors | Select-Object -Last 20);
+        running = $false; phase = 'done'; total = $queue.Count; done = $doneCount; failed = $failCount;
+        bytes = $bytes; speed = 0; errors = @($errs | Select-Object -Last 20);
+        items = @($states.Keys | ForEach-Object { [pscustomobject]@{ token = $_; state = $states[$_].state; bytes = $states[$_].bytes; error = $states[$_].error } });
         finishedAt = (Get-Date).ToString('s')
     }
     exit 0
 }
 catch {
-    Write-ProgressFile @{
-        running = $false; phase = 'error'; total = $queueTotal; done = $done; failed = $failed;
-        bytes = $doneBytes; speed = 0; errors = @(@{ token = '-'; error = $_.Exception.Message })
-    }
+    Write-ProgressFile @{ running = $false; phase = 'error'; total = $queue.Count; errors = @(@{ token = '-'; error = $_.Exception.Message }) }
     exit 1
 }

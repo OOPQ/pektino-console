@@ -69,7 +69,7 @@ function Invoke-Scan {
             $r.file_date = $f.date
             $found++
             # 只有 new/sent 才自动转 done；ignored（用户手动忽略）和 done 不动
-            if ($r.status -eq 'new' -or $r.status -eq 'sent' -or -not $r.status) {
+            if ($r.status -eq 'new' -or $r.status -eq 'sent' -or $r.status -eq 'downloading' -or -not $r.status) {
                 $r.status = 'done'
                 if (-not $r.note) { $r.note = 'auto:file' }
                 $changed++
@@ -500,6 +500,7 @@ function Get-DownloadInfo {
             }
             if ($p.active) { $info.active = @($p.active) }
             if ($p.errors) { $info.errors = @($p.errors) }
+            if ($p.items) { $info.items = @($p.items) }
         } catch { }
     }
     $alive = $false
@@ -543,10 +544,17 @@ function Start-Download {
     $proxy = if ($cfg.proxy) { [string]$cfg.proxy } else { '' }
 
     $argList = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $DlScript,
-        '-QueueFile', $DlQueue, '-Dir', $dir, '-Concurrent', "$conc", '-ProgressFile', $DlProgress)
+        '-QueueFile', $DlQueue, '-Dir', $dir, '-Concurrent', "$conc", '-ProgressFile', $DlProgress, '-CancelFile', $DlCancel)
     if ($proxy) { $argList += @('-Proxy', $proxy) }
 
     Remove-Item $DlProgress -Force -ErrorAction SilentlyContinue
+    Remove-Item $DlCancel -Force -ErrorAction SilentlyContinue
+    # 队列里的条目立刻标成 downloading，UI 与筛选都能看到
+    foreach ($q in $queue) {
+        $row = $State.Ledger | Where-Object { $_.token -eq $q.token } | Select-Object -First 1
+        if ($row -and -not $row.file_name) { $row.status = 'downloading' }
+    }
+    Save-Ledger -Rows $State.Ledger -Path $LedgerPath
     $proc = Start-Process -FilePath 'powershell.exe' -ArgumentList $argList -WindowStyle Hidden -PassThru
     $State.Download = @{ Pid = $proc.Id; Started = (Get-Date).ToString('s'); Count = $queue.Count; Dir = $dir }
     Touch-State
@@ -554,6 +562,37 @@ function Start-Download {
     $proxyText = if ($proxy) { "，代理 $proxy" } else { '，代理跟随系统' }
     Write-Log 'download' "开始下载 $($queue.Count) 条（并发 $conc$proxyText）→ $dir"
     [pscustomobject]@{ ok = $true; count = $queue.Count; dir = $dir; concurrent = $conc; proxy = $proxy }
+}
+
+function Revert-Downloading {
+    <#  把还挂在 downloading 的条目退回 new（下载失败/取消后调用）  #>
+    param([switch]$OnlyIfMissing)
+    $n = 0
+    foreach ($r in @($State.Ledger)) {
+        if ($r.status -ne 'downloading') { continue }
+        if ($OnlyIfMissing -and $r.file_name) { continue }
+        $r.status = if ($r.sent_at) { 'sent' } else { 'new' }
+        $n++
+    }
+    if ($n -gt 0) { Save-Ledger -Rows $State.Ledger -Path $LedgerPath; Touch-State }
+    return $n
+}
+
+function Cancel-DownloadItems {
+    <#  单条取消：把 token 写进取消文件，下载器下一轮 poll 会 kill 对应 curl  #>
+    param($Tokens)
+    if (-not $Tokens -or -not $Tokens.Count) { return @{ ok = $false; error = '没指定条目' } }
+    $list = @($Tokens | ForEach-Object { [string]$_ })
+    (ConvertTo-Json -InputObject $list -Depth 3) | Set-Content -Path $DlCancel -Encoding UTF8 -Force
+    # 立刻把状态退回去，别等整个队列跑完
+    foreach ($tk in $list) {
+        $row = $State.Ledger | Where-Object { $_.token -eq $tk } | Select-Object -First 1
+        if ($row -and -not $row.file_name) { $row.status = if ($row.sent_at) { 'sent' } else { 'new' } }
+    }
+    Save-Ledger -Rows $State.Ledger -Path $LedgerPath
+    Touch-State
+    Write-Log 'download' "取消下载 $(($list -join ', '))"
+    return @{ ok = $true; count = $list.Count }
 }
 
 function Stop-Download {
@@ -565,6 +604,7 @@ function Stop-Download {
     } catch { }
     try { Stop-Process -Id $pid2 -Force -ErrorAction SilentlyContinue } catch { }
     $State.Download = $null
+    [void](Revert-Downloading)
     Touch-State
     Write-Log 'download' '下载已取消'
     @{ ok = $true }
@@ -587,8 +627,80 @@ function Step-Download {
     $dir = if ($State.Download.Dir) { $State.Download.Dir } else { (Read-Config -Root $Root).downloadDir }
     $count = $State.Download.Count
     $State.Download = $null
+    $reverted = Revert-Downloading -OnlyIfMissing
+    try { [void](Repair-PartFiles) } catch { }
     try { [void](Invoke-Scan -Silent -KeepStatus) } catch { }
     try { Update-Thumbs -CoverDir $CoverDir -ThumbDir $ThumbDir } catch { }
     Touch-State
-    Write-Log 'download' "下载进程结束（队列 $count 条），已重新扫描目录"
+    Write-Log 'download' "下载进程结束（队列 $count 条，未完成退回 $reverted 条），已重新扫描目录"
+}
+
+function Repair-PartFiles {
+    <#
+      清理孤立的 .mp4.part：
+        - 同名 .mp4 已存在 → 删掉 .part
+        - 大小 == 远端 Content-Length → 改名成 .mp4（这就是"下载好了还有多余后缀"的情况）
+        - 两者都不满足 → 留作续传
+      跳过最近 2 分钟还在写的文件，避免和正在跑的下载打架。
+    #>
+    param([int]$Limit = 20)
+
+    $dir = $Config.downloadDir
+    if (-not $dir -or -not (Test-Path $dir)) { return [pscustomobject]@{ ok = $true; renamed = 0; deleted = 0; kept = 0 } }
+
+    $curl = (Get-Command curl.exe -ErrorAction SilentlyContinue).Source
+    if (-not $curl) { $curl = 'C:\Windows\System32\curl.exe' }
+    $proxy = if ($Config.proxy) { [string]$Config.proxy } else { '' }
+    if (-not $proxy) {
+        try {
+            $reg = Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Internet Settings' -ErrorAction Stop
+            if ($reg.ProxyEnable -eq 1 -and $reg.ProxyServer) {
+                $proxy = [string]$reg.ProxyServer
+                if ($proxy -notmatch '^[a-z]+://') { $proxy = 'http://' + $proxy }
+            }
+        } catch { }
+    }
+
+    $renamed = 0; $deleted = 0; $kept = 0; $checked = 0
+    $now = Get-Date
+    foreach ($p in @(Get-ChildItem -Path $dir -Filter '*.mp4.part' -File -ErrorAction SilentlyContinue)) {
+        if ($checked -ge $Limit) { break }
+        if (($now - $p.LastWriteTime).TotalMinutes -lt 2) { $kept++; continue }
+        $checked++
+        $tk = $p.Name -replace '\.mp4\.part$', ''
+        $final = Join-Path $dir ($tk + '.mp4')
+        if (Test-Path $final) {
+            Remove-Item $p.FullName -Force -ErrorAction SilentlyContinue
+            $deleted++
+            continue
+        }
+        $row = $State.Ledger | Where-Object { $_.token -eq $tk } | Select-Object -First 1
+        if (-not $row -or -not $row.url) { $kept++; continue }
+        $expected = [int64]0
+        try {
+            $a = @('-sS', '-I', '-L', '--max-time', '15')
+            if ($proxy) { $a += @('-x', $proxy) }
+            $a += $row.url
+            foreach ($line in (& $curl @a 2>$null)) {
+                if ($line -match '(?i)^content-length:\s*(\d+)') { $expected = [int64]$Matches[1]; break }
+            }
+        } catch { }
+        if ($expected -gt 0 -and $p.Length -eq $expected) {
+            try {
+                Move-Item -Path $p.FullName -Destination $final -Force
+                $renamed++
+            } catch { $kept++ }
+        } elseif ($expected -gt 0 -and $p.Length -gt $expected) {
+            # 比远端还大：文件被写坏（重复追加/断点错位），删掉重下
+            Remove-Item $p.FullName -Force -ErrorAction SilentlyContinue
+            $deleted++
+        } else {
+            $kept++
+        }
+    }
+    if ($renamed -gt 0 -or $deleted -gt 0) {
+        try { [void](Invoke-Scan -Silent) } catch { }
+        Write-Log 'download' "整理 .part：改名 $renamed，删除 $deleted，保留 $kept"
+    }
+    return [pscustomobject]@{ ok = $true; renamed = $renamed; deleted = $deleted; kept = $kept }
 }

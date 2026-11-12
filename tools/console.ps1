@@ -588,6 +588,12 @@ try {
         Push-Sse
         if (Get-Command Step-Download -ErrorAction SilentlyContinue) { try { Step-Download } catch { } }
         if (Get-Command Step-Covers -ErrorAction SilentlyContinue) { try { Step-Covers } catch { } }
+        if (Get-Command Step-DownloadGuard -ErrorAction SilentlyContinue) {
+            if (-not $script:GuardAt -or ((Get-Date) - [datetime]$script:GuardAt).TotalSeconds -ge 30) {
+                $script:GuardAt = (Get-Date).ToString('s')
+                try { Step-DownloadGuard } catch { }
+            }
+        }
     }
 } finally {
     foreach ($c in @($script:SseClients)) { try { $c.Stream.Close() } catch { }; try { $c.Socket.Close() } catch { } }

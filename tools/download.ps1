@@ -73,6 +73,50 @@ foreach ($it in $queue) {
     $states[[string]$it.token] = @{ state = 'queued'; bytes = 0; expected = 0; error = '' }
 }
 
+try { Add-Type -AssemblyName System.Net.Http -ErrorAction Stop } catch { }
+$http = $null
+function New-HeadClient {
+    $h = New-Object System.Net.Http.HttpClientHandler
+    $h.MaxConnectionsPerServer = 16
+    $h.AutomaticDecompression = [System.Net.DecompressionMethods]::GZip -bor [System.Net.DecompressionMethods]::Deflate
+    if ($script:proxyArg) {
+        $h.Proxy = New-Object System.Net.WebProxy($script:proxyArg)
+        $h.UseProxy = $true
+    }
+    $c = New-Object System.Net.Http.HttpClient($h)
+    $c.Timeout = [TimeSpan]::FromSeconds(20)
+    $c.DefaultRequestHeaders.UserAgent.ParseAdd('Mozilla/5.0 (Windows NT 10.0; Win64; x64)')
+    return $c
+}
+
+function Get-RemoteSizesParallel {
+    <#  并行取一批 URL 的 Content-Length（拿不到给 0），避免逐条 HEAD 拖慢并发启动  #>
+    param([object[]]$items)
+    $map = @{}
+    if (-not $items -or -not $items.Count) { return $map }
+    if (-not $script:http) { $script:http = New-HeadClient }
+    $reqs = @{}
+    foreach ($it in $items) {
+        try {
+            $m = New-Object System.Net.Http.HttpRequestMessage([System.Net.Http.HttpMethod]::Head, [string]$it.url)
+            $reqs[[string]$it.token] = $script:http.SendAsync($m)
+        } catch {
+            $map[[string]$it.token] = [int64]0
+        }
+    }
+    foreach ($tk in @($reqs.Keys)) {
+        try {
+            $resp = $reqs[$tk].GetAwaiter().GetResult()
+            $len = $resp.Content.Headers.ContentLength
+            $map[$tk] = @{ size = $(if ($len) { [int64]$len } else { [int64]0 }); status = [int]$resp.StatusCode }
+            $resp.Dispose()
+        } catch {
+            $map[$tk] = [int64]0
+        }
+    }
+    return $map
+}
+
 function Get-RemoteSize([string]$url) {
     try {
         $a = @('-sS', '-I', '-L', '--max-time', '20')
@@ -157,11 +201,20 @@ try {
             }
         }
 
-        # 补满并发
-        while ($jobs.Count -lt $Concurrent -and $pending.Count -gt 0) {
-            $item = $pending.Dequeue()
+        # 补满并发：先把这一批的远端大小并行问出来，再一起启动，避免逐条 HEAD 拖慢
+        $slots = $Concurrent - $jobs.Count
+        if ($slots -gt 0 -and $pending.Count -gt 0) {
+            $batch = @()
+            while ($batch.Count -lt $slots -and $pending.Count -gt 0) {
+                $it = $pending.Dequeue()
+                if ($states[[string]$it.token].state -eq 'cancelled') { continue }
+                $batch += $it
+            }
+            $sizes = @{}
+            if ($batch.Count -gt 0) { $sizes = Get-RemoteSizesParallel -items $batch }
+
+        foreach ($item in $batch) {
             $tk = [string]$item.token
-            if ($states[$tk].state -eq 'cancelled') { continue }
 
             $final = Join-Path $Dir ($tk + '.mp4')
             $part = Join-Path $Dir ($tk + '.mp4.part')
@@ -171,8 +224,15 @@ try {
                 continue
             }
 
-            $expected = Get-RemoteSize -url $item.url
+            $expected = 0; $code = 0
+            if ($sizes.ContainsKey($tk)) { $expected = [int64]$sizes[$tk].size; $code = [int]$sizes[$tk].status }
             $states[$tk].expected = $expected
+            if ($code -eq 403 -or $code -eq 404 -or $code -eq 410) {
+                # 源文件已被删除/屏蔽，重试也没用
+                $states[$tk].state = 'dead'
+                $states[$tk].error = "http:$code"
+                continue
+            }
             # 上次其实已经下满（curl 退出码异常/进程被杀）→ 直接收尾
             if ($expected -gt 0 -and (Test-Path $part) -and (Get-Item $part).Length -eq $expected) {
                 Complete-Item $tk
@@ -190,6 +250,7 @@ try {
                 $states[$tk].state = 'failed'
                 $states[$tk].error = $_.Exception.Message
             }
+        }
         }
 
         Start-Sleep -Milliseconds $PollMs
@@ -257,7 +318,9 @@ try {
             speed     = [math]::Round($speed, 2)
             active    = @($active)
             items     = @($states.Keys | ForEach-Object {
-                    [pscustomobject]@{ token = $_; state = $states[$_].state; bytes = $states[$_].bytes; expected = $states[$_].expected; error = $states[$_].error }
+                    $sp = 0
+                    if ($jobs.ContainsKey($_)) { $sp = $jobs[$_].speed }
+                    [pscustomobject]@{ token = $_; state = $states[$_].state; bytes = $states[$_].bytes; expected = $states[$_].expected; speed = $sp; error = $states[$_].error }
                 })
             startedAt = $startAt
             updatedAt = (Get-Date).ToString('s')

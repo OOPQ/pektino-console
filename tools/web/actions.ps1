@@ -489,6 +489,36 @@ function Invoke-Send {
 
 # ---------------- 内置下载器 ----------------
 
+function Get-DownloadProcesses {
+    <#  找出所有"正在下载"的进程：下载器本身 + 它起的 curl/aria2c
+        不依赖 State.Download.Pid，服务重启后也能清理孤儿进程  #>
+    $out = @()
+    try {
+        foreach ($p in @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue)) {
+            if (-not $p.CommandLine) { continue }
+            if ($p.Name -eq 'curl.exe' -and $p.CommandLine -match '\.mp4\.part') { $out += $p }
+            elseif ($p.Name -eq 'aria2c.exe' -and $p.CommandLine -match '\.mp4\.part') { $out += $p }
+            elseif ($p.Name -eq 'powershell.exe' -and $p.CommandLine -match 'download\.ps1') { $out += $p }
+        }
+    } catch { }
+    return $out
+}
+
+function Stop-AllDownloadProcesses {
+    $procs = Get-DownloadProcesses
+    $killed = 0
+    foreach ($p in $procs) {
+        if ($p.ProcessId -eq $PID) { continue }
+        try {
+            & taskkill.exe /PID $p.ProcessId /T /F 2>&1 | Out-Null
+            $killed++
+        } catch {
+            try { Stop-Process -Id $p.ProcessId -Force -ErrorAction SilentlyContinue; $killed++ } catch { }
+        }
+    }
+    return $killed
+}
+
 function Get-DownloadInfo {
     <#  返回下载器的当前状态：进程是否活着 + 进度文件内容  #>
     $info = [ordered]@{ running = $false; phase = ''; total = 0; done = 0; failed = 0; bytes = 0; speed = 0; active = @(); errors = @() }
@@ -507,6 +537,10 @@ function Get-DownloadInfo {
     if ($State.Download -and $State.Download.Pid) {
         $alive = [bool](Get-Process -Id $State.Download.Pid -ErrorAction SilentlyContinue)
     }
+    if (-not $alive) {
+        # 服务重启后 State 丢了，但 curl 可能还在跑（孤儿）
+        $alive = ((Get-DownloadProcesses).Count -gt 0)
+    }
     $info.running = $alive
     $info.pid = if ($State.Download) { $State.Download.Pid } else { 0 }
     [pscustomobject]$info
@@ -519,6 +553,8 @@ function Start-Download {
     if ($State.Job -and $State.Job.State -eq 'Running') {
         return @{ ok = $false; error = '抓取任务正在运行，等它结束再下载' }
     }
+    # 先清掉可能残留的孤儿下载进程，否则会一直挡住新任务
+    if (-not ($State.Download -and $State.Download.Pid)) { [void](Stop-AllDownloadProcesses) }
     if (Get-DownloadInfo | ForEach-Object { $_.running }) {
         return @{ ok = $false; error = '已经有一个下载任务在跑' }
     }
@@ -596,18 +632,23 @@ function Cancel-DownloadItems {
 }
 
 function Stop-Download {
-    if (-not $State.Download -or -not $State.Download.Pid) { return @{ ok = $false; error = '没有正在进行的下载' } }
-    $pid2 = $State.Download.Pid
-    try {
-        # 连同子进程（curl）一起结束
-        & taskkill.exe /PID $pid2 /T /F 2>&1 | Out-Null
-    } catch { }
-    try { Stop-Process -Id $pid2 -Force -ErrorAction SilentlyContinue } catch { }
+    <#  停止所有下载：既结束跟踪的下载器，也清掉服务重启后遗留的孤儿 curl  #>
+    $killed = 0
+    if ($State.Download -and $State.Download.Pid) {
+        $pid2 = $State.Download.Pid
+        try { & taskkill.exe /PID $pid2 /T /F 2>&1 | Out-Null; $killed++ } catch { }
+        try { Stop-Process -Id $pid2 -Force -ErrorAction SilentlyContinue } catch { }
+    }
+    $orphans = Stop-AllDownloadProcesses
     $State.Download = $null
-    [void](Revert-Downloading)
+    [void](Apply-DeadFromProgress)
+    $reverted = Revert-Downloading
     Touch-State
-    Write-Log 'download' '下载已取消'
-    @{ ok = $true }
+    if ($killed -eq 0 -and $orphans -eq 0 -and $reverted -eq 0) {
+        return @{ ok = $false; error = '没有正在进行的下载' }
+    }
+    Write-Log 'download' "下载已取消（进程 $($killed + $orphans) 个，状态回退 $reverted 条）"
+    @{ ok = $true; killed = $killed + $orphans; reverted = $reverted }
 }
 
 function Step-Download {
@@ -627,6 +668,7 @@ function Step-Download {
     $dir = if ($State.Download.Dir) { $State.Download.Dir } else { (Read-Config -Root $Root).downloadDir }
     $count = $State.Download.Count
     $State.Download = $null
+    [void](Apply-DeadFromProgress)
     $reverted = Revert-Downloading -OnlyIfMissing
     try { [void](Repair-PartFiles) } catch { }
     try { [void](Invoke-Scan -Silent -KeepStatus) } catch { }
@@ -703,4 +745,36 @@ function Repair-PartFiles {
         Write-Log 'download' "整理 .part：改名 $renamed，删除 $deleted，保留 $kept"
     }
     return [pscustomobject]@{ ok = $true; renamed = $renamed; deleted = $deleted; kept = $kept }
+}
+
+function Step-DownloadGuard {
+    <#  兜底：没有任何下载进程，却还有 downloading 状态的行 → 说明是上次失败/崩溃留下的，回退  #>
+    if ($State.Download -and $State.Download.Pid) { return }
+    if ((Get-DownloadProcesses).Count -gt 0) { return }
+    $n = Revert-Downloading
+    if ($n -gt 0) { Write-Log 'download' "没有下载进程，回退 $n 条「下载中」状态" }
+}
+
+function Apply-DeadFromProgress {
+    <#  把进度文件里 state=dead（源文件 403/404）的条目改成 ignored，避免反复重试  #>
+    try {
+        if (-not (Test-Path $DlProgress)) { return 0 }
+        $pj = Get-Content $DlProgress -Raw -Encoding UTF8 | ConvertFrom-Json
+        $dead = @($pj.items | Where-Object { $_.state -eq 'dead' })
+        $n = 0
+        foreach ($d in $dead) {
+            $row = $State.Ledger | Where-Object { $_.token -eq $d.token } | Select-Object -First 1
+            if ($row -and $row.status -ne 'ignored') {
+                $row.status = 'ignored'
+                $row.note = "dead:$($d.error)"
+                $n++
+            }
+        }
+        if ($n -gt 0) {
+            Save-Ledger -Rows $State.Ledger -Path $LedgerPath
+            Write-Log 'download' "标记 $n 条源文件失效（403/404），已转为忽略"
+            Touch-State
+        }
+        return $n
+    } catch { return 0 }
 }

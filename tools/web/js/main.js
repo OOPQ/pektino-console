@@ -90,7 +90,7 @@ function paintDownload(dl) {
   list.innerHTML = show.map(i => {
     const pct = i.expected ? Math.round(100 * i.bytes / i.expected) : 0;
     const right = i.state === 'downloading'
-      ? `${mb(i.bytes)} MB（${pct}%）`
+      ? `${mb(i.bytes)} MB（${pct}%） · ${i.speed || 0} MB/s`
       : i.state === 'failed' ? (i.error || '失败') : '排队中';
     return `<div style="display:flex;gap:8px;align-items:center">
       <span class="mono" style="flex:1;overflow:hidden;text-overflow:ellipsis">${i.token}</span>
@@ -186,9 +186,17 @@ async function doImport() {
 }
 
 async function doCancelJob() {
+  // 进度条上的 ✕：下载在跑就取消下载，否则取消抓取/入库任务
+  const dl = state.DOWNLOAD;
   try {
-    const r = await api('/api/job/cancel', {});
-    toast(r.ok ? `已取消 ${r.kind}` : (r.error || '取消失败'));
+    if (dl && dl.running) {
+      if (!confirm('取消正在进行的下载？已下载的部分会保留，可续传。')) return;
+      const r = await api('/api/download/cancel', {});
+      toast(r.ok ? `已取消下载（结束 ${r.killed || 0} 个进程）` : (r.error || '取消失败'), 4000);
+    } else {
+      const r = await api('/api/job/cancel', {});
+      toast(r.ok ? `已取消 ${r.kind}` : (r.error || '取消失败'));
+    }
   } catch (e) { toast('取消失败'); }
   load();
 }

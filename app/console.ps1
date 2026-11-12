@@ -694,7 +694,11 @@ try {
                 }
             }
         }
+        # 主循环尾巴绝不能把服务带崩：任何异常只记录，下一轮继续
+        try {
         Push-Sse
+        } catch { try { Write-FileLog "loop tail error: $($_.Exception.Message)" } catch { } }
+        try {
         # 任务收尾不能只依赖前端轮询 /api/state：没人看页面时也要把 Job 释放掉
         if (Get-Command Update-Job -ErrorAction SilentlyContinue) { try { Update-Job } catch { } }
         if (Get-Command Step-Download -ErrorAction SilentlyContinue) { try { Step-Download } catch { } }
@@ -705,7 +709,10 @@ try {
                 try { Step-DownloadGuard } catch { }
             }
         }
+        } catch { try { Write-FileLog "loop step error: $($_.Exception.Message)" } catch { }; Start-Sleep -Milliseconds 200 }
     }
+} catch {
+    try { Write-FileLog "main loop crashed: $($_.Exception.Message) / $($_.ScriptStackTrace)" } catch { }
 } finally {
     foreach ($c in @($script:SseClients)) { try { $c.Stream.Close() } catch { }; try { $c.Socket.Close() } catch { } }
     $listener.Stop()

@@ -6,7 +6,7 @@ export const STATUS_LABEL = { new: '待下载', sent: '已投递', done: '已完
 
 /* ---------- 偏好（localStorage） ---------- */
 export const PREFS = Object.assign({
-  sortKey: 'rank', sortDir: 'asc', per: 50, covers: true, compact: false,
+  sortKey: 'rank', sortDir: 'asc', per: 50, covers: true, compact: false, pageCount: 3,
   page: 1, status: 'all', res: 'all', minDur: '', q: '',
   cols: {
     cover: true, rank: true, duration: true, res: true, views: true, likes: true,

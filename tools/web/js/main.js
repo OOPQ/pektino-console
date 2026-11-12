@@ -1,5 +1,5 @@
 /* main.js — 数据加载、工具条、批量操作、初始化 */
-import { $, state, PREFS, api, toast, onEvent } from './core.js';
+import { $, state, PREFS, savePrefs, api, toast, onEvent } from './core.js';
 import { render, markActiveKpi, initTable } from './table.js';
 import { initRows, doPlay, delFiles } from './rows.js';
 import { initPanels, connectSse } from './panels.js';
@@ -16,10 +16,12 @@ function renderJob(job) {
   if (!job || !job.running) { el.classList.remove('on'); return; }
   const p = job.progress || {};
   const total = p.total || 0, done = p.done || 0;
+  const pages = job.pages || [];
+  const contiguous = pages.length > 1 && pages.every((n, i) => n === i + 1);
   el.classList.add('on');
   $('#progLabel').textContent = job.rank === 'import'
     ? '本地入库中'
-    : `抓取中 · ${job.rank} p${(job.pages || []).join(',')}`;
+    : `抓取中 · ${job.rank} ${contiguous ? `前 ${pages.length} 页` : 'p' + pages.join(',')}`;
   $('#progBar').style.width = (total ? Math.round(100 * done / total) : 0) + '%';
   $('#progStat').textContent = `${PHASE_LABEL[p.phase] || '准备'} ${done}/${total} · ${p.speed || 0}/s · ${job.elapsed}s`;
 }
@@ -97,15 +99,25 @@ async function load() {
 }
 
 /* ================= 工具条 ================= */
+/* 抓取前 N 页：页码固定从 1 开始 */
+const MAX_PAGES = 20;
+function pageList() {
+  const raw = parseInt($('#pageCount').value);
+  const n = isNaN(raw) ? 3 : Math.max(1, Math.min(MAX_PAGES, raw));
+  if (String(n) !== $('#pageCount').value) $('#pageCount').value = String(n);
+  return Array.from({ length: n }, (_, i) => i + 1);
+}
+
 async function doScrape() {
   const rank = $('#rank').value;
-  const pages = $('#pages').value.split(',').map(x => parseInt(x.trim())).filter(x => x > 0);
+  const pages = pageList();
   const limit = parseInt($('#limit').value) || 0;
-  if (!pages.length) return toast('页码填一下，例如 1,2,3');
   try {
     const r = await api('/api/scrape', { rank, pages, limit, incremental: $('#chkInc').checked });
     if (!r.ok) return toast('失败：' + r.error, 5000);
-    toast(r.incremental ? `已开始（增量，跳过 ${r.skipped} 条）` : '已开始（全量）');
+    toast(r.incremental
+      ? `已开始：前 ${pages.length} 页（增量，跳过 ${r.skipped} 条）`
+      : `已开始：前 ${pages.length} 页`);
     load();
   } catch (e) { toast('请求失败：' + e.message, 5000); }
 }
@@ -240,6 +252,13 @@ function initBulk() {
 /* ================= 初始化 ================= */
 function initControls() {
   $('#chkCovers').checked = state.SHOW_COVERS;
+  $('#pageCount').value = String(PREFS.pageCount || 3);
+  $('#pageCount').addEventListener('change', e => {
+    const raw = parseInt(e.target.value);
+    PREFS.pageCount = isNaN(raw) ? 3 : Math.max(1, Math.min(MAX_PAGES, raw));
+    savePrefs();
+    e.target.value = String(PREFS.pageCount);
+  });
   document.body.classList.toggle('compact', !!PREFS.compact);
   $('#chkCompact').checked = !!PREFS.compact;
   $('#q').value = state.FILTER.q;

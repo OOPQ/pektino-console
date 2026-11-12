@@ -88,7 +88,7 @@
     <option value="monthly">月榜</option>
     <option value="all">总榜</option>
   </select>
-  <input type="text" id="pages" value="1,2,3" class="mini" style="width:76px" title="页码，例如 1,2,3">
+  <span class="durwrap"><input type="number" id="pageCount" value="3" min="1" max="20" step="1" title="从第 1 页抓到第 N 页"><em>页</em></span>
   <input type="number" id="limit" value="0" min="0" step="1" title="只抓前 N 条，0 = 全部">
   <label class="chk"><input type="checkbox" id="chkInc" checked>增量</label>
   <button class="primary" id="btnScrape">抓取并入库</button>

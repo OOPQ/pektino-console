@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>pektino 控制台</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+
+<header>
+  <span class="dot" id="dot"></span>
+  <h1>pektino 控制台</h1>
+  <span class="sub" id="sub">连接中…</span>
+  <span class="spacer"></span>
+  <span class="sub" id="busy"></span>
+  <button class="icon" id="btnLog" title="日志">☰</button>
+  <button class="icon" id="btnSettings" title="设置">⚙</button>
+  <button class="icon" id="btnRefresh" title="刷新">⟳</button>
+</header>
+
+<div class="kpis">
+  <div class="kpi"><div class="k">总数</div><div class="v" id="kTotal">–</div></div>
+  <div class="kpi new"><div class="k">待下载</div><div class="v" id="kNew">–</div></div>
+  <div class="kpi sent"><div class="k">已投递</div><div class="v" id="kSent">–</div></div>
+  <div class="kpi done"><div class="k">已完成</div><div class="v" id="kDone">–</div></div>
+  <div class="kpi done"><div class="k">在磁盘</div><div class="v" id="kDisk">–</div></div>
+  <div class="kpi"><div class="k">未下载</div><div class="v" id="kMiss">–</div></div>
+  <div class="kpi gold"><div class="k">收藏</div><div class="v" id="kFav">–</div></div>
+  <div class="kpi" id="kpiWatch" title="点击只看待看"><div class="k">待看</div><div class="v" id="kWatch">–</div></div>
+  <div class="kpi"><div class="k">总时长(h)</div><div class="v" id="kHours">–</div></div>
+  <div class="kpi"><div class="k">今日新增</div><div class="v" id="kToday">–</div></div>
+</div>
+
+<div class="bar queries">
+  <input type="text" id="q" placeholder="查询：token / 分辨率 / 时长（按 / 聚焦，Esc 清空）">
+  <select id="fStatus" title="按状态筛选">
+    <option value="all">全部状态</option>
+    <option value="new">待下载</option>
+    <option value="sent">已投递</option>
+    <option value="done">已完成</option>
+    <option value="ignored">忽略</option>
+    <option value="have">已在磁盘</option>
+    <option value="miss">未下载</option>
+    <option value="towatch">待看（在盘未播）</option>
+    <option value="watched">已看</option>
+    <option value="rated">已评分</option>
+    <option value="unrated">未评分</option>
+    <option value="top">高分（≥4 星）</option>
+    <option value="today">今日新增</option>
+    <option value="fav">收藏 ★</option>
+  </select>
+  <select id="fRes" title="按分辨率筛选">
+    <option value="all">全部分辨率</option>
+    <option value="1080">1080p 及以上</option>
+    <option value="720">720p 及以上</option>
+    <option value="4k">4K 及以上</option>
+    <option value="portrait">竖屏</option>
+  </select>
+  <span class="durwrap"><input type="number" id="fMinDur" min="0" step="1" placeholder="最短" title="最短时长（分钟），留空不限"><em>分钟</em></span>
+  <select id="fSortQuick" title="快捷排序">
+    <option value="">排序…</option>
+    <option value="views">观看最多</option>
+    <option value="likes">点赞最多</option>
+    <option value="rating">评分最高</option>
+    <option value="duration">时长最长</option>
+    <option value="first_seen">最新入库</option>
+    <option value="disk">文件最大</option>
+  </select>
+  <button class="ghost" id="btnReset">重置</button>
+  <span style="position:relative">
+    <button class="ghost" id="btnCols" title="显示/隐藏列">列 ▾</button>
+    <div class="colpop" id="colpop"></div>
+  </span>
+  <span class="spacer"></span>
+  <label class="chk"><input type="checkbox" id="chkCovers" checked>封面</label>
+  <label class="chk"><input type="checkbox" id="chkCompact">紧凑</label>
+</div>
+
+<div class="bar actions">
+  <select id="rank">
+    <option value="daily">日榜</option>
+    <option value="weekly">周榜</option>
+    <option value="monthly">月榜</option>
+    <option value="all">总榜</option>
+  </select>
+  <input type="text" id="pages" value="1,2,3" class="mini" style="width:76px" title="页码，例如 1,2,3">
+  <input type="number" id="limit" value="0" min="0" step="1" title="只抓前 N 条，0 = 全部">
+  <label class="chk"><input type="checkbox" id="chkInc" checked>增量</label>
+  <button class="primary" id="btnScrape">抓取并入库</button>
+  <button id="btnImport" title="扫描下载目录，把本站视频录入台账">本地入库</button>
+  <span class="divider"></span>
+  <button id="btnSendNew">投递待下载</button>
+  <button id="btnPreview">预览 dry-run</button>
+  <button id="btnGacha" title="从在盘条目里随机抽一个（快捷键 R）">🎲 抽一卡</button>
+  <span class="spacer"></span>
+  <a href="/api/export" download><button id="btnExport">导出 CSV</button></a>
+</div>
+
+<div class="prog" id="prog">
+  <span class="label" id="progLabel">抓取中…</span>
+  <span class="barwrap"><i id="progBar"></i></span>
+  <span class="sub" id="progStat"></span>
+  <button class="ghost icon" id="btnCancelJob" title="取消任务">✕</button>
+</div>
+
+<main>
+  <div id="banner">你是用 <b>file://</b> 直接打开的，连不上后台。请访问
+    <a href="http://127.0.0.1:8791/" style="color:#7fb8ff">http://127.0.0.1:8791/</a>（先双击 启动控制台.cmd）
+  </div>
+
+  <div class="tablewrap" id="tablewrap">
+    <table>
+      <thead>
+        <tr>
+          <th style="width:30px"><input type="checkbox" id="chkAll"></th>
+          <th style="width:38px" title="收藏">★</th>
+          <th style="width:92px" class="col-cover">封面</th>
+          <th class="sortable col-rank" data-key="rank" style="width:64px">排名<span class="ar">▲</span></th>
+          <th class="sortable col-duration" data-key="duration" style="width:72px">时长<span class="ar">▲</span></th>
+          <th class="sortable col-res" data-key="res" style="width:92px">分辨率<span class="ar">▲</span></th>
+          <th class="sortable col-views" data-key="views" style="width:72px">观看<span class="ar">▲</span></th>
+          <th class="sortable col-likes" data-key="likes" style="width:64px">点赞<span class="ar">▲</span></th>
+          <th class="sortable col-plays" data-key="plays" style="width:64px" title="本地播放次数">播放<span class="ar">▲</span></th>
+          <th class="sortable col-rating" data-key="rating" style="width:92px" title="点击星星打分，再点同一颗清除">评分<span class="ar">▲</span></th>
+          <th class="sortable col-token" data-key="token" style="width:150px">token<span class="ar">▲</span></th>
+          <th class="sortable col-status" data-key="status" style="width:78px">状态<span class="ar">▲</span></th>
+          <th class="sortable col-disk" data-key="disk" style="width:92px">磁盘<span class="ar">▲</span></th>
+          <th class="sortable col-first_seen" data-key="first_seen" style="width:96px">入库<span class="ar">▲</span></th>
+          <th style="width:180px">操作</th>
+        </tr>
+      </thead>
+      <tbody id="tbody"><tr><td colspan="15" class="empty">加载中…</td></tr></tbody>
+    </table>
+  </div>
+
+  <div class="pager">
+    <span class="sub" id="pgInfo">–</span>
+    <span class="spacer"></span>
+    <span class="sub" id="sseInfo">–</span>
+    <label class="sub">每页</label>
+    <select id="pgSize" style="padding:3px 6px">
+      <option value="25">25</option><option value="50" selected>50</option>
+      <option value="100">100</option><option value="200">200</option><option value="0">全部</option>
+    </select>
+    <button class="ghost pg" id="pgFirst">«</button>
+    <button class="ghost pg" id="pgPrev">‹</button>
+    <span id="pgNums" style="display:flex;gap:4px"></span>
+    <button class="ghost pg" id="pgNext">›</button>
+    <button class="ghost pg" id="pgLast">»</button>
+  </div>
+</main>
+
+<div class="selbar" id="selbar">
+  <b id="selCount">已选 0</b>
+  <button class="ghost rowbtn" id="selSend">投递</button>
+  <button class="ghost rowbtn" id="selFavToggle">★ 收藏</button>
+  <button class="ghost rowbtn" id="selDone">标记完成</button>
+  <button class="ghost rowbtn" id="selWatchedToggle">✓ 标记已看</button>
+  <span class="sub" style="margin-left:4px">打分</span>
+  <span class="rt" id="selRate"></span>
+  <button class="ghost rowbtn" id="selDelete" style="color:#f85149">删除文件</button>
+  <button class="ghost rowbtn" id="selCopy">复制 URL</button>
+  <button class="ghost rowbtn" id="selClear">清空</button>
+</div>
+
+<div class="drawer" id="drawer">
+  <div class="sheet">
+    <h3>设置</h3>
+    <div class="field">
+      <label>下载目录（迅雷保存位置）</label>
+      <input type="text" id="dirInput" placeholder="例如 D:\Downloads">
+    </div>
+    <div style="display:flex;gap:8px;margin-bottom:14px">
+      <button class="primary" id="btnSaveDir">保存并扫描</button>
+      <button id="btnScan">重新扫描</button>
+    </div>
+    <div class="sub" id="dirInfo" style="margin-bottom:16px">–</div>
+
+    <h3>运行指标</h3>
+    <div class="sub" id="metricsBox">–</div>
+    <div class="logbox" id="slowList" style="margin-top:6px"></div>
+    <h3 style="margin-top:14px">前端错误（最近 20 条）</h3>
+    <div class="logbox" id="errList"></div>
+
+    <h3 style="margin-top:16px">孤立文件</h3>
+    <div class="sub" id="orphanInfo">–</div>
+    <div class="logbox" id="orphanList" style="margin-top:6px"></div>
+
+    <h3 style="margin-top:16px">日志</h3>
+    <div class="logbox" id="logbox"><div>暂无日志</div></div>
+    <div style="margin-top:14px" class="sub" id="diag">自检：–</div>
+  </div>
+</div>
+
+<div class="lightbox" id="lightbox">
+  <div class="box">
+    <img id="lbImg" alt="">
+    <div class="meta">
+      <h3 id="lbToken">–</h3>
+      <div class="big mstats" id="lbMeta"></div>
+      <div class="actions">
+        <button class="ghost" id="lbFav">☆ 收藏</button>
+        <button class="ghost" id="lbPlay">播放</button>
+        <button class="ghost" id="lbReveal">定位</button>
+        <button class="ghost" id="lbCopy">复制链接</button>
+        <button class="ghost" id="lbClose">关闭</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="lightbox" id="gacha">
+  <div class="box">
+    <div class="card" id="gCard">
+      <span class="lab" id="gLab">🎲 抽卡</span>
+      <img id="gImg" alt="">
+      <div class="gmeta" id="gMeta"></div>
+    </div>
+    <div class="meta">
+      <h3 id="gTok">–</h3>
+      <div class="big mstats" id="gInfo"></div>
+      <div class="mstats" style="margin-top:2px">
+        <div class="mrow"><span>评分</span><em class="gold"><span class="rt" id="gRate" style="gap:3px"></span></em></div>
+      </div>
+      <div class="actions">
+        <button id="gFav">★ 收藏</button>
+        <button id="gPlay">▶ 播放</button>
+        <button class="ghost" id="gReveal">定位</button>
+        <button class="ghost" id="gCopy">复制链接</button>
+        <button class="ghost" id="gAgain">🎲 再抽</button>
+        <button class="ghost" id="gClose">关闭</button>
+      </div>
+      <div class="sub" id="gRateHint" style="font-size:11px">提示：按 1–5 打星，R 再抽，Esc 关闭</div>
+    </div>
+  </div>
+</div>
+
+<div class="ctxmenu" id="ctxmenu"></div>
+<div id="toast"></div>
+
+<script src="/static/app.js"></script>
+</body>
+</html>

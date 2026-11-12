@@ -6,19 +6,18 @@ import { doPlay } from './rows.js';
 /* ================= 灯箱 ================= */
 const META_W = 280, GAP = 18;
 
-function metaRows(r, withRating = true) {
+function metaRows(r, withRating = true, ratingHtml = null) {
   return `<div class="mhead"><b>${r.duration || '–'}</b><i>${r.res || '–'}</i></div>
     <div class="mrow"><span>站点观看</span><em>${fmtNum(r.views)}</em></div>
     <div class="mrow"><span>点赞</span><em>${fmtNum(r.likes)}</em></div>
     <div class="mrow"><span>状态</span><em>${stTag(r.status)}</em></div>
     <div class="mrow"><span>本地文件</span><em>${r.file_name ? '✓ ' + fmtMB(r.file_size) : '<span style="color:#7f8ea1">未下载</span>'}</em></div>
-    ${withRating ? `<div class="mrow"><span>评分</span><em class="gold">${[1, 2, 3, 4, 5].map(n => n <= (+r.rating || 0) ? '★' : '☆').join('')}</em></div>` : ''}
+    ${withRating ? `<div class="mrow"><span>评分</span><em class="gold">${ratingHtml || [1, 2, 3, 4, 5].map(n => n <= (+r.rating || 0) ? '★' : '☆').join('')}</em></div>` : ''}
     <div class="mrow"><span>本地播放</span><em>${(+r.play_count || 0) ? '▶ ' + r.play_count + ' 次' : '无记录'}</em></div>
     ${r.file_name ? `<div class="mfile">${r.file_name}</div>` : ''}`;
 }
 
-function fitLightbox(img) {
-  const box = document.querySelector('#lightbox .box');
+function fitMedia(img, box) {
   if (!box || !img.naturalWidth) return;
   const nw = img.naturalWidth, nh = img.naturalHeight;
   const maxH = Math.min(innerHeight * 0.78, 920);
@@ -30,18 +29,21 @@ function fitLightbox(img) {
   img.style.height = h + 'px';
   box.style.width = (w + META_W + GAP) + 'px';
 }
+function bindFit(img, box) {
+  img.onload = () => fitMedia(img, box);
+  if (img.complete && img.naturalWidth) fitMedia(img, box);
+}
+function boxOf(sel) { return document.querySelector(sel + ' .box'); }
 
 export function openLightbox(tk) {
   const r = state.ROWS.find(x => x.token === tk);
   if (!r) return;
   state.LB_TOKEN = tk;
-  const img = $('#lbImg');
-  img.style.width = ''; img.style.height = '';
-  document.querySelector('#lightbox .box').style.width = '';
-  img.onload = () => fitLightbox(img);
+  const img = $('#lbImg'), box = boxOf('#lightbox');
+  img.style.width = ''; img.style.height = ''; box.style.width = '';
+  bindFit(img, box);
   img.onerror = () => { img.onload = null; img.src = '/api/cover?token=' + encodeURIComponent(tk); };
   img.src = '/api/cover?token=' + encodeURIComponent(tk) + '&full=1';
-  if (img.complete && img.naturalWidth) fitLightbox(img);
   $('#lbToken').textContent = tk;
   $('#lbMeta').innerHTML = metaRows(r);
   $('#lbFav').textContent = (r.fav === '1' ? '★ 已收藏' : '☆ 收藏');
@@ -75,13 +77,17 @@ export function drawCard() {
   if (!pool.length) return toast('没有可抽的条目 —— 先下载几个', 3000);
   const r = pickWeighted(pool);
   state.GACHA_TOKEN = r.token;
-  const card = $('#gCard');
-  card.style.animation = 'none'; void card.offsetWidth; card.style.animation = '';
-  $('#gImg').src = '/api/cover?token=' + encodeURIComponent(r.token) + '&full=1';
-  $('#gImg').onerror = () => { $('#gImg').src = '/api/cover?token=' + encodeURIComponent(r.token); };
-  $('#gLab').textContent = r.last_play ? '🎲 抽到 · 看过了' : '🎲 抽到 · 还没看';
+
+  const img = $('#gImg'), box = boxOf('#gacha');
+  img.style.width = ''; img.style.height = ''; box.style.width = '';
+  bindFit(img, box);
+  img.onerror = () => { img.src = '/api/cover?token=' + encodeURIComponent(r.token); };
+  img.src = '/api/cover?token=' + encodeURIComponent(r.token) + '&full=1';
+
   $('#gTok').textContent = r.token;
-  $('#gInfo').innerHTML = metaRows(r, false);
+  $('#gInfo').innerHTML =
+    `<div class="mrow"><span>抽到</span><em>${r.last_play ? '看过了' : '还没看'}</em></div>`
+    + metaRows(r, true, '<span class="rt" id="gRate"></span>');
   renderGRate(+r.rating || 0);
   $('#gFav').textContent = r.fav === '1' ? '☆ 取消收藏' : '★ 收藏';
   $('#gacha').classList.add('on');
@@ -123,6 +129,8 @@ export function initPanels() {
     const r = state.ROWS.find(x => x.token === state.LB_TOKEN);
     if (r && r.url) { await navigator.clipboard.writeText(r.url); toast('URL 已复制'); }
   };
+  $('#lbOpen').onclick = () => { if (state.LB_TOKEN) window.open('https://pektino.com/zh-CN/movie/' + state.LB_TOKEN, '_blank'); };
+  $('#lbCopyToken').onclick = async () => { if (state.LB_TOKEN) { await navigator.clipboard.writeText(state.LB_TOKEN); toast('token 已复制'); } };
   $('#lbFav').onclick = async () => {
     const row = state.ROWS.find(x => x.token === state.LB_TOKEN);
     if (!row) return;
@@ -133,7 +141,8 @@ export function initPanels() {
     } catch (e) { toast('收藏失败'); }
   };
   window.addEventListener('resize', () => {
-    if ($('#lightbox').classList.contains('on')) fitLightbox($('#lbImg'));
+    if ($('#lightbox').classList.contains('on')) fitMedia($('#lbImg'), boxOf('#lightbox'));
+    if ($('#gacha').classList.contains('on')) fitMedia($('#gImg'), boxOf('#gacha'));
   });
 
   /* 抽卡 */
@@ -147,6 +156,7 @@ export function initPanels() {
     try { const r = await api('/api/reveal', { token: state.GACHA_TOKEN }); if (!r.ok) toast(r.error); }
     catch (e) { toast('定位失败'); }
   };
+  $('#gOpen').onclick = () => { if (state.GACHA_TOKEN) window.open('https://pektino.com/zh-CN/movie/' + state.GACHA_TOKEN, '_blank'); };
   $('#gCopy').onclick = async () => {
     const r = state.ROWS.find(x => x.token === state.GACHA_TOKEN);
     if (r && r.url) { await navigator.clipboard.writeText(r.url); toast('URL 已复制'); }
@@ -166,8 +176,10 @@ export function initPanels() {
       }
     } catch (e) { toast('操作失败'); }
   };
-  $('#gRate').addEventListener('click', e => {
-    if (e.target.matches('i')) rateGacha(parseInt(e.target.dataset.v));
+  /* 评分星星是每次抽卡动态生成的，用事件委托绑定 */
+  document.addEventListener('click', e => {
+    const star = e.target.closest('#gRate i');
+    if (star) rateGacha(parseInt(star.dataset.v));
   });
 
   /* 抽屉 */

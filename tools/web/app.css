@@ -170,27 +170,14 @@ td.playable:hover{color:#cfe6ff}
 .mstats .mfile{margin-top:6px;font-family:ui-monospace,Consolas,monospace;font-size:11px;color:#7f8ea1;word-break:break-all}
 .lightbox .actions{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:4px}
 .lightbox .actions button{width:100%;padding:7px 8px;white-space:nowrap}
-.lightbox .actions button:last-child{grid-column:1 / -1}
-
-/* 抽卡：卡片自适应，信息栏固定 260px */
-#gacha .box{grid-template-columns:minmax(0,auto) 280px;width:min(700px,94vw)}
-#gacha .card{width:100%;max-width:340px;justify-self:end}
-#gacha .meta .big{color:#c9d6e4;font-size:12.5px}
-#gacha .actions button:last-child{grid-column:auto}
+.lightbox .box{animation:fadein .16s ease-out}
+@keyframes fadein{from{opacity:0}to{opacity:1}}
 
 @media (max-width:820px){
   .lightbox .box{grid-template-columns:1fr;width:94vw !important;max-height:92vh;overflow:auto}
   .lightbox img{max-height:60vh}
   .lightbox .meta{max-height:none}
 }
-
-.card{position:relative;width:min(320px,40vw);border-radius:16px;overflow:hidden;border:1px solid #3a4a5c;
-  box-shadow:0 0 46px rgba(77,163,255,.28);background:#0b0f14;animation:pop .38s cubic-bezier(.2,1.4,.4,1)}
-@keyframes pop{from{transform:scale(.82) rotate(-3deg);opacity:0}to{transform:scale(1) rotate(0);opacity:1}}
-.card img{width:100%;display:block;max-height:62vh;object-fit:cover}
-.card .lab{position:absolute;top:10px;left:10px;background:rgba(0,0,0,.6);border:1px solid #3a4a5c;padding:3px 9px;border-radius:999px;font-size:11px;color:#cfe6ff}
-.card .gmeta{position:absolute;left:0;right:0;bottom:0;padding:10px 12px;font-size:12px;background:linear-gradient(transparent,rgba(0,0,0,.85));color:#e6eef8}
-
 /* ---------- 选中浮条 ---------- */
 .selbar{position:fixed;left:50%;bottom:58px;transform:translate(-50%,20px);opacity:0;pointer-events:none;
   display:flex;align-items:center;gap:8px;padding:8px 12px;border-radius:12px;

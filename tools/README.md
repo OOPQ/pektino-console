@@ -24,6 +24,7 @@ tools\
   daily.ps1      一键：日榜前 N 页 → CSV → 可选整批丢迅雷
   pektino.ps1    抓榜单（-Page 多页 / -Threads 并发 / -KnownFile 增量）
   thunder.ps1    URL 批量投递迅雷（thunder:// 协议），支持去重、dry-run
+  test.ps1       冒烟测试：页面/静态资源/核心接口/路径穿越，改完代码先跑它
   lib\           System.Data.SQLite.dll + x64\SQLite.Interop.dll
   out\           data.db（事实来源）、data-YYYYMMDD.db（每日备份）、covers、thumbs、日志
 ```

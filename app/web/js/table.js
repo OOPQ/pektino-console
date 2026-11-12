@@ -61,7 +61,14 @@ function passFilter(r) {
 /* ---------- 排序 ---------- */
 const SORTS = {
   rank: r => (+r.rank || 999999),
-  duration: r => (+r.seconds || 0),
+  duration: r => {
+    const s = (r.seconds === '' || r.seconds == null) ? 0 : +r.seconds;
+    if (s > 0) return s;
+    // 兜底：老数据 seconds 可能是 0，用时长文本回算
+    const parts = (r.duration || '').split(':').map(Number);
+    if (!parts.length || parts.some(isNaN)) return null;
+    return parts.reduce((a, x) => a * 60 + x, 0) || null;
+  },
   res: r => { const m = (r.res || '').split('x'); return m.length === 2 ? (+m[0]) * (+m[1]) : 0; },
   views: r => (+r.views || 0),
   likes: r => (+r.likes || 0),
@@ -76,8 +83,14 @@ const SORTS = {
 export function visible() {
   const f = SORTS[state.SORT.key] || SORTS.rank;
   const d = state.SORT.dir === 'asc' ? 1 : -1;
+  // 缺失值（没有时长的本地文件等）永远排最后，避免"看起来没排序"
+  const isNil = v => v === null || v === undefined || v === '' || (typeof v === 'number' && isNaN(v));
   return state.ROWS.filter(passFilter).slice().sort((a, b) => {
     const va = f(a), vb = f(b);
+    const na = isNil(va), nb = isNil(vb);
+    if (na && nb) return 0;
+    if (na) return 1;
+    if (nb) return -1;
     return va < vb ? -d : va > vb ? d : 0;
   });
 }
@@ -114,7 +127,7 @@ export function render() {
         <td><button class="star ${r.fav === '1' ? 'on' : ''}" data-fav="${r.token}" title="收藏/取消">${r.fav === '1' ? '★' : '☆'}</button></td>
         <td class="col-cover">${coverCell(r)}</td>
         <td class="num col-rank">${r.rank || ''}</td>
-        <td class="num col-duration">${r.duration || ''}</td>
+        <td class="num col-duration">${r.duration || '—'}</td>
         <td class="mono col-res">${r.res || ''}</td>
         <td class="num col-views">${r.views || ''}</td>
         <td class="num col-likes">${r.likes || ''}</td>

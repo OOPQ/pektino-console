@@ -93,6 +93,8 @@ $State = @{
         clientWarns  = 0
     }
 }
+# 老数据里时长解析失败（seconds=0）的，用 duration 回算（必须放在 $State 初始化之后）
+try { $fixedSec = Repair-Durations -LedgerPath $LedgerPath; if ($fixedSec -gt 0) { Write-Host "  修正时长 $fixedSec 条" -ForegroundColor DarkGray } } catch { Write-Host "  （时长修正跳过：$($_.Exception.Message)）" -ForegroundColor DarkYellow }
 $script:SseClients = New-Object System.Collections.ArrayList
 
 # ---------- 分层加载 ----------

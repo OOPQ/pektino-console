@@ -199,3 +199,37 @@ function Get-DownloadIndex {
 
     return [pscustomobject]@{ Files = $index; Partial = @($partial); Dir = $Dir; Exists = $true }
 }
+
+function ConvertTo-Seconds {
+    <#  ISO 8601 / "6:20" / "1:02:33" / 纯数字 → 秒；无法解析返回 0 #>
+    param([string]$Value)
+    if (-not $Value) { return 0 }
+    $v = ([string]$Value).Trim()
+    if ($v -match '^P(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+(?:\.\d+)?)S)?)?$') {
+        return [int]([double]$Matches[1] * 3600 + [double]$Matches[2] * 60 + [double]$Matches[3])
+    }
+    if ($v -match '^(\d+):(\d+):(\d+(?:\.\d+)?)$') { return [int]([int]$Matches[1] * 3600 + [int]$Matches[2] * 60 + [double]$Matches[3]) }
+    if ($v -match '^(\d+):(\d+(?:\.\d+)?)$') { return [int]([int]$Matches[1] * 60 + [double]$Matches[2]) }
+    if ($v -match '^\d+(?:\.\d+)?$') { return [int][double]$v }
+    return 0
+}
+
+function Repair-Durations {
+    <#  历史数据里 seconds 存成 "0"（时长解析失败）的，用 duration 回算并写回  #>
+    param([string]$LedgerPath)
+    $n = 0
+    foreach ($r in @($State.Ledger)) {
+        $sec = 0
+        if ($r.seconds) { try { $sec = [int]$r.seconds } catch { $sec = 0 } }
+        if ($sec -gt 0) { continue }
+        if (-not $r.duration) { continue }
+        $calc = ConvertTo-Seconds $r.duration
+        if ($calc -gt 0) { $r.seconds = $calc; $n++ }
+    }
+    if ($n -gt 0) {
+        Save-Ledger -Rows $State.Ledger -Path $LedgerPath
+        Touch-State
+        Write-Log 'ledger' "修正时长字段 $n 条（seconds 原来是 0）"
+    }
+    return $n
+}

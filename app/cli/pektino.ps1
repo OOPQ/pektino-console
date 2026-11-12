@@ -131,10 +131,20 @@ function Format-IsoDuration {
 }
 
 function Get-DurationSeconds {
-    param([string]$Iso)
-    if ($Iso -match '^P(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?)?$') {
-        return ([int]$Matches[1] * 3600 + [int]$Matches[2] * 60 + [int]$Matches[3])
+    <#  ISO 8601（PT6M20S）、"6:20"、"1:02:33"、纯秒数 都能算  #>
+    param([string]$Value)
+    if (-not $Value) { return 0 }
+    $v = $Value.Trim()
+    if ($v -match '^P(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+(?:\.\d+)?)S)?)?$') {
+        return [int]([double]$Matches[1] * 3600 + [double]$Matches[2] * 60 + [double]$Matches[3])
     }
+    if ($v -match '^(\d+):(\d+):(\d+(?:\.\d+)?)$') {
+        return [int]([int]$Matches[1] * 3600 + [int]$Matches[2] * 60 + [double]$Matches[3])
+    }
+    if ($v -match '^(\d+):(\d+(?:\.\d+)?)$') {
+        return [int]([int]$Matches[1] * 60 + [double]$Matches[2])
+    }
+    if ($v -match '^\d+(?:\.\d+)?$') { return [int][double]$v }
     return 0
 }
 
@@ -223,6 +233,7 @@ foreach ($t in $targets) {
         if ($vd) {
             $row.duration = Format-IsoDuration $vd.duration
             $row.seconds = Get-DurationSeconds $vd.duration
+            if (-not $row.seconds -and $row.duration) { $row.seconds = Get-DurationSeconds $row.duration }
             $row.uploaded = $vd.uploadDate
             $row.cover = $vd.thumbnailUrl
             $row.url = $vd.contentUrl

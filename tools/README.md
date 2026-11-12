@@ -27,6 +27,7 @@ tools\
   thunder.ps1    URL 批量投递迅雷（thunder:// 协议），支持去重、dry-run
   download.ps1   内置下载器（curl.exe 断点续传 + 并发，可选 aria2c；自动跟随系统代理）
   test.ps1       冒烟测试：页面/静态资源/核心接口/路径穿越，改完代码先跑它
+  pick-test-items.ps1  测试用：按时长升序挑最短的几条待下载（避免拿长片做实验）
   lib\           System.Data.SQLite.dll + x64\SQLite.Interop.dll
   out\           data.db（事实来源）、data-YYYYMMDD.db（每日备份）、covers、thumbs、日志
 ```

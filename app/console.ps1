@@ -291,13 +291,22 @@ function Handle-Request {
         }
         switch ($path) {
             '/api/download' {
+                $forceRetry = [bool]$body.force
                 $tokens = @()
                 if ($body.tokens) { $tokens = @($body.tokens | ForEach-Object { [string]$_ }) }
                 $status = if ($body.status) { [string]$body.status } else { 'new' }
                 $limit = 0
                 if ($body.limit) { $limit = [int]$body.limit }
-                $r = Start-Download -Tokens $tokens -Status $status -Limit $limit
+                $r = Start-Download -Tokens $tokens -Status $status -Limit $limit -Force:$forceRetry
                 Send-Json -Stream $Stream -Object ([pscustomobject]$r)
+                return
+            }
+            '/api/check-url' {
+                $tk = [string]$body.token
+                $row = $State.Ledger | Where-Object { $_.token -eq $tk } | Select-Object -First 1
+                if (-not $row) { Send-Json -Stream $Stream -Object @{ ok = $false; error = '没有这个 token' }; return }
+                $code = Get-UrlStatusCode -Url $row.url
+                Send-Json -Stream $Stream -Object @{ ok = $true; code = $code; url = $row.url }
                 return
             }
             '/api/refresh-url' {

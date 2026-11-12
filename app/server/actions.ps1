@@ -555,7 +555,7 @@ function Get-DownloadInfo {
 
 function Start-Download {
     <#  把选中/待下载条目交给内置下载器（独立进程，支持续传与并发）  #>
-    param($Tokens, [string]$Status = 'new', [int]$Limit = 0)
+    param($Tokens, [string]$Status = 'new', [int]$Limit = 0, [switch]$Force)
 
     if ($State.Job -and $State.Job.State -eq 'Running') {
         return @{ ok = $false; error = '抓取任务正在运行，等它结束再下载' }
@@ -584,7 +584,7 @@ function Start-Download {
     # 失败/下架的条目：先把源地址刷新一遍（站点可能换了 CDN 路径）
     $stale = @($targets | Where-Object { $_.note -like 'dead:*' -or $_.note -like 'removed*' })
     $skippedDead = 0
-    if ($stale.Count -gt 0) {
+    if ($stale.Count -gt 0 -and -not $Force) {
         $null = Refresh-ItemUrls -Tokens @($stale | ForEach-Object { $_.token })
         # 刷新后仍下架（removed）或源仍 404/403（dead:http:*）→ 本轮跳过，别反复撞墙
         $still = @($targets | Where-Object { $_.note -like 'removed*' -or $_.note -like 'unreachable*' -or $_.note -like 'dead:http:*' })
@@ -596,7 +596,7 @@ function Start-Download {
 
     if ($Limit -gt 0) { $targets = @($targets | Select-Object -First $Limit) }
     if (-not $targets.Count) {
-        if ($skippedDead -gt 0) { return @{ ok = $false; error = "$skippedDead 条源地址不可达（站点下架或 CDN 边缘缺失）。内置下载器下不动，但迅雷可能有自己的缓存/CDN —— 右键「复制 thunder://」丢给它试试" } }
+        if ($skippedDead -gt 0 -and -not $Force) { return @{ ok = $false; error = "$skippedDead 条源地址不可达（站点下架或 CDN 边缘缺失）。内置下载器下不动，但迅雷可能有自己的缓存/CDN —— 右键「复制 thunder://」丢给它试试" } }
         return @{ ok = $false; error = '没有可下载的条目' }
     }
 

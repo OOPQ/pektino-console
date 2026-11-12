@@ -92,6 +92,8 @@ function ctxItemsFor(row) {
     { act: 'purge', label: '🗑 删除文件并从台账移除' },
     { sep: true },
     { act: 'refresh', label: '🔄 刷新源地址（下架/换源后重试用）' },
+    { act: 'check', label: '🔍 检查源地址（看 HTTP 状态）' },
+    { act: 'forceRetry', label: '⚡ 强制重试（跳过源检查）' },
     { act: 'open', label: '在站点打开' }
   ];
 }
@@ -125,6 +127,18 @@ async function onCtxAction(act) {
     case 'copy': return copyText(row.url || '', 'URL 已复制');
     case 'thunder': return copyText(thunderUrl(row.url || ''), 'thunder:// 已复制');
     case 'copytoken': return copyText(tk, 'token 已复制');
+    case 'check': {
+      const r = await api('/api/check-url', { token: tk });
+      if (!r.ok) return toast('检查失败：' + r.error, 4000);
+      toast('源地址 HTTP ' + r.code + ((r.code === 200 || r.code === 206) ? '（可用）' : '（不可用）'), 6000);
+      return;
+    }
+    case 'forceRetry': {
+      const r = await api('/api/download', { tokens: [tk], force: true });
+      toast(r.ok ? '已强制重试' : (r.error || '重试失败'), 5000);
+      if (r.ok) load();
+      return;
+    }
     case 'refresh': {
       const r = await api('/api/refresh-url', { tokens: [tk] });
       if (!r.ok) return toast('刷新失败：' + r.error, 4000);

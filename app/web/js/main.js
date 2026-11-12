@@ -53,7 +53,7 @@ function paintKpis(S) {
 }
 
 function paintDir(S) {
-  if (!$('#dirInput').value) $('#dirInput').value = S.contentDir || '';
+  if ($('#dirInput')) $('#dirInput').value = (_WS && _WS.root) || '';
   $('#dirInfo').textContent =
     `${S.dirExists ? '目录 OK' : '目录不存在'} · mp4 ${S.fileCount} 个 / ${S.dirGB} GB` +
     ` · 下载中 ${S.partialCount} · 命中 ${S.downloaded} 条 · 扫描于 ${(S.lastScan || '').slice(11)}`;
@@ -101,13 +101,13 @@ function paintDownload(dl) {
   }).join('');
 }
 
-function paintWorkspace(ws) {
+function paintProject(ws) {
   const el = $('#wsInfo');
   if (!el) return;
   if (!ws) { el.textContent = '–'; return; }
-  el.innerHTML = `数据目录 <span class="mono">${ws.dataDir}</span><br>
-    内容 <span class="mono">${ws.content}</span> · ${ws.videoCount} 个视频 / ${ws.videoGB} GB<br>
-    封面 ${ws.coverCount} 张 · 库 ${ws.dbMB} MB`;
+  el.innerHTML = `项目 <span class="mono">${ws.root}</span><br>
+    媒体 media\\ · 数据 data\\ · 缓存 cache\\<br>
+    ${ws.videoCount} 个视频 / ${ws.videoGB} GB · 封面 ${ws.coverCount} 张 · 库 ${ws.dbMB} MB`;
 }
 
 function paintCovers(S) {
@@ -131,7 +131,7 @@ async function load() {
     const s = await api('/api/state');
     state.STATS = s.stats || {};
     state.ROWS = s.rows || [];
-    _WS = s.workspace || _WS;
+    _WS = s.project || _WS;
     const S = state.STATS;
 
     $('#dot').classList.remove('off');
@@ -141,7 +141,7 @@ async function load() {
     paintMetrics(s.metrics || {});
     paintOrphans(S);
     paintCovers(S);
-    paintWorkspace(_WS);
+    paintProject(_WS);
     paintDownload(s.download);
 
     $('#logbox').innerHTML = (s.log || []).slice().reverse()
@@ -187,8 +187,8 @@ async function doScrape() {
 }
 
 async function doImport() {
-  const dir = $('#dirInput').value.trim();
-  if (!confirm(`扫描内容目录并入库？\n${dir}\n\n会逐个用文件名(token)去站点查证，能查到的才入库并标记为已完成。`)) return;
+  const media = (_WS && _WS.media) || '';
+  if (!confirm(`扫描项目里的媒体目录并入库？\n${media}\n\n会逐个用文件名(token)去站点查证，能查到的才入库并标记为已完成。`)) return;
   try {
     const r = await api('/api/import', {});
     if (!r.ok) return toast('失败：' + r.error, 5000);
@@ -234,37 +234,8 @@ async function previewLinks() {
   } catch (e) { toast('请求失败：' + e.message); }
 }
 
-/* 内容目录：默认由工作区管理（media），不给"随手填绝对路径"的入口，
-   避免用户填个盘符就凭空多出一堆文件夹 */
-async function openContentDir() {
-  try { await api('/api/content/open', {}); } catch (e) { toast('打开失败'); }
-}
-
-async function changeDir() {
-  const cur = $('#dirInput').value || 'media';
-  const input = prompt(
-    '内容目录默认是工作区内的 media\n\n' +
-    '要放到外部？填一个【已经存在】的文件夹，例如 D:\\pektino-media\n' +
-    '（不能填盘符根目录，也不能放进 app\\）',
-    cur);
-  if (!input) return;
-  const dir = input.trim();
-  if (!dir) return;
-  try {
-    const r = await api('/api/config', { contentDir: dir });
-    if (!r.ok) return toast('未修改：' + r.error, 6000);
-    toast(`已切换：${r.dir}（${r.files} 个文件，命中 ${r.downloaded}）`, 4000);
-  } catch (e) { toast('请求失败：' + e.message); }
-  load();
-}
-
-async function resetDir() {
-  try {
-    const r = await api('/api/config', { contentDir: 'media' });
-    if (!r.ok) return toast('失败：' + r.error, 5000);
-    toast('已恢复默认内容目录：media', 3000);
-  } catch (e) { toast('请求失败'); }
-  load();
+async function openProjectFolder() {
+  try { await api('/api/project/open', {}); } catch (e) { toast('打开失败'); }
 }
 
 async function scanDir() {
@@ -346,9 +317,7 @@ function initToolbar() {
   $('#btnDownload').onclick = downloadNew;
   $('#btnSaveNet').onclick = saveNet;
   $('#btnPreview').onclick = previewLinks;
-  $('#btnOpenContent').onclick = openContentDir;
-  $('#btnChangeDir').onclick = changeDir;
-  $('#btnResetDir').onclick = resetDir;
+  $('#btnOpenContent').onclick = openProjectFolder;
   $('#btnScan').onclick = scanDir;
   $('#btnWsOpen').onclick = async () => { try { await api('/api/workspace/open', {}); } catch (e) { toast('打开失败'); } };
   $('#btnWsImport').onclick = async () => {

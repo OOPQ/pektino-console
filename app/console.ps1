@@ -19,8 +19,10 @@ param(
     [switch]$NoBrowser,
     # 出错/结束时停住窗口，方便双击启动时看到原因
     [switch]$PauseOnError,
-    # 数据目录（workspace）；留空则用项目下 out\，首次运行会提示
-    [string]$Workspace = '',
+    # 项目目录（数据单元）；留空则用最近项目/交互选择
+    [string]$Project = '',
+    # 强制显示项目选择器（像 IDE 的欢迎页）
+    [switch]$Pick,
     # 无人值守/自动化时跳过首次目录询问
     [switch]$NoPrompt
 )
@@ -40,23 +42,12 @@ if (-not (Test-Path (Join-Path $Root 'lib\ledger.ps1'))) {
 $ErrorActionPreference = 'Stop'
 $script:StartedAt = Get-Date
 . (Join-Path $Root 'lib\ledger.ps1')
-. (Join-Path $Root 'lib\workspace.ps1')
+. (Join-Path $Root 'lib\project.ps1')
 
-# ---------- 工作区：数据/封面/下载/日志都挂在这个目录下 ----------
-$ProjectRoot = Split-Path $Root -Parent
-if (-not $Workspace) { $Workspace = '' }
-if (-not $Workspace -and -not (Test-Path (Join-Path $ProjectRoot 'workspace.json')) -and -not $NoPrompt) {
-    Write-Host ''
-    Write-Host '  首次使用：请指定数据目录（回车使用默认）' -ForegroundColor Cyan
-    Write-Host "    默认: $(Join-Path $ProjectRoot 'out')" -ForegroundColor DarkGray
-    Write-Host '    也可以填移动硬盘路径，例如 D:\pektino-data' -ForegroundColor DarkGray
-    try {
-        $ans = Read-Host '  目录'
-        if ($ans) { $Workspace = $ans }
-    } catch { }
-}
-$WS = Initialize-Workspace -ProjectRoot $ProjectRoot -DataDir $Workspace
+# ---------- 项目：程序只读，数据在项目文件夹里（IDE 模型） ----------
+$WS = Resolve-ProjectRoot -Path $Project -Pick:$Pick -NoPrompt:$NoPrompt
 $script:WS = $WS
+Write-Host "  项目: $($WS.ProjectRoot)" -ForegroundColor DarkGray
 
 # SQLite 存储（事实来源）；首次启动自动从 ledger.csv 迁移
 [void](Initialize-Store -Root $Root -DataDir $WS.DataDir)
@@ -80,12 +71,9 @@ $DlProgress = Join-Path $WS.DataDir 'download.json'
 $DlCancel = Join-Path $WS.DataDir '.dl-cancel.json'
 
 # ---------- 内存态 ----------
+# 配置只管代理/并发；内容目录固定在项目里（$WS.Content），不再可配置
 $Config = Read-Config -Root $Root -DataDir $WS.DataDir -DefaultContentDir $WS.Content
-# 配置里的相对路径按项目根解析（跟着项目走，方便整目录搬移）
-if ($Config.contentDir -and -not [System.IO.Path]::IsPathRooted([string]$Config.contentDir)) {
-    # 相对路径按「数据目录」解析（例如 videos → <workspace>\videos）
-    $Config.contentDir = [System.IO.Path]::GetFullPath((Join-Path $WS.ProjectRoot ([string]$Config.contentDir)))
-}
+$Config | Add-Member -NotePropertyName contentDir -NotePropertyValue $WS.Content -Force
 $State = @{
     Ledger = @(Read-Ledger -Path $LedgerPath)
     Log    = New-Object System.Collections.ArrayList
@@ -243,7 +231,7 @@ function Handle-Request {
                 log     = @($State.Log | Select-Object -Last 40)
                 job     = (Get-JobInfo)
                 download = (Get-DownloadInfo)
-                workspace = (Get-WorkspaceSummary -Paths $WS -Content $Config.contentDir)
+                project = (Get-ProjectSummary -Paths $WS)
                 settings = [pscustomobject]@{ proxy = [string]$Config.proxy; concurrent = $(if ($Config.concurrent) { [int]$Config.concurrent } else { 3 }) }
                 metrics = [pscustomobject]@{
                     total        = $State.Metrics.total
@@ -277,8 +265,8 @@ function Handle-Request {
         return
     }
 
-    if ($method -eq 'GET' -and $path -eq '/api/workspace') {
-        Send-Json -Stream $Stream -Object ([pscustomobject]@{ ok = $true; workspace = (Get-WorkspaceSummary -Paths $WS -Content $Config.contentDir) })
+    if ($method -eq 'GET' -and $path -eq '/api/project') {
+        Send-Json -Stream $Stream -Object ([pscustomobject]@{ ok = $true; project = (Get-ProjectSummary -Paths $WS) })
         return
     }
 
@@ -312,13 +300,13 @@ function Handle-Request {
                 Send-Json -Stream $Stream -Object ([pscustomobject]$r)
                 return
             }
-            '/api/workspace/open' {
-                try { Start-Process explorer.exe $WS.DataDir; Send-Json -Stream $Stream -Object @{ ok = $true; path = $WS.DataDir } }
+            '/api/project/open' {
+                try { Start-Process explorer.exe $WS.ProjectRoot; Send-Json -Stream $Stream -Object @{ ok = $true; path = $WS.ProjectRoot } }
                 catch { Send-Json -Stream $Stream -Object @{ ok = $false; error = $_.Exception.Message } }
                 return
             }
-            '/api/workspace/import' {
-                $r = Import-WorkspaceFiles -Paths $WS
+            '/api/project/import' {
+                $r = Import-ProjectFiles -Paths $WS
                 Send-Json -Stream $Stream -Object ([pscustomobject]@{ ok = $true; added = $r.added; skipped = $r.skipped })
                 return
             }
@@ -456,55 +444,13 @@ function Handle-Request {
             '/api/config' {
                 if ($body.proxy -ne $null) { $Config | Add-Member -NotePropertyName proxy -NotePropertyValue ([string]$body.proxy) -Force }
                 if ($body.concurrent -ne $null) { $Config | Add-Member -NotePropertyName concurrent -NotePropertyValue ([int]$body.concurrent) -Force }
-                $dir = [string]$body.contentDir
-                if (-not $dir) {
-                    if ($body.proxy -ne $null -or $body.concurrent -ne $null) { Save-Config -Config $Config -Root $Root -DataDir $WS.DataDir; Send-Json -Stream $Stream -Object @{ ok = $true; proxy = $Config.proxy; concurrent = $Config.concurrent }; return }
-                    Send-Json -Stream $Stream -Object @{ ok = $false; error = '缺少 contentDir' }; return
-                }
-                $dir = $dir.Trim().Trim('"')
-
-                # 规范化 + 校验：不允许盘符根、不允许放进程序目录、外部目录必须已存在
-                $isAbs = [System.IO.Path]::IsPathRooted($dir)
-                try {
-                    $abs = if ($isAbs) { [System.IO.Path]::GetFullPath($dir) } else { [System.IO.Path]::GetFullPath((Join-Path $WS.ProjectRoot $dir)) }
-                } catch {
-                    Send-Json -Stream $Stream -Object @{ ok = $false; error = "路径不合法: $dir" }; return
-                }
-                $issues = @()
-                if ($abs -match '^[A-Za-z]:\\?$') { $issues += '不能直接用整块磁盘根目录（请在它下面建一个文件夹）' }
-                $appDir = [System.IO.Path]::GetFullPath($Root)
-                if ($abs.StartsWith($appDir, [System.StringComparison]::OrdinalIgnoreCase)) { $issues += '不能放进程序目录 app\（升级会覆盖）' }
-                if (-not (Test-Path -LiteralPath $abs)) {
-                    if ($isAbs) {
-                        $issues += "外部目录必须已经存在：$abs"
-                    } else {
-                        try { New-Item -ItemType Directory -Path $abs -Force | Out-Null }
-                        catch { $issues += "无法创建目录: $($_.Exception.Message)" }
-                    }
-                }
-                if ($issues.Count) {
-                    Send-Json -Stream $Stream -Object @{ ok = $false; error = ($issues -join '；') }
-                    return
-                }
-
-                # 项目内的目录存相对路径，项目外存绝对路径
-                $projAbs = [System.IO.Path]::GetFullPath($WS.ProjectRoot).TrimEnd('\')
-                $stored = if ($abs.StartsWith($projAbs + '\', [System.StringComparison]::OrdinalIgnoreCase)) {
-                    $abs.Substring($projAbs.Length).TrimStart('\')
-                } else { $abs }
-
-                $Config | Add-Member -NotePropertyName contentDir -NotePropertyValue $stored -Force
                 Save-Config -Config $Config -Root $Root -DataDir $WS.DataDir
-                # 内存里始终用绝对路径，stats/扫描/下载才不会拿到相对路径
-                $Config | Add-Member -NotePropertyName contentDir -NotePropertyValue $abs -Force
-                Write-Log 'config' "内容目录改为 $stored（$abs）"
-                # 换目录只重扫，不因为"新目录里找不到文件"把已有状态打回待下载
-                $r = Invoke-Scan -KeepStatus
-                Send-Json -Stream $Stream -Object ([pscustomobject]@{ ok = $true; dir = $abs; stored = $stored; downloaded = $r.downloaded; files = $r.files })
+                Write-Log 'config' "代理=$([string]$Config.proxy) 并发=$($Config.concurrent)"
+                Send-Json -Stream $Stream -Object @{ ok = $true; proxy = [string]$Config.proxy; concurrent = $Config.concurrent }
                 return
             }
             '/api/content/open' {
-                try { Start-Process explorer.exe $Config.contentDir; Send-Json -Stream $Stream -Object @{ ok = $true; path = $Config.contentDir } }
+                try { Start-Process explorer.exe $WS.Content; Send-Json -Stream $Stream -Object @{ ok = $true; path = $WS.Content } }
                 catch { Send-Json -Stream $Stream -Object @{ ok = $false; error = $_.Exception.Message } }
                 return
             }
@@ -561,13 +507,13 @@ try {
     Write-FileLog "thumb backfill failed: $($_.Exception.Message)"
 }
 
-# 首次使用（台账为空）：把工作区里已有的视频识别进来
+# 首次使用（台账为空）：把项目 media\ 里已有的视频识别进来
 try {
     if (@($State.Ledger).Count -eq 0) {
-        $imp = Import-WorkspaceFiles -Paths $WS
+        $imp = Import-ProjectFiles -Paths $WS
         if ($imp.added -gt 0) { Write-Host "  识别到已有文件 $($imp.added) 条" -ForegroundColor Green }
     }
-} catch { Write-FileLog "workspace import failed: $($_.Exception.Message)" }
+} catch { Write-FileLog "project import failed: $($_.Exception.Message)" }
 
 # 启动先扫一遍内容目录，把“已经下完的”标成 done
 # 顺手整理上次中断留下的 .part（已下完的改名，写坏的删掉）
@@ -575,14 +521,6 @@ try {
     $pr = Repair-PartFiles
     if ($pr.renamed -gt 0 -or $pr.deleted -gt 0) { Write-FileLog "part repair: renamed=$($pr.renamed) deleted=$($pr.deleted) kept=$($pr.kept)" }
 } catch { Write-FileLog "part repair failed: $($_.Exception.Message)" }
-
-# 首次使用（台账为空）：把工作区里已有的视频识别进来
-try {
-    if (@($State.Ledger).Count -eq 0) {
-        $imp = Import-WorkspaceFiles -Paths $WS
-        if ($imp.added -gt 0) { Write-Host "  识别到已有文件 $($imp.added) 条" -ForegroundColor Green }
-    }
-} catch { Write-FileLog "workspace import failed: $($_.Exception.Message)" }
 
 # 启动先扫一遍内容目录，把“已经下完的”标成 done
 try {

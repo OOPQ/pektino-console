@@ -1,3 +1,8 @@
+> 结构说明（IDE 模型）
+> - 本目录（app）= 程序，只读，不含数据；升级只替换这里
+> - 数据在**项目文件夹**里：data\ media\ cache\，由 start.cmd -Project <路径> 打开
+> - 路径约定见 ..\README.md；入口 console.ps1，服务端 server\，库 lib\，命令行 cli\，前端 web\，开发脚本 dev\
+
 # tools/ —— 可复用脚本
 
 两个脚本，纯 PowerShell 5.1 + 系统 curl，不依赖 agent-browser / Node / Python。

@@ -32,6 +32,7 @@ function Resolve-WorkspacePath {
     <#  把配置里的路径解析成绝对路径；相对路径先按项目根，再按 dataDir 兜底  #>
     param([string]$Value, [string]$ProjectRoot, [string]$DataDir)
     if (-not $Value) { return '' }
+    if ($Value -eq '.') { return $DataDir }   # "." = 就用工作区根目录（mp4 直接放这儿）
     if ([System.IO.Path]::IsPathRooted($Value)) { return [System.IO.Path]::GetFullPath($Value) }
     # 相对路径统一挂在 dataDir 下，整体搬移时不会错位
     return [System.IO.Path]::GetFullPath((Join-Path $DataDir $Value))

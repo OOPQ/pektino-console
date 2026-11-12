@@ -68,14 +68,10 @@ function Invoke-Scan {
             $r.file_size = $f.size
             $r.file_date = $f.date
             $found++
-            # 只有 new/sent 才自动转 done；ignored（用户手动忽略）和 done 不动
-            # 磁盘上确实有文件 → 以文件为准（即使之前被误标成 ignored）
-            if ($r.status -eq 'ignored' -and ($r.note -like 'dead:*' -or $r.note -like 'auto:*' -or $r.note -like 'file:*' -or -not $r.note)) {
-                $r.status = 'done'; $r.note = 'auto:file'; $changed++
-            }
-            if ($r.status -eq 'new' -or $r.status -eq 'sent' -or $r.status -eq 'downloading' -or -not $r.status) {
+            # 磁盘上有文件 → 一律以文件为准（new/sent/downloading/failed/ignored 都转 done）
+            if ($r.status -eq 'failed' -or $r.status -eq 'ignored' -or $r.status -eq 'new' -or $r.status -eq 'sent' -or $r.status -eq 'downloading' -or -not $r.status) {
                 $r.status = 'done'
-                if (-not $r.note) { $r.note = 'auto:file' }
+                $r.note = 'auto:file'
                 $changed++
             }
         } else {
@@ -95,6 +91,10 @@ function Invoke-Scan {
         if (-not $ledgerKeys.ContainsKey($k)) { $orphans += $idx.Files[$k] }
     }
 
+    # 旧版本把死链标成 ignored，这里统一迁到 failed（可在「失败」里查看/重试）
+    foreach ($r in @($State.Ledger)) {
+        if ($r.status -eq 'ignored' -and $r.note -like 'dead:*') { $r.status = 'failed'; $changed++ }
+    }
     if ($changed -gt 0) { Save-Ledger -Rows $State.Ledger -Path $LedgerPath; Touch-State }
 
     $coverMissing = (Get-CoverMissingList).Count
@@ -289,7 +289,7 @@ function Invoke-Fav {
 function Invoke-Mark {
     param([string[]]$Tokens, [string]$Status = 'done', [string]$Note = '')
     if (-not $Tokens) { return @{ ok = $false; error = '没选条目' } }
-    if (@('new', 'sent', 'done', 'ignored') -notcontains $Status) { return @{ ok = $false; error = "非法状态: $Status" } }
+    if (@('new', 'sent', 'done', 'ignored', 'failed') -notcontains $Status) { return @{ ok = $false; error = "非法状态: $Status" } }
     $changed = New-Object System.Collections.ArrayList
     foreach ($r in @($State.Ledger)) {
         if ($Tokens -contains $r.token) { [void]$changed.Add($r) }
@@ -767,9 +767,8 @@ function Step-DownloadGuard {
 }
 
 function Apply-DeadFromProgress {
-    <#  把进度文件里 state=dead（源文件确认 403/404）的条目改成 ignored。
-        只在「本次运行」的进度文件上生效，且绝不忽略已有文件的条目 ——
-        否则会把刚下完的、或上一轮遗留的死标记误套到好数据上。  #>
+    <#  下载器确认源文件失效（403/404）的条目 → 标成 failed（不是 ignored），
+        这样在「失败」筛选里能看见、能重试；且绝不覆盖已有文件的条目。  #>
     param([string]$RunStarted = '')
     try {
         if (-not (Test-Path $DlProgress)) { return 0 }
@@ -789,17 +788,26 @@ function Apply-DeadFromProgress {
         foreach ($d in $dead) {
             $row = $State.Ledger | Where-Object { $_.token -eq $d.token } | Select-Object -First 1
             if (-not $row) { continue }
-            if ($row.file_name) { continue }                 # 已经有文件了，绝不忽略
+            if ($row.file_name) { continue }                 # 已经有文件了，绝不改状态
             if ($row.status -ne 'downloading') { continue }  # 不是本轮队列成员
-            # 复核一次：并发下载时 CDN 可能临时 403，只有单独再试还是 403/404 才算真死
-            if (-not (Test-UrlDeadNow -Url $row.url -Error ($d.error))) { continue }
-            $row.status = 'ignored'
+
+            # 本地已经有 .mp4 / .part → 还能续传，不判死
+            $tk = [string]$row.token
+            if (Test-Path -LiteralPath (Join-Path $Config.contentDir ($tk + '.mp4'))) { continue }
+            if (Test-Path -LiteralPath (Join-Path $Config.contentDir ($tk + '.mp4.part'))) { continue }
+
+            # 复核两次（间隔 1.5 秒），规避并发下载时的临时 403
+            if (-not (Test-UrlDeadNow -Url $row.url)) { continue }
+            Start-Sleep -Milliseconds 1500
+            if (-not (Test-UrlDeadNow -Url $row.url)) { continue }
+
+            $row.status = 'failed'
             $row.note = "dead:$($d.error)"
             $n++
         }
         if ($n -gt 0) {
             Save-Ledger -Rows $State.Ledger -Path $LedgerPath
-            Write-Log 'download' "标记 $n 条源文件失效（403/404），已转为忽略"
+            Write-Log 'download' "标记 $n 条下载失败（源文件 403/404，可在「失败」里重试）"
             Touch-State
         }
         return $n

@@ -184,19 +184,22 @@
       <button class="ghost" id="btnWsImport" title="扫描工作区里的 mp4，把没入过账的补进来">识别已有文件</button>
     </div>
     <div class="field">
-      <label>内容目录（mp4 存放位置，也是扫描目录）</label>
-      <input type="text" id="dirInput" placeholder="例如 D:\Downloads">
+      <label>内容目录（工作区内的媒体目录，默认 media）</label>
+      <input type="text" id="dirInput" readonly title="默认放在工作区里；需要外置时点「改用其它目录…」">
     </div>
+    <div style="display:flex;gap:8px;margin-bottom:6px;flex-wrap:wrap">
+      <button id="btnOpenContent">打开目录</button>
+      <button id="btnChangeDir">改用其它目录…</button>
+      <button class="ghost" id="btnResetDir">恢复默认</button>
+      <button class="ghost" id="btnScan">重新扫描</button>
+    </div>
+    <div class="sub" id="dirHint" style="margin-bottom:14px">目录由工作区管理：默认 media，不会在磁盘根目录乱建文件夹</div>
+    <div class="sub" id="dirInfo" style="margin-bottom:16px">–</div>
     <div class="field"><label>代理（留空 = 跟随系统代理）</label><input type="text" id="proxyInput" placeholder="http://127.0.0.1:7890"></div>
     <div class="field"><label>并发下载数（1-8）</label><input type="number" id="concInput" min="1" max="8" value="3"></div>
     <div style="display:flex;gap:8px;margin-bottom:14px">
       <button id="btnSaveNet">保存下载设置</button>
     </div>
-    <div style="display:flex;gap:8px;margin-bottom:14px">
-      <button class="primary" id="btnSaveDir">保存并扫描</button>
-      <button id="btnScan">重新扫描</button>
-    </div>
-    <div class="sub" id="dirInfo" style="margin-bottom:16px">–</div>
     <div class="field"><label>封面</label></div>
     <div style="display:flex;gap:8px;align-items:center;margin-bottom:16px">
       <span class="sub" id="coverInfo">–</span>

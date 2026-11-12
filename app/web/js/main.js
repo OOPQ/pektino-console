@@ -234,12 +234,35 @@ async function previewLinks() {
   } catch (e) { toast('请求失败：' + e.message); }
 }
 
-async function saveDir() {
-  const dir = $('#dirInput').value.trim();
-  if (!dir) return toast('先填目录');
+/* 内容目录：默认由工作区管理（media），不给"随手填绝对路径"的入口，
+   避免用户填个盘符就凭空多出一堆文件夹 */
+async function openContentDir() {
+  try { await api('/api/content/open', {}); } catch (e) { toast('打开失败'); }
+}
+
+async function changeDir() {
+  const cur = $('#dirInput').value || 'media';
+  const input = prompt(
+    '内容目录默认是工作区内的 media\n\n' +
+    '要放到外部？填一个【已经存在】的文件夹，例如 D:\\pektino-media\n' +
+    '（不能填盘符根目录，也不能放进 app\\）',
+    cur);
+  if (!input) return;
+  const dir = input.trim();
+  if (!dir) return;
   try {
     const r = await api('/api/config', { contentDir: dir });
-    toast(r.ok ? `已保存：${r.dir}（${r.files} 个文件，命中 ${r.downloaded}）` : '失败：' + r.error, 4000);
+    if (!r.ok) return toast('未修改：' + r.error, 6000);
+    toast(`已切换：${r.dir}（${r.files} 个文件，命中 ${r.downloaded}）`, 4000);
+  } catch (e) { toast('请求失败：' + e.message); }
+  load();
+}
+
+async function resetDir() {
+  try {
+    const r = await api('/api/config', { contentDir: 'media' });
+    if (!r.ok) return toast('失败：' + r.error, 5000);
+    toast('已恢复默认内容目录：media', 3000);
   } catch (e) { toast('请求失败'); }
   load();
 }
@@ -323,7 +346,9 @@ function initToolbar() {
   $('#btnDownload').onclick = downloadNew;
   $('#btnSaveNet').onclick = saveNet;
   $('#btnPreview').onclick = previewLinks;
-  $('#btnSaveDir').onclick = saveDir;
+  $('#btnOpenContent').onclick = openContentDir;
+  $('#btnChangeDir').onclick = changeDir;
+  $('#btnResetDir').onclick = resetDir;
   $('#btnScan').onclick = scanDir;
   $('#btnWsOpen').onclick = async () => { try { await api('/api/workspace/open', {}); } catch (e) { toast('打开失败'); } };
   $('#btnWsImport').onclick = async () => {

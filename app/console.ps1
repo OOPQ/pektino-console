@@ -462,16 +462,50 @@ function Handle-Request {
                     Send-Json -Stream $Stream -Object @{ ok = $false; error = '缺少 contentDir' }; return
                 }
                 $dir = $dir.Trim().Trim('"')
-                if (-not (Test-Path $dir)) {
-                    try { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
-                    catch { Send-Json -Stream $Stream -Object @{ ok = $false; error = "目录不存在且无法创建: $dir" }; return }
+
+                # 规范化 + 校验：不允许盘符根、不允许放进程序目录、外部目录必须已存在
+                $isAbs = [System.IO.Path]::IsPathRooted($dir)
+                try {
+                    $abs = if ($isAbs) { [System.IO.Path]::GetFullPath($dir) } else { [System.IO.Path]::GetFullPath((Join-Path $WS.ProjectRoot $dir)) }
+                } catch {
+                    Send-Json -Stream $Stream -Object @{ ok = $false; error = "路径不合法: $dir" }; return
                 }
-                $Config.contentDir = $dir
+                $issues = @()
+                if ($abs -match '^[A-Za-z]:\\?$') { $issues += '不能直接用整块磁盘根目录（请在它下面建一个文件夹）' }
+                $appDir = [System.IO.Path]::GetFullPath($Root)
+                if ($abs.StartsWith($appDir, [System.StringComparison]::OrdinalIgnoreCase)) { $issues += '不能放进程序目录 app\（升级会覆盖）' }
+                if (-not (Test-Path -LiteralPath $abs)) {
+                    if ($isAbs) {
+                        $issues += "外部目录必须已经存在：$abs"
+                    } else {
+                        try { New-Item -ItemType Directory -Path $abs -Force | Out-Null }
+                        catch { $issues += "无法创建目录: $($_.Exception.Message)" }
+                    }
+                }
+                if ($issues.Count) {
+                    Send-Json -Stream $Stream -Object @{ ok = $false; error = ($issues -join '；') }
+                    return
+                }
+
+                # 项目内的目录存相对路径，项目外存绝对路径
+                $projAbs = [System.IO.Path]::GetFullPath($WS.ProjectRoot).TrimEnd('\')
+                $stored = if ($abs.StartsWith($projAbs + '\', [System.StringComparison]::OrdinalIgnoreCase)) {
+                    $abs.Substring($projAbs.Length).TrimStart('\')
+                } else { $abs }
+
+                $Config | Add-Member -NotePropertyName contentDir -NotePropertyValue $stored -Force
                 Save-Config -Config $Config -Root $Root -DataDir $WS.DataDir
-                Write-Log 'config' "内容目录改为 $dir"
-                # 换目录只重扫，不因为“新目录里找不到文件”把已有状态打回待下载
+                # 内存里始终用绝对路径，stats/扫描/下载才不会拿到相对路径
+                $Config | Add-Member -NotePropertyName contentDir -NotePropertyValue $abs -Force
+                Write-Log 'config' "内容目录改为 $stored（$abs）"
+                # 换目录只重扫，不因为"新目录里找不到文件"把已有状态打回待下载
                 $r = Invoke-Scan -KeepStatus
-                Send-Json -Stream $Stream -Object ([pscustomobject]@{ ok = $true; dir = $dir; downloaded = $r.downloaded; files = $r.files })
+                Send-Json -Stream $Stream -Object ([pscustomobject]@{ ok = $true; dir = $abs; stored = $stored; downloaded = $r.downloaded; files = $r.files })
+                return
+            }
+            '/api/content/open' {
+                try { Start-Process explorer.exe $Config.contentDir; Send-Json -Stream $Stream -Object @{ ok = $true; path = $Config.contentDir } }
+                catch { Send-Json -Stream $Stream -Object @{ ok = $false; error = $_.Exception.Message } }
                 return
             }
         }

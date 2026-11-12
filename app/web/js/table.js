@@ -45,7 +45,7 @@ function passFilter(r) {
     const w = parseInt((r.res || '').split('x')[0]) || 0;
     const h = parseInt((r.res || '').split('x')[1]) || 0;
     if (state.FILTER.res === 'portrait') { if (h <= w) return false; }
-    else { const need = RES_RANK[state.FILTER.res]; if (w < need && h < need) return false; }
+    else { const need = RES_RANK[state.FILTER.res]; const short = Math.min(w, h); if (short < need) return false; }
   }
   if (state.FILTER.minDur) {
     const min = parseFloat(state.FILTER.minDur);
@@ -60,7 +60,7 @@ function passFilter(r) {
 
 /* ---------- 排序 ---------- */
 const SORTS = {
-  rank: r => (+r.rank || 999999),
+  rank: r => (r.rank === '' || r.rank == null) ? null : +r.rank,
   duration: r => {
     const s = (r.seconds === '' || r.seconds == null) ? 0 : +r.seconds;
     if (s > 0) return s;
@@ -318,7 +318,7 @@ export function initTable() {
     card.addEventListener('click', () => {
       if (vid === 'kHours') {
         state.SORT = { key: 'duration', dir: 'desc' };
-        Object.assign(PREFS, { sortKey: 'duration', sortDir: 'desc', status: 'all' });
+        Object.assign(PREFS, { sortKey: 'duration', sortDir: 'desc', status: 'all', flag: 'none' });
         state.PAGE = 1; state.FILTER = { status: 'all', flag: 'none', res: state.FILTER.res, minDur: state.FILTER.minDur, q: state.FILTER.q }; $('#fStatus').value = 'all'; $('#fFlag').value = 'none'; savePrefs();
         render(); markActiveKpi('all');
         toast('按时长从长到短排序', 1800);
@@ -334,7 +334,7 @@ export function initTable() {
     $('#colpop').innerHTML = COLS.map(c =>
       `<label><input type="checkbox" data-col="${c.key}" ${PREFS.cols[c.key] === false ? '' : 'checked'}> ${c.label}</label>`).join('')
       + `<div style="height:1px;background:#262f3a;margin:6px 4px"></div>
-         <label><input type="checkbox" id="colAll" checked> 全显</label>`;
+         <label><input type="checkbox" id="colAll" ${COLS.every(c => PREFS.cols[c.key] !== false) ? 'checked' : ''}> 全显</label>`;
     $('#colpop').classList.toggle('on');
   };
   document.addEventListener('click', e => {

@@ -78,7 +78,11 @@ export async function setWatched(tokens, on) {
   const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
   list.forEach(tk => {
     const row = state.ROWS.find(x => x.token === tk);
-    if (row) row.last_play = on ? now : '';
+    if (row) {
+      row.last_play = on ? now : '';
+      // 后端"标记未看"会把播放次数清零，前端同步一下，避免表格显示 ▶N 不一致
+      row.play_count = on ? (String(+row.play_count || 0) === '0' ? '1' : row.play_count) : '0';
+    }
   });
   return r;
 }

@@ -107,6 +107,8 @@ function Merge-Ledger {
                 uploaded = $s.uploaded; url = $s.url; page_url = $s.page_url
                 first_seen = $Stamp; last_seen = $Stamp; sent_at = ''; note = ''
                 file_name = ''; file_size = ''; file_date = ''
+                # 这三列后面会被评分/观看/播放直接赋值，缺了会抛"属性不存在"
+                play_count = ''; last_play = ''; rating = ''
             }
             $byToken[$s.token] = $row
             [void]$rows.Add($row)
@@ -151,7 +153,8 @@ function Read-Config {
         if (-not $c.contentDir -and $c.PSObject.Properties['downloadDir'] -and $c.downloadDir) {
             $c | Add-Member -NotePropertyName contentDir -NotePropertyValue ([string]$c.downloadDir) -Force
         }
-        if (-not $c.contentDir) { $c | Add-Member -NotePropertyName contentDir -NotePropertyValue $default.contentDir -Force }
+        # contentDir 不再从配置文件读：项目结构决定它，配置文件里残留的绝对路径一律忽略
+        $c | Add-Member -NotePropertyName contentDir -NotePropertyValue $default.contentDir -Force
         return $c
     } catch {
         return $default
@@ -163,7 +166,12 @@ function Save-Config {
     $p = Get-ConfigPath -Root $Root -DataDir $DataDir
     $dir = Split-Path $p -Parent
     if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
-    $Config | ConvertTo-Json -Depth 4 | Set-Content -Path $p -Encoding UTF8
+    # 只持久化真正需要记的项；contentDir 由项目结构决定，绝不能写绝对路径进配置
+    $out = [ordered]@{}
+    foreach ($k in @('proxy', 'concurrent')) {
+        if ($null -ne $Config.$k) { $out[$k] = $Config.$k }
+    }
+    ($out | ConvertTo-Json -Depth 4) | Set-Content -Path $p -Encoding UTF8
 }
 
 # ---------------- 内容目录扫描 ----------------
@@ -193,7 +201,8 @@ function Get-DownloadIndex {
         }
     }
 
-    foreach ($f in @(Get-ChildItem -Path $Dir -Filter *.xltd -File -ErrorAction SilentlyContinue)) {
+    # 未完成的体积也算进来：内置下载器的 .mp4.part 和迅雷的 .xltd
+    foreach ($f in @(Get-ChildItem -Path $Dir -Include *.xltd,*.part -File -Recurse -Depth 4 -ErrorAction SilentlyContinue)) {
         [void]$partial.Add([pscustomobject]@{ name = $f.Name; size = $f.Length })
     }
 
@@ -228,8 +237,9 @@ function Repair-Durations {
     }
     if ($n -gt 0) {
         Save-Ledger -Rows $State.Ledger -Path $LedgerPath
-        Touch-State
-        Write-Log 'ledger' "修正时长字段 $n 条（seconds 原来是 0）"
+        # 启动早期调用时 Touch-State / Write-Log 可能还没加载，别让它们把修正结果吞掉
+        if (Get-Command Touch-State -ErrorAction SilentlyContinue) { Touch-State }
+        if (Get-Command Write-Log -ErrorAction SilentlyContinue) { Write-Log 'ledger' "修正时长字段 $n 条（seconds 原来是 0）" }
     }
     return $n
 }

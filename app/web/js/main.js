@@ -3,7 +3,7 @@ import { $, state, PREFS, savePrefs, api, toast, onEvent } from './core.js';
 import { render, markActiveKpi, initTable } from './table.js';
 import { initRows, doPlay, delFiles } from './rows.js';
 import { initPanels, connectSse } from './panels.js';
-import { setFav, setWatched, setStatus, setRating, reload, thunderUrl } from './actions.js';
+import { setFav, setWatched, setStatus, setRating, reload, thunderUrl, copyText } from './actions.js';
 
 /* ================= 任务进度条 ================= */
 const PHASE_LABEL = {
@@ -131,6 +131,11 @@ async function load() {
     const s = await api('/api/state');
     state.STATS = s.stats || {};
     state.ROWS = s.rows || [];
+    // 选中的条目可能已被删除：清掉不再存在的 token，避免浮条计数虚高
+    if (state.SEL && state.SEL.size) {
+      const alive = new Set((s.rows || []).map(r => r.token));
+      for (const tk of [...state.SEL]) { if (!alive.has(tk)) state.SEL.delete(tk); }
+    }
     _WS = s.project || _WS;
     const S = state.STATS;
 
@@ -151,6 +156,12 @@ async function load() {
 
     state.DOWNLOAD = s.download || null;
     state.SETTINGS = s.settings || null;
+    // 首次 load 之前 DOM 还没回填过设置，这里补一次，否则点「保存」会把配置清空
+    if (state.SETTINGS) {
+      const px = document.querySelector('#proxyInput'), cc = document.querySelector('#concInput');
+      if (px && document.activeElement !== px) px.value = state.SETTINGS.proxy || '';
+      if (cc && document.activeElement !== cc) cc.value = String(state.SETTINGS.concurrent || 3);
+    }
     renderJob(s.job || {}, s.download);
     render();
     markActiveKpi();
@@ -229,8 +240,7 @@ async function previewLinks() {
     const r = await api('/api/send', { status: 'new', dryRun: true });
     if (!r.ok) return toast('失败：' + r.error);
     if (!r.count) return toast('没有待下载条目');
-    await navigator.clipboard.writeText(r.links.join('\n')).catch(() => { });
-    toast(`已生成 ${r.count} 条 thunder:// 链接并复制到剪贴板`, 4000);
+    await copyText(r.links.join('\n'), `已生成 ${r.count} 条 thunder:// 链接并复制到剪贴板`);
   } catch (e) { toast('请求失败：' + e.message); }
 }
 
@@ -319,10 +329,10 @@ function initToolbar() {
   $('#btnPreview').onclick = previewLinks;
   $('#btnOpenContent').onclick = openProjectFolder;
   $('#btnScan').onclick = scanDir;
-  $('#btnWsOpen').onclick = async () => { try { await api('/api/workspace/open', {}); } catch (e) { toast('打开失败'); } };
+  $('#btnWsOpen').onclick = async () => { try { await api('/api/project/open', {}); } catch (e) { toast('打开失败'); } };
   $('#btnWsImport').onclick = async () => {
     try {
-      const r = await api('/api/workspace/import', {});
+      const r = await api('/api/project/import', {});
       toast(r.ok ? `识别完成：新增 ${r.added} 条，跳过 ${r.skipped} 条` : '失败', 4000);
     } catch (e) { toast('请求失败'); }
     load();
@@ -387,14 +397,12 @@ function initBulk() {
   $('#selThunder').onclick = async () => {
     const links = state.ROWS.filter(r => state.SEL.has(r.token) && r.url).map(r => thunderUrl(r.url));
     if (!links.length) return toast('没有可转换的链接');
-    await navigator.clipboard.writeText(links.join('\n'));
-    toast(`已复制 ${links.length} 条 thunder:// 链接，粘到迅雷即可`, 4000);
+    await copyText(links.join('\n'), `已复制 ${links.length} 条 thunder:// 链接，粘到迅雷即可`);
   };
   $('#selCopy').onclick = async () => {
     const links = state.ROWS.filter(r => state.SEL.has(r.token) && r.url).map(r => r.url);
     if (!links.length) return toast('没有可复制的链接');
-    await navigator.clipboard.writeText(links.join('\n'));
-    toast(`已复制 ${links.length} 条 URL`);
+    await copyText(links.join('\n'), `已复制 ${links.length} 条 URL`);
   };
 }
 

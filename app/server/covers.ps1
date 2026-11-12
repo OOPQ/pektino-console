@@ -120,7 +120,7 @@ function Repair-Covers {
 
 function Step-Covers {
     <#  主循环里低频调用：空闲且缺封面时自动补一批（10 分钟最多一次）  #>
-    if ($State.Job -and $State.Job.State -eq 'Running') { return }
+    if ($State.Job -and $State.Job.handle -and $State.Job.handle.State -eq 'Running') { return }
     if ($State.Download) { return }
     if (-not $State.Scan) { return }
     $missing = [int]$State.Scan.coverMissing

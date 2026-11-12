@@ -44,9 +44,27 @@ $script:StartedAt = Get-Date
 . (Join-Path $Root 'lib\ledger.ps1')
 . (Join-Path $Root 'lib\project.ps1')
 
+function Test-ConsoleAlive {
+    param([int]$P)
+    try {
+        $r = Invoke-RestMethod -Uri "http://127.0.0.1:$P/api/state" -TimeoutSec 2
+        return [bool]$r.ok
+    } catch { return $false }
+}
+
 # ---------- 项目：程序只读，数据在项目文件夹里（IDE 模型） ----------
 $WS = Resolve-ProjectRoot -Path $Project -Pick:$Pick -NoPrompt:$NoPrompt
 $script:WS = $WS
+
+# 已经有实例在跑：直接开浏览器退出，别碰数据库/文件（重复启动会争抢 SQLite 和 .part）
+if (Test-ConsoleAlive $Port) {
+    $liveUrl = "http://127.0.0.1:$Port/"
+    Write-Host "控制台已经在运行：$liveUrl" -ForegroundColor Green
+    Write-Host '（如需重启，先关掉已有的那个窗口/进程）' -ForegroundColor DarkGray
+    if (-not $NoBrowser) { Start-Process $liveUrl }
+    if ($PauseOnError) { Start-Sleep -Seconds 1 }
+    return
+}
 Write-Host "  项目: $($WS.ProjectRoot)" -ForegroundColor DarkGray
 
 # SQLite 存储（事实来源）；首次启动自动从 ledger.csv 迁移
@@ -288,17 +306,36 @@ function Handle-Request {
 
     if ($method -eq 'POST') {
         $body = @{}
+        $bodyBad = $false
         if ($Req.Body) {
-            try { $parsed = $Req.Body | ConvertFrom-Json; foreach ($p in $parsed.PSObject.Properties) { $body[$p.Name] = $p.Value } } catch { }
+            try {
+                $parsed = $Req.Body | ConvertFrom-Json
+                foreach ($p in $parsed.PSObject.Properties) { $body[$p.Name] = $p.Value }
+            } catch { $bodyBad = $true }
+        }
+        if ($bodyBad) {
+            Send-Json -Stream $Stream -Object @{ ok = $false; error = '请求体不是合法 JSON' } -Status '400 Bad Request'
+            return
         }
         switch ($path) {
             '/api/download' {
                 $forceRetry = [bool]$body.force
+                $hasTokensKey = $body.ContainsKey('tokens')
                 $tokens = @()
-                if ($body.tokens) { $tokens = @($body.tokens | ForEach-Object { [string]$_ }) }
+                if ($hasTokensKey) { $tokens = @($body.tokens | Where-Object { $_ } | ForEach-Object { [string]$_ }) }
+                if ($hasTokensKey -and $tokens.Count -eq 0) {
+                    Send-Json -Stream $Stream -Object @{ ok = $false; error = '没选条目' }
+                    return
+                }
                 $status = if ($body.status) { [string]$body.status } else { 'new' }
+                if (@('new', 'sent', 'failed') -notcontains $status) {
+                    Send-Json -Stream $Stream -Object @{ ok = $false; error = "不认识的状态: $status" }
+                    return
+                }
                 $limit = 0
-                if ($body.limit) { $limit = [int]$body.limit }
+                if ($body.limit) { try { $limit = [int]$body.limit } catch { $limit = 0 } }
+                if ($limit -lt 0) { $limit = 0 }
+                if ($limit -gt 5000) { $limit = 5000 }
                 $r = Start-Download -Tokens $tokens -Status $status -Limit $limit -Force:$forceRetry
                 Send-Json -Stream $Stream -Object ([pscustomobject]$r)
                 return
@@ -329,6 +366,7 @@ function Handle-Request {
             }
             '/api/covers/repair' {
                 $limit = 40
+                if ($null -ne $body.limit) { $n = 0; if ([int]::TryParse([string]$body.limit, [ref]$n) -and $n -gt 0 -and $n -le 500) { $limit = $n } }
                 if ($body.limit) { $limit = [int]$body.limit }
                 $r = Repair-Covers -Limit $limit
                 Send-Json -Stream $Stream -Object ([pscustomobject]$r)
@@ -347,16 +385,32 @@ function Handle-Request {
             }
             '/api/scrape' {
                 $rank = if ($body.rank) { [string]$body.rank } else { 'daily' }
-                $pages = @(1, 2, 3)
-                if ($body.pages) { $pages = @($body.pages | ForEach-Object { [int]$_ }) }
+                if (@('daily', 'weekly', 'monthly', 'all') -notcontains $rank) {
+                    Send-Json -Stream $Stream -Object @{ ok = $false; error = "不认识的榜单: $rank" }
+                    return
+                }
+                $pages = @(1)
+                if ($null -ne $body.pages) {
+                    $raw = @($body.pages)
+                    $pages = @()
+                    foreach ($p in $raw) {
+                        $n = 0
+                        if ([int]::TryParse([string]$p, [ref]$n) -and $n -ge 1 -and $n -le 200) { $pages += $n }
+                    }
+                    if (-not $pages.Count) {
+                        Send-Json -Stream $Stream -Object @{ ok = $false; error = '页数必须是 1-200 之间的整数' }
+                        return
+                    }
+                }
                 $limit = 0
-                if ($body.limit) { $limit = [int]$body.limit }
+                if ($body.limit) { try { $limit = [int]$body.limit } catch { $limit = 0 } }
+                if ($limit -lt 0) { $limit = 0 }
                 $threads = 8
-                if ($body.threads) { $threads = [Math]::Max(2, [Math]::Min(24, [int]$body.threads)) }
+                if ($body.threads) { try { $threads = [Math]::Max(2, [Math]::Min(24, [int]$body.threads)) } catch { $threads = 8 } }
                 $inc = $true
                 if ($null -ne $body.incremental) { $inc = [bool]$body.incremental }
                 $fresh = 3
-                if ($body.freshDays) { $fresh = [Math]::Max(0, [int]$body.freshDays) }
+                if ($body.freshDays) { try { $fresh = [Math]::Max(0, [Math]::Min(30, [int]$body.freshDays)) } catch { $fresh = 3 } }
                 Send-Json -Stream $Stream -Object (Start-Scrape -Rank $rank -Pages $pages -Limit $limit -Threads $threads -Incremental $inc -FreshDays $fresh)
                 return
             }
@@ -374,7 +428,8 @@ function Handle-Request {
             }
             '/api/mark' {
                 $tokens = @()
-                if ($body.tokens) { $tokens = @($body.tokens | ForEach-Object { [string]$_ }) }
+                if ($body.tokens) { $tokens = @($body.tokens | Where-Object { $_ } | ForEach-Object { [string]$_ }) }
+                if (-not $tokens.Count) { Send-Json -Stream $Stream -Object @{ ok = $false; error = '没选条目' }; return }
                 $status = if ($body.status) { [string]$body.status } else { 'done' }
                 Send-Json -Stream $Stream -Object (Invoke-Mark -Tokens $tokens -Status $status)
                 return
@@ -393,9 +448,17 @@ function Handle-Request {
             }
             '/api/rate' {
                 $tokens = @()
-                if ($body.tokens) { $tokens = @($body.tokens | ForEach-Object { [string]$_ }) }
+                if ($body.tokens) { $tokens = @($body.tokens | Where-Object { $_ } | ForEach-Object { [string]$_ }) }
+                if (-not $tokens.Count) { Send-Json -Stream $Stream -Object @{ ok = $false; error = '没选条目' }; return }
                 $val = 0
-                if ($null -ne $body.value) { $val = [int]$body.value }
+                if ($null -ne $body.value) {
+                    $n = 0
+                    if (-not [int]::TryParse([string]$body.value, [ref]$n) -or $n -lt 0 -or $n -gt 5) {
+                        Send-Json -Stream $Stream -Object @{ ok = $false; error = '评分必须是 0-5' }
+                        return
+                    }
+                    $val = $n
+                }
                 Send-Json -Stream $Stream -Object (Invoke-Rate -Tokens $tokens -Value $val)
                 return
             }
@@ -409,7 +472,7 @@ function Handle-Request {
                 $tokens = @()
                 if ($body.tokens) { $tokens = @($body.tokens | ForEach-Object { [string]$_ }) }
                 $threads = 8
-                if ($body.threads) { $threads = [Math]::Max(2, [Math]::Min(24, [int]$body.threads)) }
+                if ($body.threads) { try { $threads = [Math]::Max(2, [Math]::Min(24, [int]$body.threads)) } catch { } }
                 Send-Json -Stream $Stream -Object (Start-Import -Tokens $tokens -Threads $threads)
                 return
             }
@@ -459,8 +522,22 @@ function Handle-Request {
                 return
             }
             '/api/config' {
-                if ($body.proxy -ne $null) { $Config | Add-Member -NotePropertyName proxy -NotePropertyValue ([string]$body.proxy) -Force }
-                if ($body.concurrent -ne $null) { $Config | Add-Member -NotePropertyName concurrent -NotePropertyValue ([int]$body.concurrent) -Force }
+                if ($body.proxy -ne $null) {
+                    $px = ([string]$body.proxy).Trim()
+                    if ($px -and $px -notmatch '^(https?://)?[A-Za-z0-9\.\-]+(:\d{1,5})?$') {
+                        Send-Json -Stream $Stream -Object @{ ok = $false; error = "代理格式不对：$px（例：http://127.0.0.1:7890）" }
+                        return
+                    }
+                    $Config | Add-Member -NotePropertyName proxy -NotePropertyValue $px -Force
+                }
+                if ($body.concurrent -ne $null) {
+                    $cc = 0
+                    if (-not [int]::TryParse([string]$body.concurrent, [ref]$cc) -or $cc -lt 1 -or $cc -gt 8) {
+                        Send-Json -Stream $Stream -Object @{ ok = $false; error = '并发数必须是 1-8 的整数' }
+                        return
+                    }
+                    $Config | Add-Member -NotePropertyName concurrent -NotePropertyValue $cc -Force
+                }
                 Save-Config -Config $Config -Root $Root -DataDir $WS.DataDir
                 Write-Log 'config' "代理=$([string]$Config.proxy) 并发=$($Config.concurrent)"
                 Send-Json -Stream $Stream -Object @{ ok = $true; proxy = [string]$Config.proxy; concurrent = $Config.concurrent }
@@ -489,13 +566,6 @@ function Write-FileLog {
     } catch { }
 }
 
-function Test-ConsoleAlive {
-    param([int]$P)
-    try {
-        $r = Invoke-RestMethod -Uri "http://127.0.0.1:$P/api/state" -TimeoutSec 2
-        return [bool]$r.ok
-    } catch { return $false }
-}
 
 function Stop-WithMessage {
     param([string]$Message, [string]$Color = 'Red')
@@ -547,16 +617,6 @@ try {
     Write-FileLog "boot scan failed: $($_.Exception.Message)"
 }
 
-# 已经有实例在跑：直接打开浏览器，不重复绑定端口
-if (Test-ConsoleAlive $Port) {
-    $liveUrl = "http://127.0.0.1:$Port/"
-    Write-Host "控制台已经在运行：$liveUrl" -ForegroundColor Green
-    Write-Host '（如需重启，先关掉已有的那个窗口/进程）' -ForegroundColor DarkGray
-    Write-FileLog "already running at $liveUrl"
-    if (-not $NoBrowser) { Start-Process $liveUrl }
-    if ($PauseOnError) { Start-Sleep -Seconds 1 }
-    return
-}
 
 # 端口被别的程序占用：往后找一个空闲端口
 $bindPort = $Port
@@ -601,6 +661,8 @@ try {
             $reqPath = ''
             try {
                 $client.ReceiveTimeout = 10000
+                # SSE / 慢客户端写不进去时别把单线程主循环永久卡住
+                try { $client.Client.SendTimeout = 8000 } catch { }
                 $stream = $client.GetStream()
                 $req = Read-Request -Stream $stream
                 if ($req) {
@@ -633,6 +695,8 @@ try {
             }
         }
         Push-Sse
+        # 任务收尾不能只依赖前端轮询 /api/state：没人看页面时也要把 Job 释放掉
+        if (Get-Command Update-Job -ErrorAction SilentlyContinue) { try { Update-Job } catch { } }
         if (Get-Command Step-Download -ErrorAction SilentlyContinue) { try { Step-Download } catch { } }
         if (Get-Command Step-Covers -ErrorAction SilentlyContinue) { try { Step-Covers } catch { } }
         if (Get-Command Step-DownloadGuard -ErrorAction SilentlyContinue) {

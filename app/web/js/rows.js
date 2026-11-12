@@ -8,12 +8,21 @@ import {
 } from './actions.js';
 
 /* ================= 选择（Shift 范围） ================= */
-let LAST_IDX = null, SHIFT_DOWN = false;
+let LAST_IDX = null, LAST_TOKEN = null, SHIFT_DOWN = false;
+
+// 排序/筛选/刷新后可见顺序会变，旧的索引不再可靠 → 用 token 重新定位
+onEvent('reload', () => { LAST_IDX = null; LAST_TOKEN = null; });
 
 function handleSelect(cb, shift) {
   const tk = cb.dataset.tk, idx = parseInt(cb.dataset.idx);
-  if (shift && LAST_IDX !== null && !isNaN(idx)) {
-    const lo = Math.min(LAST_IDX, idx), hi = Math.max(LAST_IDX, idx);
+  // 用上一次点击的 token 在当前可见列表里重新算下标，避免排序后选错区间
+  let lastIdx = LAST_IDX;
+  if (shift && LAST_TOKEN) {
+    const vi = visible().findIndex(x => x.token === LAST_TOKEN);
+    if (vi >= 0) lastIdx = vi;
+  }
+  if (shift && lastIdx !== null && !isNaN(idx)) {
+    const lo = Math.min(lastIdx, idx), hi = Math.max(lastIdx, idx);
     const all = visible();
     for (let k = lo; k <= hi; k++) {
       const r = all[k]; if (!r) continue;
@@ -23,6 +32,7 @@ function handleSelect(cb, shift) {
     cb.checked ? state.SEL.add(tk) : state.SEL.delete(tk);
   }
   LAST_IDX = isNaN(idx) ? null : idx;
+  LAST_TOKEN = tk || null;
   document.querySelectorAll('#tbody input[type=checkbox]').forEach(box => {
     box.checked = state.SEL.has(box.dataset.tk);
   });
@@ -48,9 +58,9 @@ export async function doPlay(tk) {
 }
 
 export async function delFiles(tokens, purge) {
-  const rows = state.ROWS.filter(r => tokens.includes(r.token) && r.file_name);
-  if (!rows.length) return toast('选中的条目本地没有文件');
-  const size = rows.reduce((s, r) => s + (+r.file_size || 0), 0);
+  // purge 时即使没有本地文件也要发请求（把记录从台账移除）；只有"删文件"才要求有文件
+  const rows = purge ? state.ROWS.filter(r => tokens.includes(r.token)) : state.ROWS.filter(r => tokens.includes(r.token) && r.file_name);
+  if (!rows.length) return toast(purge ? '选中条目不在列表里' : '选中的条目本地没有文件');
   const extra = purge ? '，并从台账中移除这些条目' : '（进回收站，可从回收站还原）';
   if (!confirm(`删除 ${rows.length} 个本地文件，共 ${(size / 1048576).toFixed(1)} MB${extra}？`)) return;
   try {
@@ -136,14 +146,14 @@ async function onCtxAction(act) {
     case 'forceRetry': {
       const r = await api('/api/download', { tokens: [tk], force: true });
       toast(r.ok ? '已强制重试' : (r.error || '重试失败'), 5000);
-      if (r.ok) load();
+      if (r.ok) reload();
       return;
     }
     case 'refresh': {
       const r = await api('/api/refresh-url', { tokens: [tk] });
       if (!r.ok) return toast('刷新失败：' + r.error, 4000);
       toast(`源地址：更新 ${r.refreshed}，未变 ${r.unchanged}，已下架 ${r.removed}`, 4500);
-      load();
+      reload();
       return;
     }
     case 'open': return window.open(siteUrl(tk), '_blank');

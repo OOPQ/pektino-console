@@ -4,7 +4,7 @@
 function Get-Stats {
     $rows = @($State.Ledger)
     $byStatus = @{}
-    foreach ($s in @('new', 'sent', 'done', 'ignored')) {
+    foreach ($s in @('new', 'sent', 'done', 'ignored', 'failed', 'downloading')) {
         $byStatus[$s] = @($rows | Where-Object { $_.status -eq $s }).Count
     }
     $secs = 0
@@ -30,6 +30,8 @@ function Get-Stats {
         sent        = $byStatus['sent']
         done        = $byStatus['done']
         ignored     = $byStatus['ignored']
+        failed      = $byStatus['failed']
+        downloading = $byStatus['downloading']
         hours       = [math]::Round($secs / 3600, 2)
         todayAdded  = $todayAdded
         byRes       = $resGroups
@@ -41,7 +43,8 @@ function Get-Stats {
         favorites   = @($rows | Where-Object { $_.fav -eq '1' }).Count
         coverMissing = if ($State.Scan -and $null -ne $State.Scan.coverMissing) { [int]$State.Scan.coverMissing } else { 0 }
         watched     = $watched
-        toWatch     = $onDisk - $watched
+        # 只把"有文件且没看过"算作待看，和前端 towatch 过滤口径一致
+        toWatch     = @($rows | Where-Object { $_.file_name -and -not $_.last_play }).Count
         diskGB      = [math]::Round($bytes / 1GB, 2)
         contentDir = $Config.contentDir
         dirExists   = [bool]$State.Files.Exists
@@ -57,6 +60,12 @@ function Get-Stats {
 function Invoke-Scan {
     param([switch]$Silent, [switch]$KeepStatus)
     $idx = Get-DownloadIndex -Dir $Config.contentDir
+    # 目录不可达（移动硬盘没挂载/被改名）时绝不清台账里的文件状态，
+    # 否则每 10 秒一次的自动扫描会把 done 全部打回 new
+    if (-not $idx.Exists) {
+        if ($State.Scan) { return $State.Scan }
+        return [pscustomobject]@{ ok = $true; files = 0; downloaded = 0; missing = @($State.Ledger).Count; changed = 0; partial = 0; dir = $Config.contentDir; exists = $false; orphans = @() }
+    }
     $State.Files = $idx
     $changed = 0
     $found = 0
@@ -134,7 +143,6 @@ function Start-Scrape {
     if ($State.Job) { return @{ ok = $false; error = '已有抓取任务在跑，等它结束' } }
     $dir = Split-Path $TmpCsv -Parent
     if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
-    Remove-Item $TmpCsv -Force -ErrorAction SilentlyContinue
     Remove-Item $ProgressFile -Force -ErrorAction SilentlyContinue
     Remove-Item $KnownFile -Force -ErrorAction SilentlyContinue
 
@@ -183,10 +191,9 @@ function Start-Import {
     if ($State.Job) { return @{ ok = $false; error = '已有抓取/导入任务在跑，等它结束' } }
     $dir = Split-Path $TmpCsv -Parent
     if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
-    Remove-Item $TmpCsv -Force -ErrorAction SilentlyContinue
     Remove-Item $ProgressFile -Force -ErrorAction SilentlyContinue
 
-    $script = Join-Path $Root 'import.ps1'
+    $script = Join-Path $Root 'cli\import.ps1'
     $dl = $Config.contentDir; $out = $TmpCsv; $prog = $ProgressFile; $cov = $CoverDir; $thm = $ThumbDir
     $job = Start-Job -ScriptBlock {
         param($script, $dl, $tokens, $out, $prog, $cov, $thm, $threads)
@@ -217,20 +224,24 @@ function Update-Job {
     $kind = $State.Job.kind
     if ($j.State -eq 'Completed') {
         if (Test-Path $TmpCsv) {
+            $mergeOk = $false
             try {
                 $scraped = @(Import-Csv $TmpCsv -Encoding UTF8)
                 $merged = Merge-Ledger -Existing $State.Ledger -Scraped $scraped
                 $State.Ledger = @($merged.Rows)
                 Save-Ledger -Rows $State.Ledger -Path $LedgerPath
                 [void](Invoke-Scan -Silent)
+                $mergeOk = $true
                 if ($kind -eq 'import') {
                     Write-Log 'import' "本地入库完成（$secs s）：新增 $($merged.Added)，更新 $($merged.Updated)，可识别 $($scraped.Count) 个文件"
                 } else {
                     Write-Log 'scrape' "抓取完成（$secs s）：新增 $($merged.Added)，更新 $($merged.Updated)，共 $($scraped.Count) 条"
                 }
             } catch {
-                Write-Log 'error' "导入结果失败: $($_.Exception.Message)"
+                Write-Log 'error' "导入结果失败（保留 CSV 待重试）: $($_.Exception.Message)"
             }
+            # 合并/落盘失败时保留抓取结果，别把整轮数据删掉
+            if ($mergeOk) { Remove-Item $TmpCsv -Force -ErrorAction SilentlyContinue }
         } else {
             Write-Log 'error' "$kind 结束但没有产出 CSV"
         }
@@ -242,7 +253,6 @@ function Update-Job {
 
     Remove-Job $j -Force -ErrorAction SilentlyContinue
     $State.Job = $null
-    Remove-Item $TmpCsv -Force -ErrorAction SilentlyContinue
     Touch-State
 }
 
@@ -252,7 +262,6 @@ function Stop-CurrentJob {
     try { Stop-Job $State.Job.handle -ErrorAction SilentlyContinue } catch { }
     try { Remove-Job $State.Job.handle -Force -ErrorAction SilentlyContinue } catch { }
     $State.Job = $null
-    Remove-Item $TmpCsv -Force -ErrorAction SilentlyContinue
     Remove-Item $ProgressFile -Force -ErrorAction SilentlyContinue
     Write-Log 'cancel' "已取消 $kind 任务"
     Touch-State
@@ -349,10 +358,18 @@ function Invoke-DeleteFiles {
     $deleted = 0
     $freed = 0
     $failed = @()
+    $doneTokens = @()     # 真正删掉（或确认本来就不存在）的条目
+    $missingTokens = @()  # 目录里找不到文件、但仍要清台账态的
 
     foreach ($r in $rows) {
         $file = Resolve-RowFile $r
-        if (-not $file -or -not (Test-Path $file)) { continue }
+        if (-not $file -or -not (Test-Path $file)) {
+            # 文件不在：如果台账也没记录过文件，就当作"无文件可删"，可以清状态；
+            # 记录过文件但找不到，先不动，避免目录不可达时误清
+            if (-not $r.file_name) { $missingTokens += $r.token }
+            else { $failed += "$($r.token): 台账记录有文件但磁盘上找不到（可能目录不可达），已跳过" }
+            continue
+        }
         # 只允许删内容目录内的文件
         $rootFull = [System.IO.Path]::GetFullPath($Config.contentDir).TrimEnd('\')
         $fileFull = [System.IO.Path]::GetFullPath($file)
@@ -373,19 +390,25 @@ function Invoke-DeleteFiles {
             }
             $deleted++
             $freed += $size
+            $doneTokens += $r.token
         } catch {
             $failed += "$($r.token): $($_.Exception.Message)"
         }
     }
 
+    # 只处理"确实删掉了 / 本来就没文件"的条目；删除失败（文件被占用等）保持原状
+    $okTokens = @($doneTokens + $missingTokens)
     if ($Purge) {
-        $rm = Remove-StoreItems -Tokens ($rows | ForEach-Object { $_.token })
-        $keep = @($State.Ledger | Where-Object { $Tokens -notcontains $_.token })
-        $State.Ledger = $keep
+        $rm = 0
+        if ($okTokens.Count -gt 0) {
+            $rm = Remove-StoreItems -Tokens $okTokens
+            $State.Ledger = @($State.Ledger | Where-Object { $okTokens -notcontains $_.token })
+        }
         Write-Log 'delete' "删除文件 $deleted 个，从台账移除 $rm 条"
     } else {
         $changed = 0
         foreach ($r in $rows) {
+            if ($okTokens -notcontains $r.token) { continue }
             if ($r.file_name) { $r.file_name = ''; $r.file_size = ''; $r.file_date = ''; $changed++ }
             if ($r.status -eq 'done') { $r.status = if ($r.sent_at) { 'sent' } else { 'new' }; $changed++ }
             $r.note = 'file:deleted'
@@ -479,19 +502,24 @@ function Invoke-Send {
     }
 
     $sent = 0
+    $sentTokens = @()
+    $failedTokens = @()
     foreach ($t in $targets) {
         try {
             Start-Process (New-ThunderLink $t.url)
             $sent++
+            $sentTokens += $t.token
         } catch {
+            $failedTokens += $t.token
             Write-Log 'error' "投递失败 $($t.token): $($_.Exception.Message)"
         }
     }
-    [void](Set-LedgerStatus -Rows $State.Ledger -Tokens ($targets | ForEach-Object { $_.token }) -Status 'sent')
+    # 只把真正启动成功的标成 sent；失败项留在原状态，下次还能重投
+    if ($sentTokens.Count -gt 0) { [void](Set-LedgerStatus -Rows $State.Ledger -Tokens $sentTokens -Status 'sent') }
     Save-Ledger -Rows $State.Ledger -Path $LedgerPath
-    Write-Log 'send' "投递 $sent 条到迅雷"
+    Write-Log 'send' "投递 $sent 条到迅雷（失败 $($failedTokens.Count) 条）"
     Touch-State
-    return @{ ok = $true; count = $sent; links = @(); dryRun = $false }
+    return @{ ok = $true; count = $sent; failed = $failedTokens.Count; links = @(); dryRun = $false }
 }
 
 # ---------------- 内置下载器 ----------------
@@ -557,7 +585,7 @@ function Start-Download {
     <#  把选中/待下载条目交给内置下载器（独立进程，支持续传与并发）  #>
     param($Tokens, [string]$Status = 'new', [int]$Limit = 0, [switch]$Force)
 
-    if ($State.Job -and $State.Job.State -eq 'Running') {
+    if ($State.Job -and $State.Job.handle -and $State.Job.handle.State -eq 'Running') {
         return @{ ok = $false; error = '抓取任务正在运行，等它结束再下载' }
     }
     # 先清掉可能残留的孤儿下载进程，否则会一直挡住新任务
@@ -582,7 +610,7 @@ function Start-Download {
         $targets = @($State.Ledger | Where-Object { $_.url -and -not $_.file_name -and $_.status -eq $Status })
     }
     # 失败/下架的条目：先把源地址刷新一遍（站点可能换了 CDN 路径）
-    $stale = @($targets | Where-Object { $_.note -like 'dead:*' -or $_.note -like 'removed*' })
+    $stale = @($targets | Where-Object { $_.note -like 'dead:*' -or $_.note -like 'removed*' } | Select-Object -First 8)
     $skippedDead = 0
     if ($stale.Count -gt 0 -and -not $Force) {
         $null = Refresh-ItemUrls -Tokens @($stale | ForEach-Object { $_.token })
@@ -802,7 +830,8 @@ function Apply-DeadFromProgress {
             } catch { }
         }
 
-        $dead = @($pj.items | Where-Object { $_.state -eq 'dead' })
+        # 每轮最多核对 10 条：核对含网络复核，太多会把主循环卡住（前端 SSE 会停）
+        $dead = @($pj.items | Where-Object { $_.state -eq 'dead' } | Select-Object -First 10)
         $n = 0
         foreach ($d in $dead) {
             $row = $State.Ledger | Where-Object { $_.token -eq $d.token } | Select-Object -First 1

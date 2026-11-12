@@ -39,8 +39,19 @@ function fitMedia(img, box) {
 
 function loadCover(img, box, token) {
   img.style.width = ''; img.style.height = ''; box.style.width = '';
+  let triedThumb = false;
   img.onload = () => fitMedia(img, box);
-  img.onerror = () => { img.onload = null; img.src = '/api/cover?token=' + encodeURIComponent(token); };
+  img.onerror = () => {
+    if (!triedThumb) {
+      // 只回退一次到缩略图；再失败就显示占位，避免同一个 404 反复重试
+      triedThumb = true;
+      img.src = '/api/cover?token=' + encodeURIComponent(token);
+      return;
+    }
+    img.onload = null; img.onerror = null;
+    img.removeAttribute('src');
+    box.classList.add('nocover');
+  };
   img.src = '/api/cover?token=' + encodeURIComponent(token) + '&full=1';
   if (img.complete && img.naturalWidth) fitMedia(img, box);
 }
@@ -110,7 +121,8 @@ async function rateGacha(v) {
 export function connectSse() {
   try {
     const es = new EventSource('/api/events');
-    es.addEventListener('hello', () => { $('#sseInfo').textContent = 'SSE 已连接'; });
+    // 重连后补一次全量：断线期间的变化不会自己冒出来
+    es.addEventListener('hello', () => { $('#sseInfo').textContent = 'SSE 已连接'; emit('reload'); });
     es.addEventListener('state', () => { if (!state.BUSY) emit('reload'); });
     es.onerror = () => { $('#sseInfo').textContent = 'SSE 重连中…'; };
   } catch (e) {
@@ -125,7 +137,7 @@ export function initPanels() {
   $('#lightbox').onclick = e => { if (e.target.id === 'lightbox') closeLightbox(); };
   $('#lbPlay').onclick = () => { if (state.LB_TOKEN) doPlay(state.LB_TOKEN); };
   $('#lbReveal').onclick = async () => {
-    try { await api('/api/reveal', { token: state.LB_TOKEN }); } catch (e) { }
+    try { const r = await api('/api/reveal', { token: state.LB_TOKEN }); if (!r.ok) toast('定位失败：' + (r.error || '文件不在本地')); } catch (e) { toast('定位失败'); }
   };
   $('#lbCopy').onclick = () => {
     const r = state.ROWS.find(x => x.token === state.LB_TOKEN);

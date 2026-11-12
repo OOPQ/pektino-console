@@ -71,6 +71,8 @@ $states = @{}   # token -> @{ state; bytes; expected; error }
 $queueMap = @{}
 foreach ($it in $queue) {
     $states[[string]$it.token] = @{ state = 'queued'; bytes = 0; expected = 0; error = '' }
+    # 重试时要用到原 item（url/file），之前没填导致重试 curl 没 URL 可用
+    $queueMap[[string]$it.token] = $it
 }
 
 try { Add-Type -AssemblyName System.Net.Http -ErrorAction Stop } catch { }

@@ -67,7 +67,11 @@ function Read-Request {
     }
 
     $len = 0
-    if ($req.Headers['content-length']) { $len = [int]$req.Headers['content-length'] }
+    if ($req.Headers['content-length']) {
+        # 头可能是伪造/非数字，解析失败就当没有 body（否则整个请求会抛异常掉线）
+        try { $len = [int]$req.Headers['content-length'] } catch { $len = 0 }
+        if ($len -lt 0) { $len = 0 }
+    }
     if ($len -gt 0 -and $len -lt 2000000) {
         $bodyStart = $headEnd + 4
         $have = [Math]::Max(0, $all.Length - $bodyStart)

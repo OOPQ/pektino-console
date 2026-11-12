@@ -563,8 +563,13 @@ function Start-Download {
         return @{ ok = $false; error = '已经有一个下载任务在跑' }
     }
 
-    $cfg = Read-Config -Root $Root
-    $dir = if ($cfg.downloadDir) { [string]$cfg.downloadDir } else { 'D:\Downloads' }
+    # 必须和启动时同一份配置（数据目录下的 config.json），否则下载会落到旧路径
+    $cfg = Read-Config -Root $Root -DataDir $WS.DataDir -DefaultDownloadDir $WS.Downloads
+    $dir = if ($cfg.downloadDir) { [string]$cfg.downloadDir } else { $WS.Downloads }
+    # 配置里可能是相对路径（videos），按数据目录解析，避免落到进程当前目录
+    if (-not [System.IO.Path]::IsPathRooted($dir)) {
+        $dir = [System.IO.Path]::GetFullPath((Join-Path $WS.DataDir $dir))
+    }
     if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
 
     $targets = @()
@@ -670,7 +675,7 @@ function Step-Download {
         return
     }
 
-    $dir = if ($State.Download.Dir) { $State.Download.Dir } else { (Read-Config -Root $Root).downloadDir }
+    $dir = if ($State.Download.Dir) { $State.Download.Dir } else { (Read-Config -Root $Root -DataDir $WS.DataDir -DefaultDownloadDir $WS.Downloads).downloadDir }
     $count = $State.Download.Count
     $runStarted = $State.Download.Started
     $State.Download = $null

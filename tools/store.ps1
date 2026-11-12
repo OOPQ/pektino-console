@@ -18,12 +18,13 @@ $script:DbPath = $null
 $script:LastSnapshot = [datetime]::MinValue
 
 function Get-DbPath {
-    param([string]$Root = $PSScriptRoot)
+    param([string]$Root = $PSScriptRoot, [string]$DataDir = '')
+    if ($DataDir) { return (Join-Path $DataDir 'data.db') }
     Join-Path $Root 'out\data.db'
 }
 
 function Initialize-Store {
-    param([string]$Root = $PSScriptRoot)
+    param([string]$Root = $PSScriptRoot, [string]$DataDir = '')
 
     $lib = Join-Path $Root 'lib\System.Data.SQLite.dll'
     if (-not ('System.Data.SQLite.SQLiteConnection' -as [type])) {
@@ -31,7 +32,7 @@ function Initialize-Store {
         Add-Type -Path $lib
     }
 
-    $script:DbPath = Get-DbPath -Root $Root
+    $script:DbPath = Get-DbPath -Root $Root -DataDir $DataDir
     $dir = Split-Path $script:DbPath -Parent
     if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
 

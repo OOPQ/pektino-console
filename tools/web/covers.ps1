@@ -9,6 +9,10 @@ function Get-CoverMissingList {
     foreach ($r in @($State.Ledger)) {
         $tk = [string]$r.token
         if (-not $tk) { continue }
+        # 非 token 命名的本地文件（例如中文片名）不参与封面抓取
+        if ($tk -notmatch '^[A-Za-z0-9_\-]+$') { continue }
+        # 没有 url 的条目（本地导入/无来源）没有详情页可抓，跳过
+        if (-not $r.url) { continue }
         if (Test-Path (Join-Path $CoverDir ($tk + '.missing'))) { continue }
         $f = Join-Path $CoverDir ($tk + '.jpg')
         if ((Test-Path $f) -and ((Get-Item $f).Length -gt 1024)) { continue }

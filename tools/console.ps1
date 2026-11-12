@@ -18,7 +18,11 @@ param(
     [string]$Root = '',
     [switch]$NoBrowser,
     # 出错/结束时停住窗口，方便双击启动时看到原因
-    [switch]$PauseOnError
+    [switch]$PauseOnError,
+    # 数据目录（workspace）；留空则用项目下 out\，首次运行会提示
+    [string]$Workspace = '',
+    # 无人值守/自动化时跳过首次目录询问
+    [switch]$NoPrompt
 )
 
 # $PSScriptRoot 在 param 默认值里可能还是空的（powershell -File 启动时），这里显式兜底
@@ -36,30 +40,51 @@ if (-not (Test-Path (Join-Path $Root 'ledger.ps1'))) {
 $ErrorActionPreference = 'Stop'
 $script:StartedAt = Get-Date
 . (Join-Path $Root 'ledger.ps1')
+. (Join-Path $Root 'workspace.ps1')
+
+# ---------- 工作区：数据/封面/下载/日志都挂在这个目录下 ----------
+$ProjectRoot = Split-Path $Root -Parent
+if (-not $Workspace) { $Workspace = '' }
+if (-not $Workspace -and -not (Test-Path (Join-Path $ProjectRoot 'workspace.json')) -and -not $NoPrompt) {
+    Write-Host ''
+    Write-Host '  首次使用：请指定数据目录（回车使用默认）' -ForegroundColor Cyan
+    Write-Host "    默认: $(Join-Path $ProjectRoot 'out')" -ForegroundColor DarkGray
+    Write-Host '    也可以填移动硬盘路径，例如 D:\pektino-data' -ForegroundColor DarkGray
+    try {
+        $ans = Read-Host '  目录'
+        if ($ans) { $Workspace = $ans }
+    } catch { }
+}
+$WS = Initialize-Workspace -ProjectRoot $ProjectRoot -DataDir $Workspace
+$script:WS = $WS
 
 # SQLite 存储（事实来源）；首次启动自动从 ledger.csv 迁移
-[void](Initialize-Store -Root $Root)
-$migrated = Import-CsvIntoStore -CsvPath (Get-LedgerPath -Root $Root)
+[void](Initialize-Store -Root $Root -DataDir $WS.DataDir)
+$migrated = Import-CsvIntoStore -CsvPath $WS.LedgerCsv
 # 每日库备份 + WAL 合并
 try { Invoke-DbMaintenance -Backup -Checkpoint } catch { }
 
 $Pektino = Join-Path $Root 'pektino.ps1'
-$LedgerPath = Get-LedgerPath -Root $Root
+$LedgerPath = $WS.LedgerCsv
 $WebDir = Join-Path $Root 'web'
 $HtmlPath = Join-Path $WebDir 'index.html'
-$TmpCsv = Join-Path $Root 'out\.scrape.csv'
-$CoverDir = Join-Path $Root 'out\covers'
-$ThumbDir = Join-Path $Root 'out\thumbs'
-$ProgressFile = Join-Path $Root 'out\progress.json'
-$KnownFile = Join-Path $Root 'out\.known.txt'
-$ClientLog = Join-Path $Root 'out\client.log'
+$TmpCsv = Join-Path $WS.DataDir '.scrape.csv'
+$CoverDir = $WS.Covers
+$ThumbDir = $WS.Thumbs
+$ProgressFile = Join-Path $WS.DataDir 'progress.json'
+$KnownFile = Join-Path $WS.DataDir '.known.txt'
+$ClientLog = Join-Path $WS.Logs 'client.log'
 $DlScript = Join-Path $Root 'download.ps1'
-$DlQueue = Join-Path $Root 'out\.queue.json'
-$DlProgress = Join-Path $Root 'out\download.json'
-$DlCancel = Join-Path $Root 'out\.dl-cancel.json'
+$DlQueue = Join-Path $WS.DataDir '.queue.json'
+$DlProgress = Join-Path $WS.DataDir 'download.json'
+$DlCancel = Join-Path $WS.DataDir '.dl-cancel.json'
 
 # ---------- 内存态 ----------
-$Config = Read-Config -Root $Root
+$Config = Read-Config -Root $Root -DataDir $WS.DataDir -DefaultDownloadDir $WS.Downloads
+# 配置里的相对路径按项目根解析（跟着项目走，方便整目录搬移）
+if ($Config.downloadDir -and -not [System.IO.Path]::IsPathRooted([string]$Config.downloadDir)) {
+    $Config.downloadDir = [System.IO.Path]::GetFullPath((Join-Path $WS.ProjectRoot ([string]$Config.downloadDir)))
+}
 $State = @{
     Ledger = @(Read-Ledger -Path $LedgerPath)
     Log    = New-Object System.Collections.ArrayList
@@ -217,6 +242,7 @@ function Handle-Request {
                 log     = @($State.Log | Select-Object -Last 40)
                 job     = (Get-JobInfo)
                 download = (Get-DownloadInfo)
+                workspace = (Get-WorkspaceSummary -Paths $WS -Downloads $Config.downloadDir)
                 settings = [pscustomobject]@{ proxy = [string]$Config.proxy; concurrent = $(if ($Config.concurrent) { [int]$Config.concurrent } else { 3 }) }
                 metrics = [pscustomobject]@{
                     total        = $State.Metrics.total
@@ -250,6 +276,11 @@ function Handle-Request {
         return
     }
 
+    if ($method -eq 'GET' -and $path -eq '/api/workspace') {
+        Send-Json -Stream $Stream -Object ([pscustomobject]@{ ok = $true; workspace = (Get-WorkspaceSummary -Paths $WS -Downloads $Config.downloadDir) })
+        return
+    }
+
     if ($method -eq 'GET' -and $path -eq '/api/download') {
         Send-Json -Stream $Stream -Object ([pscustomobject]@{ ok = $true; download = (Get-DownloadInfo) })
         return
@@ -278,6 +309,16 @@ function Handle-Request {
                 if ($body.limit) { $limit = [int]$body.limit }
                 $r = Start-Download -Tokens $tokens -Status $status -Limit $limit
                 Send-Json -Stream $Stream -Object ([pscustomobject]$r)
+                return
+            }
+            '/api/workspace/open' {
+                try { Start-Process explorer.exe $WS.DataDir; Send-Json -Stream $Stream -Object @{ ok = $true; path = $WS.DataDir } }
+                catch { Send-Json -Stream $Stream -Object @{ ok = $false; error = $_.Exception.Message } }
+                return
+            }
+            '/api/workspace/import' {
+                $r = Import-WorkspaceFiles -Paths $WS
+                Send-Json -Stream $Stream -Object ([pscustomobject]@{ ok = $true; added = $r.added; skipped = $r.skipped })
                 return
             }
             '/api/covers/repair' {
@@ -416,7 +457,7 @@ function Handle-Request {
                 if ($body.concurrent -ne $null) { $Config | Add-Member -NotePropertyName concurrent -NotePropertyValue ([int]$body.concurrent) -Force }
                 $dir = [string]$body.downloadDir
                 if (-not $dir) {
-                    if ($body.proxy -ne $null -or $body.concurrent -ne $null) { Save-Config -Config $Config -Root $Root; Send-Json -Stream $Stream -Object @{ ok = $true; proxy = $Config.proxy; concurrent = $Config.concurrent }; return }
+                    if ($body.proxy -ne $null -or $body.concurrent -ne $null) { Save-Config -Config $Config -Root $Root -DataDir $WS.DataDir; Send-Json -Stream $Stream -Object @{ ok = $true; proxy = $Config.proxy; concurrent = $Config.concurrent }; return }
                     Send-Json -Stream $Stream -Object @{ ok = $false; error = '缺少 downloadDir' }; return
                 }
                 $dir = $dir.Trim().Trim('"')
@@ -425,7 +466,7 @@ function Handle-Request {
                     catch { Send-Json -Stream $Stream -Object @{ ok = $false; error = "目录不存在且无法创建: $dir" }; return }
                 }
                 $Config.downloadDir = $dir
-                Save-Config -Config $Config -Root $Root
+                Save-Config -Config $Config -Root $Root -DataDir $WS.DataDir
                 Write-Log 'config' "下载目录改为 $dir"
                 # 换目录只重扫，不因为“新目录里找不到文件”把已有状态打回待下载
                 $r = Invoke-Scan -KeepStatus
@@ -439,7 +480,7 @@ function Handle-Request {
 }
 
 # ---------- 启动 ----------
-$LogFile = Join-Path (Split-Path $LedgerPath -Parent) 'console.log'
+$LogFile = Join-Path $WS.Logs 'console.log'
 
 function Write-FileLog {
     param([string]$Message)
@@ -485,12 +526,28 @@ try {
     Write-FileLog "thumb backfill failed: $($_.Exception.Message)"
 }
 
+# 首次使用（台账为空）：把工作区里已有的视频识别进来
+try {
+    if (@($State.Ledger).Count -eq 0) {
+        $imp = Import-WorkspaceFiles -Paths $WS
+        if ($imp.added -gt 0) { Write-Host "  识别到已有文件 $($imp.added) 条" -ForegroundColor Green }
+    }
+} catch { Write-FileLog "workspace import failed: $($_.Exception.Message)" }
+
 # 启动先扫一遍下载目录，把“已经下完的”标成 done
 # 顺手整理上次中断留下的 .part（已下完的改名，写坏的删掉）
 try {
     $pr = Repair-PartFiles
     if ($pr.renamed -gt 0 -or $pr.deleted -gt 0) { Write-FileLog "part repair: renamed=$($pr.renamed) deleted=$($pr.deleted) kept=$($pr.kept)" }
 } catch { Write-FileLog "part repair failed: $($_.Exception.Message)" }
+
+# 首次使用（台账为空）：把工作区里已有的视频识别进来
+try {
+    if (@($State.Ledger).Count -eq 0) {
+        $imp = Import-WorkspaceFiles -Paths $WS
+        if ($imp.added -gt 0) { Write-Host "  识别到已有文件 $($imp.added) 条" -ForegroundColor Green }
+    }
+} catch { Write-FileLog "workspace import failed: $($_.Exception.Message)" }
 
 # 启动先扫一遍下载目录，把“已经下完的”标成 done
 try {

@@ -1,4 +1,4 @@
-﻿/* main.js — 数据加载、工具条、批量操作、初始化 */
+/* main.js — 数据加载、工具条、批量操作、初始化 */
 import { $, state, PREFS, savePrefs, api, toast, onEvent } from './core.js';
 import { render, markActiveKpi, initTable } from './table.js';
 import { initRows, doPlay, delFiles } from './rows.js';
@@ -38,6 +38,7 @@ function renderJob(job, download) {
 }
 
 /* ================= 数据加载 ================= */
+let _WS = null;
 function paintKpis(S) {
   $('#kTotal').textContent = S.total;
   $('#kNew').textContent = S.new;
@@ -100,6 +101,15 @@ function paintDownload(dl) {
   }).join('');
 }
 
+function paintWorkspace(ws) {
+  const el = $('#wsInfo');
+  if (!el) return;
+  if (!ws) { el.textContent = '–'; return; }
+  el.innerHTML = `数据目录 <span class="mono">${ws.dataDir}</span><br>
+    下载 <span class="mono">${ws.downloads}</span> · ${ws.videoCount} 个视频 / ${ws.videoGB} GB<br>
+    封面 ${ws.coverCount} 张 · 库 ${ws.dbMB} MB`;
+}
+
 function paintCovers(S) {
   const n = +S.coverMissing || 0;
   const el = $('#coverInfo');
@@ -121,6 +131,7 @@ async function load() {
     const s = await api('/api/state');
     state.STATS = s.stats || {};
     state.ROWS = s.rows || [];
+    _WS = s.workspace || _WS;
     const S = state.STATS;
 
     $('#dot').classList.remove('off');
@@ -130,6 +141,7 @@ async function load() {
     paintMetrics(s.metrics || {});
     paintOrphans(S);
     paintCovers(S);
+    paintWorkspace(_WS);
     paintDownload(s.download);
 
     $('#logbox').innerHTML = (s.log || []).slice().reverse()
@@ -313,6 +325,14 @@ function initToolbar() {
   $('#btnPreview').onclick = previewLinks;
   $('#btnSaveDir').onclick = saveDir;
   $('#btnScan').onclick = scanDir;
+  $('#btnWsOpen').onclick = async () => { try { await api('/api/workspace/open', {}); } catch (e) { toast('打开失败'); } };
+  $('#btnWsImport').onclick = async () => {
+    try {
+      const r = await api('/api/workspace/import', {});
+      toast(r.ok ? `识别完成：新增 ${r.added} 条，跳过 ${r.skipped} 条` : '失败', 4000);
+    } catch (e) { toast('请求失败'); }
+    load();
+  };
   $('#btnRepairCovers').onclick = repairCovers;
   $('#btnCancelAll').onclick = cancelAllDownloads;
   $('#btnRepairParts').onclick = repairParts;

@@ -21,7 +21,8 @@ $script:LedgerColumns = @(
 . (Join-Path $PSScriptRoot 'store.ps1')
 
 function Get-LedgerPath {
-    param([string]$Root = $PSScriptRoot)
+    param([string]$Root = $PSScriptRoot, [string]$DataDir = '')
+    if ($DataDir) { return (Join-Path $DataDir 'ledger.csv') }
     Join-Path $Root 'out\ledger.csv'
 }
 
@@ -134,14 +135,15 @@ function Set-LedgerStatus {
 # ---------------- 配置 ----------------
 
 function Get-ConfigPath {
-    param([string]$Root = $PSScriptRoot)
+    param([string]$Root = $PSScriptRoot, [string]$DataDir = '')
+    if ($DataDir) { return (Join-Path $DataDir 'config.json') }
     Join-Path $Root 'out\config.json'
 }
 
 function Read-Config {
-    param([string]$Root = $PSScriptRoot)
-    $default = [pscustomobject]@{ downloadDir = 'D:\Downloads' }
-    $p = Get-ConfigPath -Root $Root
+    param([string]$Root = $PSScriptRoot, [string]$DataDir = '', [string]$DefaultDownloadDir = 'D:\Downloads')
+    $default = [pscustomobject]@{ downloadDir = $DefaultDownloadDir }
+    $p = Get-ConfigPath -Root $Root -DataDir $DataDir
     if (-not (Test-Path $p)) { return $default }
     try {
         $c = Get-Content $p -Raw -Encoding UTF8 | ConvertFrom-Json
@@ -153,8 +155,8 @@ function Read-Config {
 }
 
 function Save-Config {
-    param($Config, [string]$Root = $PSScriptRoot)
-    $p = Get-ConfigPath -Root $Root
+    param($Config, [string]$Root = $PSScriptRoot, [string]$DataDir = '')
+    $p = Get-ConfigPath -Root $Root -DataDir $DataDir
     $dir = Split-Path $p -Parent
     if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
     $Config | ConvertTo-Json -Depth 4 | Set-Content -Path $p -Encoding UTF8

@@ -69,6 +69,10 @@ function Invoke-Scan {
             $r.file_date = $f.date
             $found++
             # 只有 new/sent 才自动转 done；ignored（用户手动忽略）和 done 不动
+            # 磁盘上确实有文件 → 以文件为准（即使之前被误标成 ignored）
+            if ($r.status -eq 'ignored' -and ($r.note -like 'dead:*' -or $r.note -like 'auto:*' -or $r.note -like 'file:*' -or -not $r.note)) {
+                $r.status = 'done'; $r.note = 'auto:file'; $changed++
+            }
             if ($r.status -eq 'new' -or $r.status -eq 'sent' -or $r.status -eq 'downloading' -or -not $r.status) {
                 $r.status = 'done'
                 if (-not $r.note) { $r.note = 'auto:file' }
@@ -640,8 +644,9 @@ function Stop-Download {
         try { Stop-Process -Id $pid2 -Force -ErrorAction SilentlyContinue } catch { }
     }
     $orphans = Stop-AllDownloadProcesses
+    $runStarted = if ($State.Download) { $State.Download.Started } else { '' }
     $State.Download = $null
-    [void](Apply-DeadFromProgress)
+    [void](Apply-DeadFromProgress -RunStarted $runStarted)
     $reverted = Revert-Downloading
     Touch-State
     if ($killed -eq 0 -and $orphans -eq 0 -and $reverted -eq 0) {
@@ -667,8 +672,9 @@ function Step-Download {
 
     $dir = if ($State.Download.Dir) { $State.Download.Dir } else { (Read-Config -Root $Root).downloadDir }
     $count = $State.Download.Count
+    $runStarted = $State.Download.Started
     $State.Download = $null
-    [void](Apply-DeadFromProgress)
+    [void](Apply-DeadFromProgress -RunStarted $runStarted)
     $reverted = Revert-Downloading -OnlyIfMissing
     try { [void](Repair-PartFiles) } catch { }
     try { [void](Invoke-Scan -Silent -KeepStatus) } catch { }
@@ -756,19 +762,35 @@ function Step-DownloadGuard {
 }
 
 function Apply-DeadFromProgress {
-    <#  把进度文件里 state=dead（源文件 403/404）的条目改成 ignored，避免反复重试  #>
+    <#  把进度文件里 state=dead（源文件确认 403/404）的条目改成 ignored。
+        只在「本次运行」的进度文件上生效，且绝不忽略已有文件的条目 ——
+        否则会把刚下完的、或上一轮遗留的死标记误套到好数据上。  #>
+    param([string]$RunStarted = '')
     try {
         if (-not (Test-Path $DlProgress)) { return 0 }
         $pj = Get-Content $DlProgress -Raw -Encoding UTF8 | ConvertFrom-Json
+
+        # 进度文件必须属于本次运行（时间差 15 秒内），避免拿旧文件误判
+        if ($RunStarted -and $pj.startedAt) {
+            try {
+                $t1 = [datetime]$RunStarted
+                $t2 = [datetime]$pj.startedAt
+                if ([math]::Abs(($t1 - $t2).TotalSeconds) -gt 15) { return 0 }
+            } catch { }
+        }
+
         $dead = @($pj.items | Where-Object { $_.state -eq 'dead' })
         $n = 0
         foreach ($d in $dead) {
             $row = $State.Ledger | Where-Object { $_.token -eq $d.token } | Select-Object -First 1
-            if ($row -and $row.status -ne 'ignored') {
-                $row.status = 'ignored'
-                $row.note = "dead:$($d.error)"
-                $n++
-            }
+            if (-not $row) { continue }
+            if ($row.file_name) { continue }                 # 已经有文件了，绝不忽略
+            if ($row.status -ne 'downloading') { continue }  # 不是本轮队列成员
+            # 复核一次：并发下载时 CDN 可能临时 403，只有单独再试还是 403/404 才算真死
+            if (-not (Test-UrlDeadNow -Url $row.url -Error ($d.error))) { continue }
+            $row.status = 'ignored'
+            $row.note = "dead:$($d.error)"
+            $n++
         }
         if ($n -gt 0) {
             Save-Ledger -Rows $State.Ledger -Path $LedgerPath
@@ -777,4 +799,31 @@ function Apply-DeadFromProgress {
         }
         return $n
     } catch { return 0 }
+}
+
+function Test-UrlDeadNow {
+    <#  用 1 字节 Range GET 复核源文件是否真的失效；只有在确认 403/404/410 时才返回 $true  #>
+    param([string]$Url, [string]$Error = '')
+    if (-not $Url) { return $false }
+    $curl = (Get-Command curl.exe -ErrorAction SilentlyContinue).Source
+    if (-not $curl) { $curl = 'C:\Windows\System32\curl.exe' }
+    $proxy = ''
+    try {
+        if ($Config.proxy) { $proxy = [string]$Config.proxy }
+        if (-not $proxy) {
+            $reg = Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Internet Settings' -ErrorAction Stop
+            if ($reg.ProxyEnable -eq 1 -and $reg.ProxyServer) {
+                $proxy = [string]$reg.ProxyServer
+                if ($proxy -notmatch '^[a-z]+://') { $proxy = 'http://' + $proxy }
+            }
+        }
+    } catch { }
+    try {
+        $a = @('-sS', '-o', 'NUL', '-w', '%{http_code}', '-r', '0-0', '--max-time', '15', '-L')
+        if ($proxy) { $a += @('-x', $proxy) }
+        $a += $Url
+        $code = (& $curl @a 2>$null)
+        $code = ([string]$code).Trim()
+        return ($code -eq '403' -or $code -eq '404' -or $code -eq '410')
+    } catch { return $false }
 }

@@ -137,7 +137,7 @@ function Build-Args($item, $outFile) {
         $a += $item.url
         return @{ exe = $aria; args = $a }
     }
-    $a = @('-sS', '-L', '-C', '-', '--retry', "$Retries", '--retry-delay', '2',
+    $a = @('-sS', '-L', '-C', '-', '--fail', '--retry', "$Retries", '--retry-delay', '2',
         '--connect-timeout', '20', '-o', $outFile)
     if ($proxyArg) { $a += @('-x', $proxyArg) }
     $a += $item.url
@@ -164,6 +164,19 @@ function Complete-Item($tk) {
         $s.state = 'failed'
         $s.error = "改名失败: $($_.Exception.Message)"
     }
+}
+
+function Test-DeadUrl {
+    <#  HEAD 返回 403/404 时再用 1 字节 Range GET 复核：
+        很多 CDN 会拦截 HEAD 或短时间大量请求，只有 GET 也失败才认为是真的失效 #>
+    param([string]$url, [int]$code)
+    try {
+        $a = @('-sS', '-o', 'NUL', '-w', '%{http_code}', '-r', '0-0', '--max-time', '15', '-L')
+        if ($script:proxyArg) { $a += @('-x', $script:proxyArg) }
+        $a += $url
+        $got = (& $curl @a 2>$null)
+        return ([string]$got).Trim() -eq [string]$code
+    } catch { return $false }
 }
 
 # ---------------- 主循环 ----------------
@@ -228,10 +241,12 @@ try {
             if ($sizes.ContainsKey($tk)) { $expected = [int64]$sizes[$tk].size; $code = [int]$sizes[$tk].status }
             $states[$tk].expected = $expected
             if ($code -eq 403 -or $code -eq 404 -or $code -eq 410) {
-                # 源文件已被删除/屏蔽，重试也没用
-                $states[$tk].state = 'dead'
-                $states[$tk].error = "http:$code"
-                continue
+                # HEAD 可能是被 CDN 限流/拦了，用 1 字节 Range GET 复核一次再判死
+                if ((Test-DeadUrl -url $item.url -code $code) -and -not (Test-Path $part)) {
+                    $states[$tk].state = 'dead'
+                    $states[$tk].error = "http:$code"
+                    continue
+                }
             }
             # 上次其实已经下满（curl 退出码异常/进程被杀）→ 直接收尾
             if ($expected -gt 0 -and (Test-Path $part) -and (Get-Item $part).Length -eq $expected) {
@@ -276,6 +291,15 @@ try {
                     $j.retries++
                     $errText = ''
                     if (Test-Path $j.log) { $errText = (Get-Content $j.log -Tail 2 -ErrorAction SilentlyContinue) -join ' ' }
+
+                    # curl 在 GET 上拿到 403/404/410 —— 源文件确实没了，别重试
+                    if ($errText -match 'error:\s*(403|404|410)') {
+                        $states[$tk].state = 'dead'
+                        $states[$tk].error = "http:$($Matches[1])"
+                        $jobs.Remove($tk)
+                        continue
+                    }
+
                     if ($j.expected -gt 0 -and $size -gt $j.expected) {
                         Remove-Item $j.part -Force -ErrorAction SilentlyContinue
                         $size = 0
@@ -334,13 +358,13 @@ try {
     }
     Write-ProgressFile @{
         running = $false; phase = 'done'; total = $queue.Count; done = $doneCount; failed = $failCount;
-        bytes = $bytes; speed = 0; errors = @($errs | Select-Object -Last 20);
+        bytes = $bytes; speed = 0; errors = @($errs | Select-Object -Last 20); startedAt = $startAt;
         items = @($states.Keys | ForEach-Object { [pscustomobject]@{ token = $_; state = $states[$_].state; bytes = $states[$_].bytes; error = $states[$_].error } });
         finishedAt = (Get-Date).ToString('s')
     }
     exit 0
 }
 catch {
-    Write-ProgressFile @{ running = $false; phase = 'error'; total = $queue.Count; errors = @(@{ token = '-'; error = $_.Exception.Message }) }
+    Write-ProgressFile @{ running = $false; phase = 'error'; total = $queue.Count; startedAt = $startAt; errors = @(@{ token = '-'; error = $_.Exception.Message }) }
     exit 1
 }

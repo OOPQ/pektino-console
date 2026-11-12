@@ -121,7 +121,7 @@ export function render() {
         <td class="num col-plays" title="${r.last_play ? '上次播放 ' + r.last_play : '还没播过'}">${(+r.play_count || 0) > 0 ? '▶' + r.play_count : ''}</td>
         <td class="col-rating">${rateCell(r)}</td>
         <td class="mono playable col-token" data-play="${r.token}" title="${r.file_name || '点击播放'}">${r.token}</td>
-        <td class="col-status">${stTag(r.status)}</td>
+        <td class="col-status"${r.note ? ` title="${r.note}"` : ''}>${stTag(r.status)}</td>
         <td class="mono col-disk">${r.file_name ? '✓ ' + fmtMB(r.file_size) : '<span style="color:#5b6773">—</span>'}</td>
         <td class="mono col-first_seen">${(r.first_seen || '').slice(5, 16)}</td>
         <td>

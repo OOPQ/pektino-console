@@ -34,8 +34,8 @@ function Resolve-WorkspacePath {
     if (-not $Value) { return '' }
     if ($Value -eq '.') { return $DataDir }   # "." = 就用工作区根目录（mp4 直接放这儿）
     if ([System.IO.Path]::IsPathRooted($Value)) { return [System.IO.Path]::GetFullPath($Value) }
-    # 相对路径统一挂在 dataDir 下，整体搬移时不会错位
-    return [System.IO.Path]::GetFullPath((Join-Path $DataDir $Value))
+    # 相对路径统一挂在项目根下，整体搬移时不会错位
+    return [System.IO.Path]::GetFullPath((Join-Path $ProjectRoot $Value))
 }
 
 function New-WorkspaceLayout {
@@ -45,11 +45,11 @@ function New-WorkspaceLayout {
         version     = 1
         name        = 'pektino'
         dataDir     = $DataDir
-        contentDir = 'content'
-        coversDir   = 'covers'
-        thumbsDir   = 'thumbs'
-        logsDir     = 'logs'
-        exportsDir  = 'exports'
+        contentDir = 'media'
+        coversDir   = 'cache\covers'
+        thumbsDir   = 'cache\thumbs'
+        logsDir     = 'data\logs'
+        exportsDir  = 'data\exports'
         createdAt   = (Get-Date).ToString('s')
     }
     return $cfg
@@ -82,8 +82,7 @@ function Initialize-Workspace {
     if (-not $cfg) {
         if (-not $DataDir) {
             # 老版本数据在 tools\out：沿用；全新安装用项目下的 data\
-            if (Test-Path (Join-Path $ProjectRoot 'tools\out\data.db')) { $DataDir = 'tools\out' }
-            else { $DataDir = 'data' }
+            $DataDir = 'data'
         }
         $cfg = [pscustomobject](New-WorkspaceLayout -ProjectRoot $ProjectRoot -DataDir $DataDir)
         ($cfg | ConvertTo-Json -Depth 4) | Set-Content -Path $file -Encoding UTF8 -Force

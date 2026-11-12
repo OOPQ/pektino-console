@@ -31,7 +31,7 @@ function Test-Item($name, $scriptBlock) {
 if ($Start) {
     Write-Host "启动临时服务 :$Port ..." -ForegroundColor Cyan
     $proc = Start-Process -FilePath 'powershell.exe' `
-        -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', (Join-Path $root 'console.ps1'), '-Port', $Port, '-NoBrowser') `
+        -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', (Join-Path (Split-Path $root -Parent) 'console.ps1'), '-Port', $Port, '-NoBrowser') `
         -PassThru -WindowStyle Hidden
     $deadline = (Get-Date).AddSeconds(25)
     while ((Get-Date) -lt $deadline) {

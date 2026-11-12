@@ -568,7 +568,7 @@ function Start-Download {
     $dir = if ($cfg.contentDir) { [string]$cfg.contentDir } else { $WS.Content }
     # 配置里可能是相对路径（videos），按数据目录解析，避免落到进程当前目录
     if (-not [System.IO.Path]::IsPathRooted($dir)) {
-        $dir = [System.IO.Path]::GetFullPath((Join-Path $WS.DataDir $dir))
+        $dir = [System.IO.Path]::GetFullPath((Join-Path $WS.ProjectRoot $dir))
     }
     if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
 

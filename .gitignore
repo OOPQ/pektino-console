@@ -1,18 +1,16 @@
 # ---------- 运行数据（不入库） ----------
+data/
+media/
+cache/
 out/
+tools/
 *.log
 *.mp4
+*.part
 *.xltd
 *.bak
 *.bak.csv
 .sent-thunder.txt
-
-# ---------- 下载目录（故意不跟踪） ----------
-# 用户可能把下载目录指到项目里（如 tools/H），视频体积巨大，绝不能进 git
-tools/H/
-tools/Downloads/
-downloads/
-videos/
 
 # ---------- 下载的 CLI 本体（体积大、可重新获取） ----------
 agent-browser.exe

@@ -1,11 +1,11 @@
 ﻿{
     "version":  1,
     "name":  "pektino",
-    "coversDir":  "covers",
-    "thumbsDir":  "thumbs",
-    "logsDir":  "logs",
-    "exportsDir":  "exports",
-    "createdAt":  "2026-11-13T04:16:59",
-    "dataDir":  "tools\\H",
-    "contentDir":  "content"
+    "dataDir":  "data",
+    "contentDir":  "media",
+    "coversDir":  "cache\\covers",
+    "thumbsDir":  "cache\\thumbs",
+    "logsDir":  "data\\logs",
+    "exportsDir":  "data\\exports",
+    "createdAt":  "2026-11-13T04:34:30"
 }

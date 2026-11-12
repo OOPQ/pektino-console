@@ -20,7 +20,7 @@ $script:LastSnapshot = [datetime]::MinValue
 function Get-DbPath {
     param([string]$Root = $PSScriptRoot, [string]$DataDir = '')
     if ($DataDir) { return (Join-Path $DataDir 'data.db') }
-    Join-Path $Root 'out\data.db'
+    Join-Path $Root 'data\data.db'
 }
 
 function Initialize-Store {

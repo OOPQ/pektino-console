@@ -277,7 +277,7 @@ if ($CoverDir) {
 
     # 缩略图
     if ($ThumbDir) {
-        . (Join-Path $PSScriptRoot 'thumbs.ps1')
+        . (Join-Path (Split-Path $PSScriptRoot -Parent) 'lib\thumbs.ps1')
         if (-not (Test-Path $ThumbDir)) { New-Item -ItemType Directory -Path $ThumbDir -Force | Out-Null }
         $madeThumb = 0
         foreach ($r in $rows) {

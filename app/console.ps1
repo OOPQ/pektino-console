@@ -31,7 +31,7 @@ if (-not $Root) {
     elseif ($MyInvocation.MyCommand.Path) { $Root = Split-Path -Parent $MyInvocation.MyCommand.Path }
     else { $Root = (Get-Location).Path }
 }
-if (-not (Test-Path (Join-Path $Root 'ledger.ps1'))) {
+if (-not (Test-Path (Join-Path $Root 'lib\ledger.ps1'))) {
     Write-Host "找不到 ledger.ps1，Root=$Root" -ForegroundColor Red
     if ($PauseOnError) { Read-Host '按回车关闭' | Out-Null }
     exit 1
@@ -39,8 +39,8 @@ if (-not (Test-Path (Join-Path $Root 'ledger.ps1'))) {
 
 $ErrorActionPreference = 'Stop'
 $script:StartedAt = Get-Date
-. (Join-Path $Root 'ledger.ps1')
-. (Join-Path $Root 'workspace.ps1')
+. (Join-Path $Root 'lib\ledger.ps1')
+. (Join-Path $Root 'lib\workspace.ps1')
 
 # ---------- 工作区：数据/封面/下载/日志都挂在这个目录下 ----------
 $ProjectRoot = Split-Path $Root -Parent
@@ -64,7 +64,7 @@ $migrated = Import-CsvIntoStore -CsvPath $WS.LedgerCsv
 # 每日库备份 + WAL 合并
 try { Invoke-DbMaintenance -Backup -Checkpoint } catch { }
 
-$Pektino = Join-Path $Root 'pektino.ps1'
+$Pektino = Join-Path $Root 'cli\pektino.ps1'
 $LedgerPath = $WS.LedgerCsv
 $WebDir = Join-Path $Root 'web'
 $HtmlPath = Join-Path $WebDir 'index.html'
@@ -74,7 +74,7 @@ $ThumbDir = $WS.Thumbs
 $ProgressFile = Join-Path $WS.DataDir 'progress.json'
 $KnownFile = Join-Path $WS.DataDir '.known.txt'
 $ClientLog = Join-Path $WS.Logs 'client.log'
-$DlScript = Join-Path $Root 'download.ps1'
+$DlScript = Join-Path $Root 'cli\download.ps1'
 $DlQueue = Join-Path $WS.DataDir '.queue.json'
 $DlProgress = Join-Path $WS.DataDir 'download.json'
 $DlCancel = Join-Path $WS.DataDir '.dl-cancel.json'
@@ -84,7 +84,7 @@ $Config = Read-Config -Root $Root -DataDir $WS.DataDir -DefaultContentDir $WS.Co
 # 配置里的相对路径按项目根解析（跟着项目走，方便整目录搬移）
 if ($Config.contentDir -and -not [System.IO.Path]::IsPathRooted([string]$Config.contentDir)) {
     # 相对路径按「数据目录」解析（例如 videos → <workspace>\videos）
-    $Config.contentDir = [System.IO.Path]::GetFullPath((Join-Path $WS.DataDir ([string]$Config.contentDir)))
+    $Config.contentDir = [System.IO.Path]::GetFullPath((Join-Path $WS.ProjectRoot ([string]$Config.contentDir)))
 }
 $State = @{
     Ledger = @(Read-Ledger -Path $LedgerPath)
@@ -110,9 +110,9 @@ $script:SseClients = New-Object System.Collections.ArrayList
 # ---------- 分层加载 ----------
 # transport: Send-Bytes / Send-Json / Read-Request / Push-Sse
 # actions  : Get-Stats / Invoke-Scan / 任务与抓取 / 收藏·评分·观看 / 播放 / 删除 / 投递
-. (Join-Path $WebDir 'transport.ps1')
-. (Join-Path $WebDir 'actions.ps1')
-. (Join-Path $WebDir 'covers.ps1')
+. (Join-Path $Root 'server\transport.ps1')
+. (Join-Path $Root 'server\actions.ps1')
+. (Join-Path $Root 'server\covers.ps1')
 
 function Touch-State { $State.Rev++ }
 
@@ -520,7 +520,7 @@ if ($migrated -gt 0) {
 
 # 缩略图补齐（只在缺失时跑，通常瞬间完成）
 try {
-    . (Join-Path $Root 'thumbs.ps1')
+    . (Join-Path $Root 'lib\thumbs.ps1')
     $tr = Update-Thumbs -CoverDir $CoverDir -ThumbDir $ThumbDir
     if ($tr.made -gt 0) { Write-Log 'thumbs' "补齐缩略图 $($tr.made) 张（跳过 $($tr.skip)）"; Write-FileLog "thumbs: made=$($tr.made) skip=$($tr.skip) fail=$($tr.fail)" }
 } catch {

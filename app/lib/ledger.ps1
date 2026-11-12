@@ -137,7 +137,7 @@ function Set-LedgerStatus {
 function Get-ConfigPath {
     param([string]$Root = $PSScriptRoot, [string]$DataDir = '')
     if ($DataDir) { return (Join-Path $DataDir 'config.json') }
-    Join-Path $Root 'out\config.json'
+    Join-Path $Root 'data\config.json'
 }
 
 function Read-Config {

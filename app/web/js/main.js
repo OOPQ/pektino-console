@@ -3,7 +3,7 @@ import { $, state, PREFS, savePrefs, api, toast, onEvent } from './core.js';
 import { render, markActiveKpi, initTable } from './table.js';
 import { initRows, doPlay, delFiles } from './rows.js';
 import { initPanels, connectSse } from './panels.js';
-import { setFav, setWatched, setStatus, setRating, reload } from './actions.js';
+import { setFav, setWatched, setStatus, setRating, reload, thunderUrl } from './actions.js';
 
 /* ================= 任务进度条 ================= */
 const PHASE_LABEL = {
@@ -384,6 +384,12 @@ function initBulk() {
 
   $('#selDelete').onclick = () => { if (state.SEL.size) delFiles(sel(), false); };
 
+  $('#selThunder').onclick = async () => {
+    const links = state.ROWS.filter(r => state.SEL.has(r.token) && r.url).map(r => thunderUrl(r.url));
+    if (!links.length) return toast('没有可转换的链接');
+    await navigator.clipboard.writeText(links.join('\n'));
+    toast(`已复制 ${links.length} 条 thunder:// 链接，粘到迅雷即可`, 4000);
+  };
   $('#selCopy').onclick = async () => {
     const links = state.ROWS.filter(r => state.SEL.has(r.token) && r.url).map(r => r.url);
     if (!links.length) return toast('没有可复制的链接');

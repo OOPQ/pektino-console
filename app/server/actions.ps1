@@ -93,7 +93,10 @@ function Invoke-Scan {
 
     # 旧版本把死链标成 ignored，这里统一迁到 failed（可在「失败」里查看/重试）
     foreach ($r in @($State.Ledger)) {
-        if ($r.status -eq 'ignored' -and $r.note -like 'dead:*') { $r.status = 'failed'; $changed++ }
+        if ($r.status -eq 'ignored' -and ($r.note -like 'dead:*' -or $r.note -like 'unreachable*' -or $r.note -like 'removed*')) { $r.status = 'failed'; $changed++ }
+        # 旧措辞迁移：dead:http:x → unreachable:http:x；removed → removed:site
+        if ($r.note -like 'dead:http:*') { $r.note = 'unreachable' + $r.note.Substring(4); $changed++ }
+        elseif ($r.note -eq 'removed') { $r.note = 'removed:site'; $changed++ }
     }
     if ($changed -gt 0) { Save-Ledger -Rows $State.Ledger -Path $LedgerPath; Touch-State }
 
@@ -584,16 +587,16 @@ function Start-Download {
     if ($stale.Count -gt 0) {
         $null = Refresh-ItemUrls -Tokens @($stale | ForEach-Object { $_.token })
         # 刷新后仍下架（removed）或源仍 404/403（dead:http:*）→ 本轮跳过，别反复撞墙
-        $still = @($targets | Where-Object { $_.note -eq 'removed' -or $_.note -like 'dead:http:*' })
+        $still = @($targets | Where-Object { $_.note -like 'removed*' -or $_.note -like 'unreachable*' -or $_.note -like 'dead:http:*' })
         if ($still.Count -gt 0) {
             $skippedDead = $still.Count
-            $targets = @($targets | Where-Object { $_.note -ne 'removed' -and $_.note -notlike 'dead:http:*' })
+            $targets = @($targets | Where-Object { $_.note -notlike 'removed*' -and $_.note -notlike 'unreachable*' -and $_.note -notlike 'dead:http:*' })
         }
     }
 
     if ($Limit -gt 0) { $targets = @($targets | Select-Object -First $Limit) }
     if (-not $targets.Count) {
-        if ($skippedDead -gt 0) { return @{ ok = $false; error = "这些视频站点上已下架，无法下载（共 $skippedDead 条）" } }
+        if ($skippedDead -gt 0) { return @{ ok = $false; error = "$skippedDead 条源地址不可达（站点下架或 CDN 边缘缺失）。内置下载器下不动，但迅雷可能有自己的缓存/CDN —— 右键「复制 thunder://」丢给它试试" } }
         return @{ ok = $false; error = '没有可下载的条目' }
     }
 
@@ -818,7 +821,7 @@ function Apply-DeadFromProgress {
             if (-not (Test-UrlDeadNow -Url $row.url)) { continue }
 
             $row.status = 'failed'
-            $row.note = "dead:$($d.error)"
+            $row.note = "unreachable:$($d.error)"
             $n++
         }
         if ($n -gt 0) {
@@ -905,14 +908,14 @@ function Refresh-ItemUrls {
         $info = Get-DetailVideoInfo -Token $tk
 
         if ($null -eq $info) {
-            $row.note = 'removed'
+            $row.note = 'removed:site'
             $removed++
             continue
         }
         if ($info.error) { $errors++; continue }
 
         $newUrl = [string]$info.url
-        if (-not $newUrl) { $row.note = 'removed'; $removed++; continue }
+        if (-not $newUrl) { $row.note = 'removed:site'; $removed++; continue }
 
         if ($newUrl -ne [string]$row.url) {
             $row.url = $newUrl
@@ -922,10 +925,10 @@ function Refresh-ItemUrls {
             # URL 没变：再确认一次源文件是否真的还在
             $code = Get-UrlStatusCode -Url $newUrl
             if ($code -eq 200 -or $code -eq 206) {
-                if ($row.note -like 'dead:*' -or $row.note -eq 'removed') { $row.note = 'url-ok' }
+                if ($row.note -like 'dead:*' -or $row.note -like 'unreachable*' -or $row.note -like 'removed*') { $row.note = 'url-ok' }
                 $unchanged++
             } else {
-                $row.note = "dead:http:$code"
+                $row.note = "unreachable:http:$code"          # 源不可达：可能只是本机网络/CDN 边缘，迅雷仍可能下得动
                 $unchanged++
             }
         }

@@ -174,8 +174,8 @@ function Handle-Request {
 
     # 静态资源：/static/app.css、/static/app.js
     if ($method -eq 'GET' -and $path.StartsWith('/static/')) {
-        $rel = $path.Substring(8)
-        if ($rel -match '^[A-Za-z0-9_\-\.]+$') {
+        $rel = $path.Substring(8).Replace('/', '\')
+        if ($rel -match '^[A-Za-z0-9_\-\.\\]+$' -and $rel -notmatch '\.\.') {
             $file = Join-Path $WebDir $rel
             if (Test-Path $file) {
                 $ext = [System.IO.Path]::GetExtension($file).TrimStart('.').ToLower()

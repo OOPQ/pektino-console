@@ -7,9 +7,14 @@ tools\
   启动控制台.cmd  双击即可（等价于 powershell -File console.ps1）
   console.ps1    入口：参数、存储初始化、HTTP 循环、路由表（~540 行）
   web\
-    index.html   页面结构（~236 行）
-    app.css      样式（~173 行）
-    app.js       前端逻辑（~807 行）
+    index.html   页面结构（只留骨架，不含逻辑）
+    app.css      样式
+    js\          前端 ES modules（无构建，浏览器原生 import）
+      core.js      常量、全局 state、事件总线、API 封装、错误上报
+      table.js     过滤/排序/分页/表格渲染/列显隐/KPI 快捷筛选
+      rows.js      选择、行内操作、右键菜单、播放、删除
+      panels.js    灯箱、抽卡、设置抽屉、SSE、键盘
+      main.js      加载数据、工具条、批量操作、初始化
     transport.ps1 HTTP 传输层：Send-Bytes / Send-Json / Read-Request / Push-Sse
     actions.ps1  业务动作：统计、扫描、任务、收藏/评分/观看、播放、删除、投递
   store.ps1      **SQLite 存储层**（out\data.db，WAL，事务 upsert，每日 VACUUM 备份）

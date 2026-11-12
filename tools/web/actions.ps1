@@ -39,6 +39,7 @@ function Get-Stats {
         downloaded  = $onDisk
         missing     = $rows.Count - $onDisk
         favorites   = @($rows | Where-Object { $_.fav -eq '1' }).Count
+        coverMissing = if ($State.Scan -and $null -ne $State.Scan.coverMissing) { [int]$State.Scan.coverMissing } else { 0 }
         watched     = $watched
         toWatch     = $onDisk - $watched
         diskGB      = [math]::Round($bytes / 1GB, 2)
@@ -92,7 +93,9 @@ function Invoke-Scan {
 
     if ($changed -gt 0) { Save-Ledger -Rows $State.Ledger -Path $LedgerPath; Touch-State }
 
+    $coverMissing = (Get-CoverMissingList).Count
     $State.Scan = [pscustomobject]@{
+        coverMissing = $coverMissing
         downloaded = $found
         missing    = (@($State.Ledger).Count - $found)
         changed    = $changed
@@ -585,7 +588,7 @@ function Step-Download {
     $count = $State.Download.Count
     $State.Download = $null
     try { [void](Invoke-Scan -Silent -KeepStatus) } catch { }
-    try { if (Test-Path $dir) { Update-Thumbs -Root $Root -Dir $dir } } catch { }
+    try { Update-Thumbs -CoverDir $CoverDir -ThumbDir $ThumbDir } catch { }
     Touch-State
     Write-Log 'download' "下载进程结束（队列 $count 条），已重新扫描目录"
 }

@@ -71,6 +71,14 @@ function paintMetrics(m) {
     : '<div>没有前端错误</div>';
 }
 
+function paintCovers(S) {
+  const n = +S.coverMissing || 0;
+  const el = $('#coverInfo');
+  if (!el) return;
+  el.textContent = n > 0 ? `缺 ${n} 张（下载没成功时会出现）` : '完整';
+  el.style.color = n > 0 ? '#d29922' : '';
+}
+
 function paintOrphans(S) {
   const orph = S.orphans || [];
   $('#orphanInfo').textContent = orph.length ? `共 ${S.orphanCount} 个（目录里有、台账里没有）` : '没有孤立文件';
@@ -92,6 +100,7 @@ async function load() {
     paintDir(S);
     paintMetrics(s.metrics || {});
     paintOrphans(S);
+    paintCovers(S);
 
     $('#logbox').innerHTML = (s.log || []).slice().reverse()
       .map(l => `<div><span class="t">${l.time}</span> [${l.kind}] ${l.message}</div>`).join('')
@@ -214,6 +223,20 @@ async function saveNet() {
   } catch (e) { toast('请求失败'); }
 }
 
+async function repairCovers() {
+  const btn = $('#btnRepairCovers');
+  btn.disabled = true;
+  btn.textContent = '修复中…';
+  try {
+    const r = await api('/api/covers/repair', { limit: 60 });
+    if (!r.ok) toast('修复失败：' + r.error, 5000);
+    else toast(`补了 ${r.fixed} 张，失败 ${r.failed}，仍缺 ${r.missing}`, 5000);
+  } catch (e) { toast('请求失败：' + e.message, 5000); }
+  btn.disabled = false;
+  btn.textContent = '修复缺失封面';
+  load();
+}
+
 function initToolbar() {
   $('#btnScrape').onclick = doScrape;
   $('#btnImport').onclick = doImport;
@@ -224,6 +247,7 @@ function initToolbar() {
   $('#btnPreview').onclick = previewLinks;
   $('#btnSaveDir').onclick = saveDir;
   $('#btnScan').onclick = scanDir;
+  $('#btnRepairCovers').onclick = repairCovers;
   $('#btnRefresh').onclick = () => load();
 }
 

@@ -78,7 +78,10 @@ export function visible() {
 function coverCell(r) {
   if (!state.SHOW_COVERS) return '<div class="covbox"><div class="ph"></div></div>';
   const u = '/api/cover?token=' + encodeURIComponent(r.token);
-  return `<div class="covbox" data-lb="${r.token}" title="点击放大"><img src="${u}" loading="lazy" alt=""></div>`;
+  return `<div class="covbox" data-lb="${r.token}" title="点击放大">
+      <img src="${u}" loading="lazy" alt=""
+           onerror="this.parentNode.classList.add('nocover');this.remove()">
+    </div>`;
 }
 function rateCell(r) {
   return starsHtml(r.rating, { token: r.token });

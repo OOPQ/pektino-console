@@ -85,6 +85,7 @@ $script:SseClients = New-Object System.Collections.ArrayList
 # actions  : Get-Stats / Invoke-Scan / 任务与抓取 / 收藏·评分·观看 / 播放 / 删除 / 投递
 . (Join-Path $WebDir 'transport.ps1')
 . (Join-Path $WebDir 'actions.ps1')
+. (Join-Path $WebDir 'covers.ps1')
 
 function Touch-State { $State.Rev++ }
 
@@ -275,6 +276,13 @@ function Handle-Request {
                 $limit = 0
                 if ($body.limit) { $limit = [int]$body.limit }
                 $r = Start-Download -Tokens $tokens -Status $status -Limit $limit
+                Send-Json -Stream $Stream -Object ([pscustomobject]$r)
+                return
+            }
+            '/api/covers/repair' {
+                $limit = 40
+                if ($body.limit) { $limit = [int]$body.limit }
+                $r = Repair-Covers -Limit $limit
                 Send-Json -Stream $Stream -Object ([pscustomobject]$r)
                 return
             }
@@ -564,6 +572,7 @@ try {
         }
         Push-Sse
         if (Get-Command Step-Download -ErrorAction SilentlyContinue) { try { Step-Download } catch { } }
+        if (Get-Command Step-Covers -ErrorAction SilentlyContinue) { try { Step-Covers } catch { } }
     }
 } finally {
     foreach ($c in @($script:SseClients)) { try { $c.Stream.Close() } catch { }; try { $c.Socket.Close() } catch { } }

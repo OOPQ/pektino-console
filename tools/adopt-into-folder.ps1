@@ -88,7 +88,7 @@ $cfg = [ordered]@{
     version     = 1
     name        = 'pektino'
     dataDir     = $dataDir
-    downloadDir = '.'
+    downloadDir = 'videos'
     coversDir   = 'covers'
     thumbsDir   = 'thumbs'
     logsDir     = 'logs'
@@ -104,6 +104,6 @@ if ($DryRun) {
 ($cfg | ConvertTo-Json -Depth 4) | Set-Content -Path $wsFile -Encoding UTF8 -Force
 Write-Host "已更新工作区配置: $wsFile" -ForegroundColor Green
 Write-Host "  数据目录 = $Target" -ForegroundColor Green
-Write-Host "  下载目录 = 同上（mp4 直接放在这里）" -ForegroundColor Green
+Write-Host "  下载目录 = <workspace>\videos（mp4 放子目录，避免和库/封面混在一起）" -ForegroundColor Green
 Write-Host ''
 Write-Host '下一步：重新启动控制台，确认台账条数与封面正常。旧数据没有删除，确认无误后可手动清理。' -ForegroundColor Cyan

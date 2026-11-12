@@ -65,7 +65,7 @@ out/                    # 默认数据目录（老版本沿用；全新安装用
   data.db               # 台账（SQLite，事实来源）
   ledger.csv            # 导出快照
   covers/  thumbs/      # 封面与缩略图
-  downloads/            # 默认下载目录
+  videos/               # 视频目录（mp4 都在这里，和库/封面分开）
   logs/                 # 日志
   exports/              # 导出
 ```
@@ -75,8 +75,10 @@ out/                    # 默认数据目录（老版本沿用；全新安装用
 - 台账为空时，首次启动会把 `downloads/` 里已有的 `*.mp4` **自动识别入库**（`note=scan:init`）
 - 界面「设置」里有 **打开数据目录** / **识别已有文件** 两个按钮
 - 下载目录可以单独指向别的盘（绝对路径），不跟着工作区
-- **也可以让下载目录就是工作区本身**（`downloadDir: "."`）：mp4 和 data.db、covers 全在一个文件夹里，
-  适合移动硬盘/整目录备份。用 `.\adopt-into-folder.ps1 -Target <文件夹>` 一键把现有数据搬进去（需先停控制台，旧数据会保留）
+- 工作区就是一个自洽的文件夹：`data.db` + `covers/` + `thumbs/` + `videos/`；
+  视频统一放 `videos/` 子目录，避免和配置/库混在一起，也方便以后加音乐、字幕等类型
+- `.\adopt-into-folder.ps1 -Target <文件夹>` 把现有数据搬进某个文件夹（需先停控制台，旧数据会保留）
+- `.\organize-workspace.ps1` 把根目录散落的 mp4 收进 `videos\`（支持 -DryRun）
 
 ## 控制台（推荐入口）
 

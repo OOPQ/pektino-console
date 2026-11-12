@@ -45,7 +45,7 @@ function New-WorkspaceLayout {
         version     = 1
         name        = 'pektino'
         dataDir     = $DataDir
-        downloadDir = 'downloads'
+        downloadDir = 'videos'
         coversDir   = 'covers'
         thumbsDir   = 'thumbs'
         logsDir     = 'logs'

@@ -83,7 +83,8 @@ $DlCancel = Join-Path $WS.DataDir '.dl-cancel.json'
 $Config = Read-Config -Root $Root -DataDir $WS.DataDir -DefaultDownloadDir $WS.Downloads
 # 配置里的相对路径按项目根解析（跟着项目走，方便整目录搬移）
 if ($Config.downloadDir -and -not [System.IO.Path]::IsPathRooted([string]$Config.downloadDir)) {
-    $Config.downloadDir = [System.IO.Path]::GetFullPath((Join-Path $WS.ProjectRoot ([string]$Config.downloadDir)))
+    # 相对路径按「数据目录」解析（例如 videos → <workspace>\videos）
+    $Config.downloadDir = [System.IO.Path]::GetFullPath((Join-Path $WS.DataDir ([string]$Config.downloadDir)))
 }
 $State = @{
     Ledger = @(Read-Ledger -Path $LedgerPath)

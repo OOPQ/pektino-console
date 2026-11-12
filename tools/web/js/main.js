@@ -1,4 +1,4 @@
-/* main.js — 数据加载、工具条、批量操作、初始化 */
+﻿/* main.js — 数据加载、工具条、批量操作、初始化 */
 import { $, state, PREFS, savePrefs, api, toast, onEvent } from './core.js';
 import { render, markActiveKpi, initTable } from './table.js';
 import { initRows, doPlay, delFiles } from './rows.js';
@@ -141,7 +141,7 @@ async function load() {
     state.SETTINGS = s.settings || null;
     renderJob(s.job || {}, s.download);
     render();
-    markActiveKpi(state.FILTER.status);
+    markActiveKpi();
     if ((s.job && s.job.running) || (s.download && s.download.running)) { clearTimeout(load._t); load._t = setTimeout(load, 1200); }
   } catch (e) {
     $('#dot').classList.add('off');
@@ -396,6 +396,7 @@ function initControls() {
   $('#chkCompact').checked = !!PREFS.compact;
   $('#q').value = state.FILTER.q;
   $('#fStatus').value = state.FILTER.status;
+  $('#fFlag').value = state.FILTER.flag || 'none';
   $('#fRes').value = state.FILTER.res;
   $('#fMinDur').value = state.FILTER.minDur;
   $('#pgSize').value = String(state.PER);

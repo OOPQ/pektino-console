@@ -37,22 +37,23 @@
 <!-- ===== 查询条 ===== -->
 <div class="bar queries">
   <input type="text" id="q" placeholder="查询：token / 分辨率 / 时长（按 / 聚焦，Esc 清空）">
-  <select id="fStatus" title="按状态筛选">
+  <select id="fStatus" title="按状态筛选（任务生命周期）">
     <option value="all">全部状态</option>
     <option value="new">待下载</option>
-    <option value="sent">已投递</option>
+    <option value="downloading">下载中</option>
     <option value="done">已完成</option>
     <option value="ignored">忽略</option>
-    <option value="downloading">下载中</option>
-    <option value="have">已在磁盘</option>
-    <option value="miss">未下载</option>
-    <option value="towatch">待看（在盘未播）</option>
+  </select>
+  <select id="fFlag" title="按标记筛选（可叠加在上面的状态之上）">
+    <option value="none">不限标记</option>
+    <option value="fav">★ 收藏</option>
+    <option value="towatch">待看</option>
     <option value="watched">已看</option>
+    <option value="have">在磁盘</option>
+    <option value="miss">未下载</option>
     <option value="rated">已评分</option>
-    <option value="unrated">未评分</option>
-    <option value="top">高分（≥4 星）</option>
+    <option value="top">高分 ≥4★</option>
     <option value="today">今日新增</option>
-    <option value="fav">收藏 ★</option>
   </select>
   <select id="fRes" title="按分辨率筛选">
     <option value="all">全部分辨率</option>

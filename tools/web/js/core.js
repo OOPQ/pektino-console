@@ -14,6 +14,13 @@ export const PREFS = Object.assign({
   }
 }, JSON.parse(localStorage.getItem(KEY) || '{}'));
 if (!PREFS.cols) PREFS.cols = {};
+// 旧版本的筛选把「标记」混在 status 里，这里迁移到 flag
+const LEGACY_FLAGS = ['have', 'miss', 'fav', 'towatch', 'watched', 'rated', 'unrated', 'top', 'today'];
+if (LEGACY_FLAGS.includes(PREFS.status)) {
+  PREFS.flag = PREFS.status === 'unrated' ? 'none' : PREFS.status;
+  PREFS.status = 'all';
+}
+if (!PREFS.flag) PREFS.flag = 'none';
 export const savePrefs = () => localStorage.setItem(KEY, JSON.stringify(PREFS));
 
 /* ---------- 全局状态 ---------- */
@@ -22,7 +29,7 @@ export const state = {
   SEL: new Set(),
   BUSY: false,
   SORT: { key: PREFS.sortKey, dir: PREFS.sortDir },
-  FILTER: { status: PREFS.status, res: PREFS.res, minDur: PREFS.minDur, q: PREFS.q },
+  FILTER: { status: PREFS.status || 'all', flag: PREFS.flag || 'none', res: PREFS.res, minDur: PREFS.minDur, q: PREFS.q },
   PAGE: PREFS.page,
   PER: PREFS.per,
   SHOW_COVERS: PREFS.covers,

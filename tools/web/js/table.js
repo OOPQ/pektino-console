@@ -18,21 +18,29 @@ export function applyCols() {
 /* ---------- 过滤 ---------- */
 const RES_RANK = { '4k': 2160, '1080': 1080, '720': 720 };
 function passFilter(r) {
+  /* 状态：任务生命周期（单选） */
   const st = state.FILTER.status;
-  if (st === 'have' && !r.file_name) return false;
-  if (st === 'miss' && r.file_name) return false;
-  if (st === 'fav' && r.fav !== '1') return false;
-  if (st === 'towatch' && (!r.file_name || r.last_play)) return false;
-  if (st === 'watched' && !r.last_play) return false;
-  if (st === 'rated' && !(+r.rating > 0)) return false;
-  if (st === 'unrated' && (+r.rating > 0)) return false;
-  if (st === 'top' && !(+r.rating >= 4)) return false;
-  if (st === 'today') {
-    const d = new Date();
-    const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-    if ((r.first_seen || '').slice(0, 10) !== iso) return false;
-  }
   if (['new', 'sent', 'done', 'ignored', 'downloading'].includes(st) && r.status !== st) return false;
+
+  /* 标记：资源属性（单选，可与状态叠加） */
+  const fl = state.FILTER.flag;
+  if (fl && fl !== 'none') {
+    switch (fl) {
+      case 'have': if (!r.file_name) return false; break;
+      case 'miss': if (r.file_name) return false; break;
+      case 'fav': if (r.fav !== '1') return false; break;
+      case 'towatch': if (!r.file_name || r.last_play) return false; break;
+      case 'watched': if (!r.last_play) return false; break;
+      case 'rated': if (!(+r.rating > 0)) return false; break;
+      case 'top': if (!(+r.rating >= 4)) return false; break;
+      case 'today': {
+        const d = new Date();
+        const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        if ((r.first_seen || '').slice(0, 10) !== iso) return false;
+        break;
+      }
+    }
+  }
   if (state.FILTER.res !== 'all') {
     const w = parseInt((r.res || '').split('x')[0]) || 0;
     const h = parseInt((r.res || '').split('x')[1]) || 0;
@@ -175,20 +183,44 @@ export function renderSel() {
 
 /* ---------- KPI 快捷筛选 ---------- */
 const KPI_MAP = {
-  kTotal: 'all', kNew: 'new', kSent: 'sent', kDone: 'done',
-  kDisk: 'have', kMiss: 'miss', kFav: 'fav', kWatch: 'towatch', kToday: 'today'
+  kTotal: { status: 'all', flag: 'none' },
+  kNew: { status: 'new', flag: 'none' },
+  kSent: { status: 'sent', flag: 'none' },
+  kDone: { status: 'done', flag: 'none' },
+  kDisk: { status: 'all', flag: 'have' },
+  kMiss: { status: 'all', flag: 'miss' },
+  kFav: { status: 'all', flag: 'fav' },
+  kWatch: { status: 'all', flag: 'towatch' },
+  kToday: { status: 'all', flag: 'today' }
 };
-export function markActiveKpi(f) {
-  document.querySelectorAll('.kpi').forEach(c => c.classList.toggle('active', KPI_MAP[c.dataset.kpi] === f));
+
+function kpiOf(card) { return KPI_MAP[card.dataset.kpi] || { status: 'all', flag: 'none' }; }
+
+export function markActiveKpi() {
+  const st = state.FILTER.status, fl = state.FILTER.flag;
+  document.querySelectorAll('.kpi').forEach(c => {
+    const m = kpiOf(c);
+    c.classList.toggle('active', m.status === st && m.flag === fl);
+  });
 }
-export function applyKpiFilter(f) {
-  state.FILTER.status = f; state.PAGE = 1;
-  PREFS.status = f; savePrefs();
-  $('#fStatus').value = f;
+
+export function applyKpiFilter(entry) {
+  state.FILTER.status = entry.status || 'all';
+  state.FILTER.flag = entry.flag || 'none';
+  state.PAGE = 1;
+  PREFS.status = state.FILTER.status;
+  PREFS.flag = state.FILTER.flag;
+  savePrefs();
+  $('#fStatus').value = state.FILTER.status;
+  $('#fFlag').value = state.FILTER.flag;
   render();
-  markActiveKpi(f);
-  const opt = $('#fStatus').selectedOptions[0];
-  toast(f === 'all' ? '显示全部' : `筛选：${opt ? opt.textContent : f}`, 1800);
+  markActiveKpi();
+  const sOpt = $('#fStatus').selectedOptions[0];
+  const fOpt = $('#fFlag').selectedOptions[0];
+  const parts = [];
+  if (state.FILTER.status !== 'all') parts.push(sOpt ? sOpt.textContent : state.FILTER.status);
+  if (state.FILTER.flag !== 'none') parts.push(fOpt ? fOpt.textContent : state.FILTER.flag);
+  toast(parts.length ? `筛选：${parts.join(' + ')}` : '显示全部', 1800);
 }
 
 export function initTable() {
@@ -225,7 +257,11 @@ export function initTable() {
   });
   $('#fStatus').addEventListener('change', e => {
     state.FILTER.status = e.target.value; state.PAGE = 1;
-    PREFS.status = state.FILTER.status; savePrefs(); render(); markActiveKpi(state.FILTER.status);
+    PREFS.status = state.FILTER.status; savePrefs(); render(); markActiveKpi();
+  });
+  $('#fFlag').addEventListener('change', e => {
+    state.FILTER.flag = e.target.value; state.PAGE = 1;
+    PREFS.flag = state.FILTER.flag; savePrefs(); render(); markActiveKpi();
   });
   $('#fRes').addEventListener('change', e => {
     state.FILTER.res = e.target.value; state.PAGE = 1;
@@ -242,12 +278,12 @@ export function initTable() {
     e.target.value = ''; render();
   });
   $('#btnReset').onclick = () => {
-    state.FILTER = { status: 'all', res: 'all', minDur: '', q: '' };
+    state.FILTER = { status: 'all', flag: 'none', res: 'all', minDur: '', q: '' };
     state.SORT = { key: 'rank', dir: 'asc' };
     state.PAGE = 1; state.PER = 50; state.SEL.clear();
-    Object.assign(PREFS, { status: 'all', res: 'all', minDur: '', q: '', sortKey: 'rank', sortDir: 'asc', per: 50 });
+    Object.assign(PREFS, { status: 'all', flag: 'none', res: 'all', minDur: '', q: '', sortKey: 'rank', sortDir: 'asc', per: 50 });
     savePrefs();
-    $('#q').value = ''; $('#fStatus').value = 'all'; $('#fRes').value = 'all';
+    $('#q').value = ''; $('#fStatus').value = 'all'; $('#fFlag').value = 'none'; $('#fRes').value = 'all';
     $('#fMinDur').value = ''; $('#pgSize').value = '50';
     render(); markActiveKpi('all');
   };
@@ -270,12 +306,12 @@ export function initTable() {
       if (vid === 'kHours') {
         state.SORT = { key: 'duration', dir: 'desc' };
         Object.assign(PREFS, { sortKey: 'duration', sortDir: 'desc', status: 'all' });
-        state.PAGE = 1; state.FILTER.status = 'all'; $('#fStatus').value = 'all'; savePrefs();
+        state.PAGE = 1; state.FILTER = { status: 'all', flag: 'none', res: state.FILTER.res, minDur: state.FILTER.minDur, q: state.FILTER.q }; $('#fStatus').value = 'all'; $('#fFlag').value = 'none'; savePrefs();
         render(); markActiveKpi('all');
         toast('按时长从长到短排序', 1800);
         return;
       }
-      applyKpiFilter(KPI_MAP[vid] || 'all');
+      applyKpiFilter(kpiOf(card));
     });
   });
 

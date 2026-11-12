@@ -1,7 +1,7 @@
 /* core.js — 常量、全局状态、事件总线、通用工具、API 封装、错误上报 */
 
 export const $ = s => document.querySelector(s);
-export const KEY = 'pektino.ui.v3';
+const KEY = 'pektino.ui.v3';
 export const STATUS_LABEL = { new: '待下载', sent: '已投递', done: '已完成', ignored: '忽略' };
 
 /* ---------- 偏好（localStorage） ---------- */
@@ -31,9 +31,9 @@ export const state = {
 };
 
 /* ---------- 事件总线（解耦模块之间的调用） ---------- */
-export const bus = new EventTarget();
+const bus = new EventTarget();
 export const emit = (name, detail) => bus.dispatchEvent(new CustomEvent(name, { detail }));
-export const on = (name, fn) => bus.addEventListener(name, e => fn(e.detail));
+export const onEvent = (name, fn) => bus.addEventListener(name, e => fn(e.detail));
 
 /* ---------- 基础工具 ---------- */
 export function toast(msg, ms = 2500) {
@@ -44,22 +44,13 @@ export function toast(msg, ms = 2500) {
   clearTimeout(toast._t);
   toast._t = setTimeout(() => t.classList.remove('on'), ms);
 }
-export const thunder = url => 'thunder://' + btoa('AA' + url + 'ZZ');
 export const stTag = s => `<span class="tag ${s}">${STATUS_LABEL[s] || s}</span>`;
 export const fmtMB = n => n ? (n / 1048576).toFixed(1) + ' MB' : '';
 export const fmtNum = n => (n === '' || n == null) ? '–' : Number(n).toLocaleString('en-US');
 
-export function setBusy(on, text) {
-  state.BUSY = on;
-  const b = $('#busy');
-  if (b) b.textContent = on ? (text || '处理中…') : '';
-  document.querySelectorAll('button').forEach(x => x.disabled = on);
-  if (!on) emit('render');
-}
-
 /* ---------- 前端上报 ---------- */
 const REPORT_LAST = {};
-export function report(level, msg, extra = {}) {
+function report(level, msg, extra = {}) {
   const key = level + '|' + msg;
   const now = Date.now();
   if (REPORT_LAST[key] && now - REPORT_LAST[key] < 5000) return;
@@ -99,4 +90,17 @@ export async function api(path, body) {
     report('error', `请求失败 ${path}: ${e.message}`, { url: path, ms: Math.round(performance.now() - t0) });
     throw e;
   }
+}
+
+/* ---------- 评分星（表格 / 灯箱 / 抽卡 / 右键菜单 共用一套） ---------- */
+export function starsInner(value) {
+  const v = Math.max(0, Math.min(5, +value || 0));
+  return [1, 2, 3, 4, 5]
+    .map(n => `<i class="${n <= v ? 'on' : ''}" data-v="${n}">★</i>`)
+    .join('');
+}
+export function starsHtml(value, opts = {}) {
+  const cls = ['rt', opts.cls || ''].filter(Boolean).join(' ');
+  const attr = opts.token ? ` data-rate="${opts.token}"` : '';
+  return `<span class="${cls}"${attr}>${starsInner(value)}</span>`;
 }

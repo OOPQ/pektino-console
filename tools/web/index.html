@@ -8,6 +8,7 @@
 </head>
 <body>
 
+<!-- ===== 顶栏 ===== -->
 <header>
   <span class="dot" id="dot"></span>
   <h1>pektino 控制台</h1>
@@ -19,6 +20,7 @@
   <button class="icon" id="btnRefresh" title="刷新">⟳</button>
 </header>
 
+<!-- ===== 看板（每张卡可点，等于快捷筛选） ===== -->
 <div class="kpis">
   <div class="kpi"><div class="k">总数</div><div class="v" id="kTotal">–</div></div>
   <div class="kpi new"><div class="k">待下载</div><div class="v" id="kNew">–</div></div>
@@ -32,6 +34,7 @@
   <div class="kpi"><div class="k">今日新增</div><div class="v" id="kToday">–</div></div>
 </div>
 
+<!-- ===== 查询条 ===== -->
 <div class="bar queries">
   <input type="text" id="q" placeholder="查询：token / 分辨率 / 时长（按 / 聚焦，Esc 清空）">
   <select id="fStatus" title="按状态筛选">
@@ -77,6 +80,7 @@
   <label class="chk"><input type="checkbox" id="chkCompact">紧凑</label>
 </div>
 
+<!-- ===== 操作条 ===== -->
 <div class="bar actions">
   <select id="rank">
     <option value="daily">日榜</option>
@@ -97,6 +101,7 @@
   <a href="/api/export" download><button id="btnExport">导出 CSV</button></a>
 </div>
 
+<!-- ===== 任务进度 ===== -->
 <div class="prog" id="prog">
   <span class="label" id="progLabel">抓取中…</span>
   <span class="barwrap"><i id="progBar"></i></span>
@@ -104,6 +109,7 @@
   <button class="ghost icon" id="btnCancelJob" title="取消任务">✕</button>
 </div>
 
+<!-- ===== 表格 + 分页 ===== -->
 <main>
   <div id="banner">你是用 <b>file://</b> 直接打开的，连不上后台。请访问
     <a href="http://127.0.0.1:8791/" style="color:#7fb8ff">http://127.0.0.1:8791/</a>（先双击 启动控制台.cmd）
@@ -151,6 +157,7 @@
   </div>
 </main>
 
+<!-- ===== 选中浮条 ===== -->
 <div class="selbar" id="selbar">
   <b id="selCount">已选 0</b>
   <button class="ghost rowbtn" id="selSend">投递</button>
@@ -164,6 +171,7 @@
   <button class="ghost rowbtn" id="selClear">清空</button>
 </div>
 
+<!-- ===== 设置抽屉 ===== -->
 <div class="drawer" id="drawer">
   <div class="sheet">
     <h3>设置</h3>
@@ -193,6 +201,7 @@
   </div>
 </div>
 
+<!-- ===== 预览灯箱 ===== -->
 <div class="lightbox" id="lightbox">
   <div class="box">
     <img id="lbImg" alt="">
@@ -207,13 +216,14 @@
         <button class="ghost" id="lbCopyToken">复制 token</button>
         <button class="ghost" id="lbOpen">站点</button>
       </div>
-      <div class="actions" style="grid-template-columns:1fr">
+      <div class="actions single">
         <button class="ghost" id="lbClose">关闭</button>
       </div>
     </div>
   </div>
 </div>
 
+<!-- ===== 抽卡（与预览同一套布局） ===== -->
 <div class="lightbox" id="gacha">
   <div class="box">
     <img id="gImg" alt="">
@@ -229,7 +239,7 @@
         <button class="ghost" id="gOpen">站点</button>
         <button class="ghost" id="gAgain">🎲 再抽</button>
       </div>
-      <div class="actions" style="grid-template-columns:1fr">
+      <div class="actions single">
         <button class="ghost" id="gClose">关闭</button>
       </div>
       <div class="sub" id="gRateHint" style="font-size:11px">点星星打分，或按 1–5；R 再抽，Esc 关闭</div>

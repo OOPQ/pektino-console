@@ -1,5 +1,5 @@
 /* table.js — 过滤 / 排序 / 分页 / 表格渲染 / 列显隐 / KPI 快捷筛选 */
-import { $, PREFS, savePrefs, state, emit, on, toast, stTag, fmtMB } from './core.js';
+import { $, PREFS, savePrefs, state, onEvent, toast, stTag, fmtMB, starsHtml, starsInner } from './core.js';
 
 export const COLS = [
   { key: 'cover', label: '封面' }, { key: 'rank', label: '排名' }, { key: 'duration', label: '时长' },
@@ -81,9 +81,7 @@ function coverCell(r) {
   return `<div class="covbox" data-lb="${r.token}" title="点击放大"><img src="${u}" loading="lazy" alt=""></div>`;
 }
 function rateCell(r) {
-  const v = +r.rating || 0;
-  const stars = [1, 2, 3, 4, 5].map(n => `<i class="${n <= v ? 'on' : ''}" data-v="${n}">★</i>`).join('');
-  return `<span class="rt" data-rate="${r.token}">${stars}</span>`;
+  return starsHtml(r.rating, { token: r.token });
 }
 
 /* ---------- 渲染 ---------- */
@@ -165,8 +163,7 @@ export function renderSel() {
   const ratings = rows.map(r => +r.rating || 0);
   const minR = ratings.length ? Math.min(...ratings) : 0;
   const same = ratings.length > 0 && ratings.every(v => v === minR);
-  $('#selRate').innerHTML = [1, 2, 3, 4, 5]
-    .map(k => `<i class="${same && k <= minR ? 'on' : ''}" data-v="${k}">★</i>`).join('');
+  $('#selRate').innerHTML = starsInner(same ? minR : 0);
 }
 
 /* ---------- KPI 快捷筛选 ---------- */
@@ -294,5 +291,5 @@ export function initTable() {
   });
 
   /* 状态变化时自动重绘 */
-  on('render', render);
+  onEvent('render', render);
 }

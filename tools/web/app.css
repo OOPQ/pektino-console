@@ -6,6 +6,7 @@
   --bg:#0d1117; --panel:#151b23; --panel2:#1b232d; --panel3:#222b36; --line:#262f3a;
   --text:#d7dee8; --dim:#8b97a6; --acc:#4da3ff; --ok:#3fb950; --warn:#d29922; --bad:#f85149;
   --sent:#a371f7; --gold:#e3b341;
+  --chip:#1b2530; --val:#e8f0fa; --faint:#7f8ea1;
 }
 *{box-sizing:border-box}
 
@@ -161,14 +162,15 @@ td.playable:hover{color:#cfe6ff}
 .mstats{display:flex;flex-direction:column;gap:2px}
 .mstats .mhead{display:flex;align-items:baseline;gap:8px;margin:2px 0 8px}
 .mstats .mhead b{font-size:22px;font-weight:650;color:#fff;letter-spacing:.4px;font-variant-numeric:tabular-nums}
-.mstats .mhead i{font-style:normal;font-size:12px;color:#9fb0c3;background:#1b2530;border:1px solid var(--line);border-radius:6px;padding:1px 6px}
+.mstats .mhead i{font-style:normal;font-size:12px;color:#9fb0c3;background:var(--chip);border:1px solid var(--line);border-radius:6px;padding:1px 6px}
 .mstats .mrow{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:5px 0;border-bottom:1px dashed rgba(255,255,255,.07);font-size:12.5px}
 .mstats .mrow:last-of-type{border-bottom:none}
 .mstats .mrow > span{color:#8b97a6;white-space:nowrap}
-.mstats .mrow > em{font-style:normal;color:#e8f0fa;font-weight:550;font-variant-numeric:tabular-nums;text-align:right}
+.mstats .mrow > em{font-style:normal;color:var(--val);font-weight:550;font-variant-numeric:tabular-nums;text-align:right}
 .mstats .mrow > em.gold{color:var(--gold);letter-spacing:1px}
-.mstats .mfile{margin-top:6px;font-family:ui-monospace,Consolas,monospace;font-size:11px;color:#7f8ea1;word-break:break-all}
+.mstats .mfile{margin-top:6px;font-family:ui-monospace,Consolas,monospace;font-size:11px;color:var(--faint);word-break:break-all}
 .lightbox .actions{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:4px}
+.lightbox .actions.single{grid-template-columns:1fr}
 .lightbox .actions button{width:100%;padding:7px 8px;white-space:nowrap}
 .lightbox .box{animation:fadein .16s ease-out}
 @keyframes fadein{from{opacity:0}to{opacity:1}}

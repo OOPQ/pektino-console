@@ -11,8 +11,19 @@ const PHASE_LABEL = {
   scan: '扫描文件', resolve: '核对详情', done: '收尾'
 };
 
-function renderJob(job) {
+function renderJob(job, download) {
   const el = $('#prog');
+  const dl = download || state.DOWNLOAD;
+  if (dl && dl.running) {
+    const total = +dl.total || 0, done = +dl.done || 0;
+    el.classList.add('on');
+    $('#progLabel').textContent = '下载中';
+    $('#progBar').style.width = (total ? Math.round(100 * done / total) : 0) + '%';
+    const mb = ((+dl.bytes || 0) / 1048576).toFixed(1);
+    const active = (dl.active || []).length;
+    $('#progStat').textContent = `${done}/${total} 完成 · ${mb} MB · ${dl.speed || 0} MB/s · 并发 ${active}`;
+    return;
+  }
   if (!job || !job.running) { el.classList.remove('on'); return; }
   const p = job.progress || {};
   const total = p.total || 0, done = p.done || 0;
@@ -87,10 +98,12 @@ async function load() {
       || '<div>暂无日志</div>';
     $('#diag').textContent = `自检：前端 OK · API OK · 渲染 ${state.ROWS.length} 行 · 磁盘命中 ${S.downloaded}`;
 
-    renderJob(s.job || {});
+    state.DOWNLOAD = s.download || null;
+    state.SETTINGS = s.settings || null;
+    renderJob(s.job || {}, s.download);
     render();
     markActiveKpi(state.FILTER.status);
-    if (s.job && s.job.running) { clearTimeout(load._t); load._t = setTimeout(load, 1200); }
+    if ((s.job && s.job.running) || (s.download && s.download.running)) { clearTimeout(load._t); load._t = setTimeout(load, 1200); }
   } catch (e) {
     $('#dot').classList.add('off');
     $('#sub').textContent = '服务未连接 —— 先运行 启动控制台.cmd';
@@ -180,11 +193,34 @@ async function scanDir() {
   load();
 }
 
+async function downloadNew() {
+  const n = state.STATS.new || 0;
+  if (!n) return toast('没有可下载的条目');
+  if (!confirm(`用内置下载器下载 ${n} 条？\n保存到：${state.STATS.downloadDir || ''}\n\n支持断点续传，可在进度条上取消。`)) return;
+  try {
+    const r = await api('/api/download', { status: 'new' });
+    if (!r.ok) return toast('失败：' + r.error, 5000);
+    toast(`已开始下载 ${r.count} 条（并发 ${r.concurrent}）`, 3500);
+    load();
+  } catch (e) { toast('请求失败：' + e.message); }
+}
+
+async function saveNet() {
+  const proxy = $('#proxyInput').value.trim();
+  const concurrent = parseInt($('#concInput').value) || 3;
+  try {
+    const r = await api('/api/config', { proxy, concurrent });
+    toast(r.ok ? `已保存：代理 ${proxy || '跟随系统'}，并发 ${concurrent}` : '失败：' + r.error, 3500);
+  } catch (e) { toast('请求失败'); }
+}
+
 function initToolbar() {
   $('#btnScrape').onclick = doScrape;
   $('#btnImport').onclick = doImport;
   $('#btnCancelJob').onclick = doCancelJob;
   $('#btnSendNew').onclick = sendAllNew;
+  $('#btnDownload').onclick = downloadNew;
+  $('#btnSaveNet').onclick = saveNet;
   $('#btnPreview').onclick = previewLinks;
   $('#btnSaveDir').onclick = saveDir;
   $('#btnScan').onclick = scanDir;
@@ -253,6 +289,10 @@ function initBulk() {
 function initControls() {
   $('#chkCovers').checked = state.SHOW_COVERS;
   $('#pageCount').value = String(PREFS.pageCount || 3);
+  if (state.SETTINGS) {
+    $('#proxyInput').value = state.SETTINGS.proxy || '';
+    $('#concInput').value = String(state.SETTINGS.concurrent || 3);
+  }
   $('#pageCount').addEventListener('change', e => {
     const raw = parseInt(e.target.value);
     PREFS.pageCount = isNaN(raw) ? 3 : Math.max(1, Math.min(MAX_PAGES, raw));

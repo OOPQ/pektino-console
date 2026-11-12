@@ -79,6 +79,7 @@ function ctxItemsFor(row) {
     { act: 'thunder', label: '复制 thunder://' },
     { act: 'copytoken', label: '复制 token' },
     { sep: true },
+    { act: 'download', label: '⬇ 用内置下载器下载', off: !row || !row.url || !!row.file_name },
     { act: 'toggleFav', label: favOn ? '☆ 取消收藏' : '★ 收藏' },
     { act: 'toggleWatched', label: seen ? '↺ 标记未看' : '✓ 标记已看' },
     { rate: true, value: +((row && row.rating) || 0) },
@@ -124,6 +125,12 @@ async function onCtxAction(act) {
     case 'thunder': return copyText(thunderUrl(row.url || ''), 'thunder:// 已复制');
     case 'copytoken': return copyText(tk, 'token 已复制');
     case 'open': return window.open(siteUrl(tk), '_blank');
+    case 'download': {
+      const r2 = await api('/api/download', { tokens: [tk] });
+      toast(r2.ok ? '已加入下载队列' : '下载失败：' + r2.error, 4000);
+      if (r2.ok) reload();
+      return;
+    }
     case 'toggleFav': {
       const next = row.fav !== '1';
       const r = await setFav([tk], next);
@@ -191,6 +198,14 @@ async function onRowClick(e) {
       if (!r.ok) toast(r.error);
     } catch (err) { toast('定位失败'); }
     return;
+  }
+
+  const dlBtn = e.target.closest('[data-dl]');
+  if (dlBtn) {
+    const r = await api('/api/download', { tokens: [dlBtn.dataset.dl] });
+    if (!r.ok) return toast('下载失败：' + r.error, 5000);
+    toast(`开始下载 1 条（并发 ${r.concurrent}）`, 3000);
+    return emit('reload');
   }
 
   const copyBtn = e.target.closest('[data-copy]');

@@ -483,3 +483,109 @@ function Invoke-Send {
     Touch-State
     return @{ ok = $true; count = $sent; links = @(); dryRun = $false }
 }
+
+# ---------------- 内置下载器 ----------------
+
+function Get-DownloadInfo {
+    <#  返回下载器的当前状态：进程是否活着 + 进度文件内容  #>
+    $info = [ordered]@{ running = $false; phase = ''; total = 0; done = 0; failed = 0; bytes = 0; speed = 0; active = @(); errors = @() }
+    if (Test-Path $DlProgress) {
+        try {
+            $p = Get-Content $DlProgress -Raw -Encoding UTF8 | ConvertFrom-Json
+            foreach ($k in @('phase', 'total', 'done', 'failed', 'bytes', 'speed')) {
+                if ($null -ne $p.$k) { $info[$k] = $p.$k }
+            }
+            if ($p.active) { $info.active = @($p.active) }
+            if ($p.errors) { $info.errors = @($p.errors) }
+        } catch { }
+    }
+    $alive = $false
+    if ($State.Download -and $State.Download.Pid) {
+        $alive = [bool](Get-Process -Id $State.Download.Pid -ErrorAction SilentlyContinue)
+    }
+    $info.running = $alive
+    $info.pid = if ($State.Download) { $State.Download.Pid } else { 0 }
+    [pscustomobject]$info
+}
+
+function Start-Download {
+    <#  把选中/待下载条目交给内置下载器（独立进程，支持续传与并发）  #>
+    param($Tokens, [string]$Status = 'new', [int]$Limit = 0)
+
+    if ($State.Job -and $State.Job.State -eq 'Running') {
+        return @{ ok = $false; error = '抓取任务正在运行，等它结束再下载' }
+    }
+    if (Get-DownloadInfo | ForEach-Object { $_.running }) {
+        return @{ ok = $false; error = '已经有一个下载任务在跑' }
+    }
+
+    $cfg = Read-Config -Root $Root
+    $dir = if ($cfg.downloadDir) { [string]$cfg.downloadDir } else { 'D:\Downloads' }
+    if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
+
+    $targets = @()
+    if ($Tokens) {
+        $targets = @($State.Ledger | Where-Object { $_.url -and ($Tokens -contains $_.token) })
+    } else {
+        $targets = @($State.Ledger | Where-Object { $_.url -and -not $_.file_name -and $_.status -eq $Status })
+    }
+    if ($Limit -gt 0) { $targets = @($targets | Select-Object -First $Limit) }
+    if (-not $targets.Count) { return @{ ok = $false; error = '没有可下载的条目' } }
+
+    $queue = @($targets | ForEach-Object { [pscustomobject]@{ token = $_.token; url = $_.url } })
+    (ConvertTo-Json -InputObject $queue -Depth 4) | Set-Content -Path $DlQueue -Encoding UTF8 -Force
+
+    $conc = if ($cfg.concurrent) { [int]$cfg.concurrent } else { 3 }
+    if ($conc -lt 1 -or $conc -gt 8) { $conc = 3 }
+    $proxy = if ($cfg.proxy) { [string]$cfg.proxy } else { '' }
+
+    $argList = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $DlScript,
+        '-QueueFile', $DlQueue, '-Dir', $dir, '-Concurrent', "$conc", '-ProgressFile', $DlProgress)
+    if ($proxy) { $argList += @('-Proxy', $proxy) }
+
+    Remove-Item $DlProgress -Force -ErrorAction SilentlyContinue
+    $proc = Start-Process -FilePath 'powershell.exe' -ArgumentList $argList -WindowStyle Hidden -PassThru
+    $State.Download = @{ Pid = $proc.Id; Started = (Get-Date).ToString('s'); Count = $queue.Count; Dir = $dir }
+    Touch-State
+
+    $proxyText = if ($proxy) { "，代理 $proxy" } else { '，代理跟随系统' }
+    Write-Log 'download' "开始下载 $($queue.Count) 条（并发 $conc$proxyText）→ $dir"
+    [pscustomobject]@{ ok = $true; count = $queue.Count; dir = $dir; concurrent = $conc; proxy = $proxy }
+}
+
+function Stop-Download {
+    if (-not $State.Download -or -not $State.Download.Pid) { return @{ ok = $false; error = '没有正在进行的下载' } }
+    $pid2 = $State.Download.Pid
+    try {
+        # 连同子进程（curl）一起结束
+        & taskkill.exe /PID $pid2 /T /F 2>&1 | Out-Null
+    } catch { }
+    try { Stop-Process -Id $pid2 -Force -ErrorAction SilentlyContinue } catch { }
+    $State.Download = $null
+    Touch-State
+    Write-Log 'download' '下载已取消'
+    @{ ok = $true }
+}
+
+function Step-Download {
+    <#  主循环里每轮调用：进程结束后补一次扫描，运行中则节流推 SSE  #>
+    if (-not $State.Download -or -not $State.Download.Pid) { return }
+
+    $alive = [bool](Get-Process -Id $State.Download.Pid -ErrorAction SilentlyContinue)
+    if ($alive) {
+        # 每 2 秒推一次 rev，让前端拿到进度
+        if (-not $State.Download.LastPush -or ((Get-Date) - [datetime]$State.Download.LastPush).TotalSeconds -ge 2) {
+            $State.Download.LastPush = (Get-Date).ToString('s')
+            Touch-State
+        }
+        return
+    }
+
+    $dir = if ($State.Download.Dir) { $State.Download.Dir } else { (Read-Config -Root $Root).downloadDir }
+    $count = $State.Download.Count
+    $State.Download = $null
+    try { [void](Invoke-Scan -Silent -KeepStatus) } catch { }
+    try { if (Test-Path $dir) { Update-Thumbs -Root $Root -Dir $dir } } catch { }
+    Touch-State
+    Write-Log 'download' "下载进程结束（队列 $count 条），已重新扫描目录"
+}

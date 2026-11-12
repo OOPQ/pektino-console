@@ -114,7 +114,9 @@ export function render() {
         <td class="mono col-disk">${r.file_name ? '✓ ' + fmtMB(r.file_size) : '<span style="color:#5b6773">—</span>'}</td>
         <td class="mono col-first_seen">${(r.first_seen || '').slice(5, 16)}</td>
         <td>
-          <button class="ghost rowbtn" data-play="${r.token}">播放</button>
+          ${r.file_name
+            ? `<button class="ghost rowbtn" data-play="${r.token}">播放</button>`
+            : `<button class="ghost rowbtn" data-dl="${r.token}" title="用内置下载器下载这一条">下载</button>`}
           <button class="ghost rowbtn" data-reveal="${r.token}">定位</button>
           <button class="ghost rowbtn" data-copy="${r.url || ''}">复制</button>
           <button class="ghost rowbtn" data-th="${r.url || ''}">thunder</button>

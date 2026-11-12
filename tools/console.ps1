@@ -53,6 +53,9 @@ $ThumbDir = Join-Path $Root 'out\thumbs'
 $ProgressFile = Join-Path $Root 'out\progress.json'
 $KnownFile = Join-Path $Root 'out\.known.txt'
 $ClientLog = Join-Path $Root 'out\client.log'
+$DlScript = Join-Path $Root 'download.ps1'
+$DlQueue = Join-Path $Root 'out\.queue.json'
+$DlProgress = Join-Path $Root 'out\download.json'
 
 # ---------- 内存态 ----------
 $Config = Read-Config -Root $Root
@@ -64,6 +67,7 @@ $State = @{
     Scan   = $null
     Job    = $null
     Rev    = 0
+    Download = $null
     Metrics = @{
         total        = 0
         sumMs        = 0.0
@@ -210,6 +214,8 @@ function Handle-Request {
                 rows    = @($State.Ledger)
                 log     = @($State.Log | Select-Object -Last 40)
                 job     = (Get-JobInfo)
+                download = (Get-DownloadInfo)
+                settings = [pscustomobject]@{ proxy = [string]$Config.proxy; concurrent = $(if ($Config.concurrent) { [int]$Config.concurrent } else { 3 }) }
                 metrics = [pscustomobject]@{
                     total        = $State.Metrics.total
                     avgMs        = if ($State.Metrics.total -gt 0) { [math]::Round($State.Metrics.sumMs / $State.Metrics.total, 1) } else { 0 }
@@ -242,6 +248,11 @@ function Handle-Request {
         return
     }
 
+    if ($method -eq 'GET' -and $path -eq '/api/download') {
+        Send-Json -Stream $Stream -Object ([pscustomobject]@{ ok = $true; download = (Get-DownloadInfo) })
+        return
+    }
+
     if ($method -eq 'GET' -and $path -eq '/api/export') {
         $tmp = Join-Path (Split-Path $LedgerPath -Parent) '.export.csv'
         Write-CsvSnapshot -Rows @($State.Ledger) -Path $tmp -Force
@@ -257,6 +268,20 @@ function Handle-Request {
             try { $parsed = $Req.Body | ConvertFrom-Json; foreach ($p in $parsed.PSObject.Properties) { $body[$p.Name] = $p.Value } } catch { }
         }
         switch ($path) {
+            '/api/download' {
+                $tokens = @()
+                if ($body.tokens) { $tokens = @($body.tokens | ForEach-Object { [string]$_ }) }
+                $status = if ($body.status) { [string]$body.status } else { 'new' }
+                $limit = 0
+                if ($body.limit) { $limit = [int]$body.limit }
+                $r = Start-Download -Tokens $tokens -Status $status -Limit $limit
+                Send-Json -Stream $Stream -Object ([pscustomobject]$r)
+                return
+            }
+            '/api/download/cancel' {
+                Send-Json -Stream $Stream -Object ([pscustomobject](Stop-Download))
+                return
+            }
             '/api/scrape' {
                 $rank = if ($body.rank) { [string]$body.rank } else { 'daily' }
                 $pages = @(1, 2, 3)
@@ -371,8 +396,13 @@ function Handle-Request {
                 return
             }
             '/api/config' {
+                if ($body.proxy -ne $null) { $Config | Add-Member -NotePropertyName proxy -NotePropertyValue ([string]$body.proxy) -Force }
+                if ($body.concurrent -ne $null) { $Config | Add-Member -NotePropertyName concurrent -NotePropertyValue ([int]$body.concurrent) -Force }
                 $dir = [string]$body.downloadDir
-                if (-not $dir) { Send-Json -Stream $Stream -Object @{ ok = $false; error = '缺少 downloadDir' }; return }
+                if (-not $dir) {
+                    if ($body.proxy -ne $null -or $body.concurrent -ne $null) { Save-Config -Config $Config -Root $Root; Send-Json -Stream $Stream -Object @{ ok = $true; proxy = $Config.proxy; concurrent = $Config.concurrent }; return }
+                    Send-Json -Stream $Stream -Object @{ ok = $false; error = '缺少 downloadDir' }; return
+                }
                 $dir = $dir.Trim().Trim('"')
                 if (-not (Test-Path $dir)) {
                     try { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
@@ -533,6 +563,7 @@ try {
             }
         }
         Push-Sse
+        if (Get-Command Step-Download -ErrorAction SilentlyContinue) { try { Step-Download } catch { } }
     }
 } finally {
     foreach ($c in @($script:SseClients)) { try { $c.Stream.Close() } catch { }; try { $c.Socket.Close() } catch { } }

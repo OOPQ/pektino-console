@@ -47,13 +47,13 @@ export async function doPlay(tk) {
   if (!row || !row.file_name) return toast('本地还没有这个文件，先下载');
   try {
     const r = await api('/api/play', { token: tk });
-    if (!r.ok) return toast('播放失败：' + r.error, 4000);
+    if (!r || r.ok === false) return toast('播放失败：' + ((r && r.error) || '未知错误'), 4000);
     row.play_count = r.plays || String((+row.play_count || 0) + 1);
     row.last_play = r.last_play || row.last_play;
     render();
-    toast('已调用播放器：' + r.name, 2200);
+    toast(r.name ? `已用系统播放器打开：${r.name}` : '已用系统播放器打开', 2200);
   } catch (e) {
-    toast('播放失败：' + e.message);
+    toast('播放失败：' + (e.message || '未知错误'));
   }
 }
 

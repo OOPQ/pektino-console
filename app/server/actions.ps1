@@ -509,7 +509,7 @@ function Invoke-Play {
         Save-Ledger -Rows @($row) -NoSnapshot
         Touch-State
         Write-Log 'play' "浏览器播放 $($row.token)（第 $($row.play_count) 次）"
-        return @{ ok = $true; plays = $row.play_count; last_play = $row.last_play; file = $file }
+        return @{ ok = $true; plays = $row.play_count; last_play = $row.last_play; file = $file; name = [System.IO.Path]::GetFileName($file) }
     }
     try {
         if ($Reveal) {

@@ -322,6 +322,7 @@
       <div class="actions">
         <button class="ghost" id="lbFav">☆ 收藏</button>
         <button class="ghost" id="lbPlay">本地播放器</button>
+        <button class="ghost" id="lbPip" disabled title="画中画：切出去也能继续看">画中画</button>
         <button class="ghost" id="lbReveal">定位</button>
         <button class="ghost" id="lbCopy">复制链接</button>
         <button class="ghost" id="lbCopyToken">复制 token</button>
@@ -339,14 +340,19 @@
 <!-- ===== 抽卡（与预览同一套布局） ===== -->
 <div class="lightbox" id="gacha">
   <div class="box">
-    <img id="gImg" alt="">
+    <div class="lbMedia" id="gMedia">
+      <img id="gImg" alt="" title="点击用浏览器播放">
+      <video id="gVideo" controls playsinline preload="metadata" hidden></video>
+      <button class="lbPlayOverlay" id="gPlayOverlay" title="浏览器内播放">▶</button>
+    </div>
     <div class="meta">
       <h3 id="gTok">–</h3>
       <div class="big mstats" id="gInfo"></div>
 
       <div class="actions">
         <button id="gFav">★ 收藏</button>
-        <button id="gPlay">▶ 播放</button>
+        <button id="gPlay">本地播放器</button>
+        <button class="ghost" id="gPip" disabled title="画中画：切出去也能继续看">画中画</button>
         <button class="ghost" id="gReveal">定位</button>
         <button class="ghost" id="gCopy">复制链接</button>
         <button class="ghost" id="gOpen">站点</button>

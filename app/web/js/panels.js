@@ -58,10 +58,103 @@ function loadCover(img, box, token) {
   if (img.complete && img.naturalWidth) fitMedia(img, box);
 }
 
-/* ================= 灯箱（预览 + 浏览器内播放） ================= */
-let lbList = [];      // 当前筛选结果里的 token 顺序，用于 ←/→ 切换
+/* ================= 播放器（预览灯箱 / 抽卡共用） ================= */
+let lbList = [];      // 当前筛选结果里的 token 顺序，用于 Ctrl+←/→ 切换
 let lbIdx = -1;
 let lbPlaying = false;
+let gPlaying = false;
+
+const PLAYERS = {
+  lb: { img: '#lbImg', video: '#lbVideo', overlay: '#lbPlayOverlay', pip: '#lbPip' },
+  g: { img: '#gImg', video: '#gVideo', overlay: '#gPlayOverlay', pip: '#gPip' }
+};
+
+const isPip = v => !!v && document.pictureInPictureElement === v;
+
+function stopPlayer(key) {
+  const ctx = PLAYERS[key];
+  const v = $(ctx.video);
+  if (key === 'lb') lbPlaying = false; else gPlaying = false;
+  if (!v) return;
+  if (isPip(v)) { try { document.exitPictureInPicture(); } catch { } }
+  try { v.pause(); } catch { }
+  v.hidden = true;
+  v.removeAttribute('src');
+  try { v.load(); } catch { }
+  const ov = $(ctx.overlay);
+  if (ov) ov.hidden = false;
+  const pip = $(ctx.pip);
+  if (pip) pip.disabled = true;
+}
+
+function playToken(key, tk, opts = {}) {
+  const ctx = PLAYERS[key];
+  const row = state.ROWS.find(x => x.token === tk);
+  if (!row || !row.file_name) {
+    if (!opts.quiet) toast('这条还没下载，先下载再播放', 3000);
+    return false;
+  }
+  const m = state.MEDIA;
+  if (!m || !m.base) {
+    toast('媒体服务没有启动：用 start.cmd -Restart 重启控制台后重试', 5000);
+    return false;
+  }
+  const v = $(ctx.video);
+  if (!v) return false;
+  // 视频绝对定位盖在封面上（尺寸跟封面一致），所以不用改封面/容器的尺寸
+  v.hidden = false;
+  const ov = $(ctx.overlay);
+  if (ov) ov.hidden = true;
+  const pip = $(ctx.pip);
+  if (pip) pip.disabled = false;
+  v.onerror = () => {
+    toast('浏览器播不了这个文件，试试「本地播放器」', 5000);
+    v.hidden = true;
+    if (ov) ov.hidden = false;
+    if (key === 'lb') lbPlaying = false; else gPlaying = false;
+  };
+  v.src = `${m.base}/${encodeURIComponent(tk)}.mp4?k=${encodeURIComponent(m.key)}`;
+  const p = v.play();
+  if (p && p.catch) p.catch(() => { });
+  if (key === 'lb') lbPlaying = true; else gPlaying = true;
+  // 记一次播放（浏览器内播放，不打开系统播放器）
+  api('/api/play', { token: tk, count: true }).then(r => {
+    if (!r || !r.ok) return;
+    const row2 = state.ROWS.find(x => x.token === tk);
+    if (row2) { row2.play_count = r.plays; row2.last_play = r.last_play; }
+  }).catch(() => { });
+  return true;
+}
+
+function togglePlay(key, tk) {
+  const v = $(PLAYERS[key].video);
+  if (!v) return;
+  if (v.hidden) { playToken(key, tk); return; }
+  if (v.paused) { const p = v.play(); if (p && p.catch) p.catch(() => { }); }
+  else { try { v.pause(); } catch { } }
+}
+
+async function togglePip(key) {
+  const v = $(PLAYERS[key].video);
+  if (!v) return;
+  try {
+    if (isPip(v)) { await document.exitPictureInPicture(); return; }
+    if (!document.pictureInPictureEnabled || !v.requestPictureInPicture) {
+      toast('这个浏览器不支持画中画', 3000);
+      return;
+    }
+    if (v.hidden) { toast('先播放再开画中画', 2500); return; }
+    await v.requestPictureInPicture();
+  } catch (e) {
+    toast('画中画失败：' + (e.message || '浏览器不支持'), 4000);
+  }
+}
+
+function toggleFullscreen(v) {
+  if (!v || v.hidden) return;
+  if (document.fullscreenElement) { document.exitFullscreen().catch(() => { }); return; }
+  if (v.requestFullscreen) v.requestFullscreen().catch(() => { toast('全屏失败', 3000); });
+}
 
 function lbPaint(tk) {
   const r = state.ROWS.find(x => x.token === tk);
@@ -80,64 +173,18 @@ function lbPaint(tk) {
 
   // 没下载的条目没有可播文件：隐藏播放入口，避免点了报错
   const canPlay = !!r.file_name;
-  const img = $('#lbImg'), ov = $('#lbPlayOverlay'), ext = $('#lbPlay');
+  const img = $('#lbImg'), ov = $('#lbPlayOverlay'), ext = $('#lbPlay'), pip = $('#lbPip');
   if (ov) ov.hidden = !canPlay;
+  if (pip) pip.disabled = true;   // 播放后才允许画中画
   if (img) {
     img.classList.toggle('canplay', canPlay);
-    img.title = canPlay ? '点击用浏览器播放' : '这条还没下载，先下载再播放';
+    img.title = canPlay ? '点击用浏览器播放（空格播放/暂停，F 全屏）' : '这条还没下载，先下载再播放';
   }
   if (ext) {
     ext.disabled = !canPlay;
     ext.textContent = canPlay ? '本地播放器' : '未下载';
   }
   return true;
-}
-
-function lbStopVideo() {
-  const v = $('#lbVideo');
-  if (!v) return;
-  lbPlaying = false;
-  try { v.pause(); } catch { }
-  v.hidden = true;
-  v.removeAttribute('src');
-  try { v.load(); } catch { }
-  const ov = $('#lbPlayOverlay');
-  if (ov) ov.hidden = false;
-}
-
-function lbPlayVideo(tk) {
-  const row = state.ROWS.find(x => x.token === tk);
-  if (!row || !row.file_name) {
-    toast('这条还没下载，先下载再播放', 3000);
-    return;
-  }
-  const m = state.MEDIA;
-  if (!m || !m.base) {
-    toast('媒体服务没有启动：用 start.cmd -Restart 重启控制台后重试', 5000);
-    return;
-  }
-  const v = $('#lbVideo');
-  if (!v) return;
-  // 视频绝对定位盖在封面上（尺寸跟封面一致），所以不用改封面/容器的尺寸
-  v.hidden = false;
-  const ov = $('#lbPlayOverlay');
-  if (ov) ov.hidden = true;
-  v.onerror = () => {
-    toast('浏览器播不了这个文件，试试「本地播放器」', 5000);
-    v.hidden = true;
-    if (ov) ov.hidden = false;
-    lbPlaying = false;
-  };
-  v.src = `${m.base}/${encodeURIComponent(tk)}.mp4?k=${encodeURIComponent(m.key)}`;
-  const p = v.play();
-  if (p && p.catch) p.catch(() => { });
-  lbPlaying = true;
-  // 记一次播放（浏览器内播放，不打开系统播放器）
-  api('/api/play', { token: tk, count: true }).then(r => {
-    if (!r || !r.ok) return;
-    const row2 = state.ROWS.find(x => x.token === tk);
-    if (row2) { row2.play_count = r.plays; row2.last_play = r.last_play; }
-  }).catch(() => { });
 }
 
 export function openLightbox(tk, opts = {}) {
@@ -150,11 +197,11 @@ export function openLightbox(tk, opts = {}) {
   lbList = list;
   lbIdx = lbList.indexOf(tk);
   lbPlaying = false;
-  lbStopVideo();
+  stopPlayer('lb');
   lbPaint(tk);
   $('#lightbox').classList.add('on');
   // 从下载队列进来：直接开播（预览封面 + 视频立即播放）
-  if (opts.autoplay && r.file_name) lbPlayVideo(tk);
+  if (opts.autoplay && r.file_name) playToken('lb', tk);
 }
 
 export function navLightbox(delta) {
@@ -162,14 +209,17 @@ export function navLightbox(delta) {
   lbIdx = (lbIdx + delta + lbList.length) % lbList.length;
   const tk = lbList[lbIdx];
   const wasPlaying = lbPlaying;
-  lbStopVideo();
+  stopPlayer('lb');
   if (!lbPaint(tk)) return;
   const target = state.ROWS.find(x => x.token === tk);
-  if (wasPlaying && target && target.file_name) lbPlayVideo(tk);
+  if (wasPlaying && target && target.file_name) playToken('lb', tk, { quiet: true });
 }
 
 const closeLightbox = () => {
-  lbStopVideo();
+  const v = $('#lbVideo');
+  // 画中画里还在播：关掉灯箱但别停视频，让画中画继续
+  if (isPip(v)) { lbPlaying = false; }
+  else stopPlayer('lb');
   $('#lightbox').classList.remove('on');
   state.LB_TOKEN = null;
 };
@@ -190,8 +240,8 @@ function renderGRate(v) {
   const el = $('#gRate');
   if (el) el.innerHTML = starsInner(v);
   $('#gRateHint').textContent = v > 0
-    ? `${v} 星 · 再点同一颗可清除；按 1–5 改分，R 再抽，Esc 关闭`
-    : '点星星打分，或按 1–5；R 再抽，Esc 关闭';
+    ? `${v} 星 · 再点同一颗可清除；按 1–5 改分，空格播放/暂停，F 全屏，R 再抽，Esc 关闭`
+    : '点星星打分，或按 1–5；空格播放/暂停，F 全屏，R 再抽，Esc 关闭';
 }
 
 export function drawCard() {
@@ -200,7 +250,12 @@ export function drawCard() {
   const r = pickWeighted(pool);
   state.GACHA_TOKEN = r.token;
 
-  loadCover($('#gImg'), boxOf('#gacha'), r.token);
+  stopPlayer('g');
+  const box = boxOf('#gacha');
+  box.classList.remove('nocover');
+  loadCover($('#gImg'), box, r.token);
+  $('#gPlayOverlay').hidden = false;
+  $('#gPip').disabled = true;
   $('#gTok').textContent = r.token;
   $('#gInfo').innerHTML = metaRows(r, {
     ratingHtml: '<span class="rt" id="gRate"></span>',
@@ -222,6 +277,13 @@ async function rateGacha(v) {
   toast(val ? `已打 ${val} 星` : '已清除评分');
 }
 
+const closeGacha = () => {
+  const v = $('#gVideo');
+  if (isPip(v)) { gPlaying = false; }
+  else stopPlayer('g');
+  $('#gacha').classList.remove('on');
+};
+
 /* ================= SSE ================= */
 export function connectSse() {
   try {
@@ -240,12 +302,22 @@ export function initPanels() {
   /* 灯箱 */
   $('#lbClose').onclick = closeLightbox;
   $('#lightbox').onclick = e => { if (e.target.id === 'lightbox') closeLightbox(); };
-  // 点封面 / 播放按钮：原地切到浏览器内播放（没下载的条目直接忽略）
-  $('#lbImg').onclick = () => {
+  // 点封面/播放浮层/空白处：原地切到浏览器内播放（没下载的条目直接忽略；视频控件区域除外）
+  $('#lbImg').onclick = e => {
+    e.stopPropagation();
     const r = state.ROWS.find(x => x.token === state.LB_TOKEN);
-    if (r && r.file_name) lbPlayVideo(state.LB_TOKEN);
+    if (r && r.file_name) playToken('lb', state.LB_TOKEN);
   };
-  $('#lbPlayOverlay').onclick = () => { if (state.LB_TOKEN) lbPlayVideo(state.LB_TOKEN); };
+  $('#lbPlayOverlay').onclick = e => {
+    e.stopPropagation();
+    if (state.LB_TOKEN) playToken('lb', state.LB_TOKEN);
+  };
+  $('#lbMedia').onclick = e => {
+    if (e.target.closest('video')) return;
+    const r = state.ROWS.find(x => x.token === state.LB_TOKEN);
+    if (r && r.file_name) playToken('lb', state.LB_TOKEN);
+  };
+  $('#lbPip').onclick = () => togglePip('lb');
   $('#lbPrev').onclick = () => navLightbox(-1);
   $('#lbNext').onclick = () => navLightbox(1);
   $('#lbPlay').onclick = () => { if (state.LB_TOKEN) doPlay(state.LB_TOKEN); };
@@ -269,8 +341,15 @@ export function initPanels() {
   /* 抽卡 */
   $('#btnGacha').onclick = drawCard;
   $('#gAgain').onclick = drawCard;
-  $('#gClose').onclick = () => $('#gacha').classList.remove('on');
-  $('#gacha').onclick = e => { if (e.target.id === 'gacha') $('#gacha').classList.remove('on'); };
+  $('#gClose').onclick = closeGacha;
+  $('#gacha').onclick = e => { if (e.target.id === 'gacha') closeGacha(); };
+  $('#gImg').onclick = e => { e.stopPropagation(); if (state.GACHA_TOKEN) playToken('g', state.GACHA_TOKEN); };
+  $('#gPlayOverlay').onclick = e => { e.stopPropagation(); if (state.GACHA_TOKEN) playToken('g', state.GACHA_TOKEN); };
+  $('#gMedia').onclick = e => {
+    if (e.target.closest('video')) return;
+    if (state.GACHA_TOKEN) playToken('g', state.GACHA_TOKEN);
+  };
+  $('#gPip').onclick = () => togglePip('g');
   $('#gPlay').onclick = () => { if (state.GACHA_TOKEN) doPlay(state.GACHA_TOKEN); };
   $('#gReveal').onclick = async () => {
     if (!state.GACHA_TOKEN) return;
@@ -321,11 +400,24 @@ export function initPanels() {
       return;
     }
     if (gachaOpen && /^[1-5]$/.test(e.key) && !typing) { e.preventDefault(); rateGacha(parseInt(e.key)); return; }
+    // 播放快捷键：空格 播放/暂停，F 全屏，M 静音（灯箱和抽卡都生效）
+    if ((lbOpen || gachaOpen) && !typing) {
+      const pkey = gachaOpen ? 'g' : 'lb';
+      const ptoken = gachaOpen ? state.GACHA_TOKEN : state.LB_TOKEN;
+      if (e.code === 'Space' || e.key === ' ') { e.preventDefault(); togglePlay(pkey, ptoken); return; }
+      if (e.key === 'f' || e.key === 'F') { e.preventDefault(); toggleFullscreen($(PLAYERS[pkey].video)); return; }
+      if (e.key === 'm' || e.key === 'M') {
+        e.preventDefault();
+        const v = $(PLAYERS[pkey].video);
+        if (v && !v.hidden) { v.muted = !v.muted; toast(v.muted ? '已静音' : '已取消静音', 1500); }
+        return;
+      }
+    }
     if (e.key === '/' && !typing) { e.preventDefault(); $('#q').focus(); return; }
     if ((e.key === 'r' || e.key === 'R') && !typing) { e.preventDefault(); drawCard(); return; }
     if (e.key === 'Escape') {
       if ($('#scrapeModal').classList.contains('on')) $('#scrapeModal').classList.remove('on');
-      else if ($('#gacha').classList.contains('on')) $('#gacha').classList.remove('on');
+      else if ($('#gacha').classList.contains('on')) closeGacha();
       else if ($('#lightbox').classList.contains('on')) closeLightbox();
       else if ($('#dlDrawer').classList.contains('on')) $('#dlDrawer').classList.remove('on');
       else if ($('#drawer').classList.contains('on')) $('#drawer').classList.remove('on');

@@ -101,6 +101,116 @@ function paintDownload(dl) {
   }).join('');
 }
 
+/* ================= 下载队列抽屉 ================= */
+const DL_LABEL = {
+  downloading: '下载中', queued: '排队中', paused: '已暂停',
+  done: '已完成', failed: '失败', dead: '源失效', cancelled: '已取消'
+};
+const dlMb = n => ((+n || 0) / 1048576).toFixed(1);
+
+function dlItemHtml(i) {
+  const bytes = +i.bytes || 0;
+  const expected = +i.expected || 0;
+  const pct = expected
+    ? Math.max(0, Math.min(100, Math.round(100 * bytes / expected)))
+    : (i.state === 'done' ? 100 : 0);
+  const size = expected ? `${dlMb(bytes)} / ${dlMb(expected)} MB` : `${dlMb(bytes)} MB`;
+  const right = i.state === 'downloading' ? `${(+(i.speed) || 0).toFixed(2)} MB/s` : (DL_LABEL[i.state] || i.state);
+  const canCancel = ['downloading', 'queued', 'paused'].includes(i.state);
+  const cls = i.state === 'paused' ? 'paused' : i.state === 'done' ? 'done'
+    : (i.state === 'failed' || i.state === 'dead') ? 'failed' : '';
+  return `<div class="dq-item ${cls}">
+    <div class="dq-top">
+      <span class="tk mono" title="${i.token}">${i.token}</span>
+      <span class="sub">${size}</span>
+      <span class="sub">${right}</span>
+      ${canCancel ? `<button class="ghost rowbtn" data-dlq-cancel="${i.token}">取消</button>` : ''}
+    </div>
+    <div class="dq-bar"><i style="width:${pct}%"></i></div>
+  </div>`;
+}
+
+function dlList(el, items, emptyText) {
+  if (!el) return;
+  el.innerHTML = items.length ? items.map(dlItemHtml).join('') : `<div class="dq-empty">${emptyText}</div>`;
+}
+
+function renderDownloadQueue(dl) {
+  dl = dl || {};
+  const items = Array.isArray(dl.items) ? dl.items : [];
+  const active = items.filter(i => ['downloading', 'queued', 'paused'].includes(i.state));
+  const done = items.filter(i => i.state === 'done');
+  const failed = items.filter(i => ['failed', 'dead', 'cancelled'].includes(i.state));
+  const downloading = active.filter(i => i.state === 'downloading').length;
+  const queued = active.filter(i => i.state === 'queued').length;
+  const pausedN = active.filter(i => i.state === 'paused').length;
+
+  const badge = $('#dlBadge');
+  if (badge) {
+    badge.textContent = String(active.length);
+    badge.hidden = active.length === 0;
+  }
+  const pauseBtn = $('#dlPause');
+  if (pauseBtn) {
+    pauseBtn.disabled = !dl.running;
+    pauseBtn.dataset.on = dl.paused ? '1' : '';
+    pauseBtn.textContent = dl.paused ? '▶ 继续' : '⏸ 暂停';
+  }
+  const head = $('#dlHead');
+  if (!head) return;
+  head.textContent = (!dl.running && !items.length)
+    ? '没有下载任务'
+    : `${dl.running ? (dl.paused ? '已暂停' : '进行中') : '已结束'} · ${dl.done || 0}/${dl.total || 0} 完成` +
+      (dl.speed ? ` · ${dl.speed} MB/s` : '');
+  $('#dlActiveInfo').textContent = active.length
+    ? `下载中 ${downloading} · 排队 ${queued}${pausedN ? ` · 已暂停 ${pausedN}` : ''}`
+    : '当前没有排队或下载中的条目';
+  dlList($('#dlActiveList'), active, '当前没有排队或下载中的条目');
+  $('#dlDoneInfo').textContent = done.length ? `（${done.length} 条）` : '';
+  dlList($('#dlDoneList'), done, '还没有完成的条目');
+  const failHead = $('#dlFailHead');
+  if (failHead) failHead.hidden = failed.length === 0;
+  $('#dlFailInfo').textContent = failed.length ? `（${failed.length} 条）` : '';
+  dlList($('#dlFailList'), failed, '没有失败条目');
+}
+
+async function toggleDownloadPause() {
+  const paused = !!(state.DOWNLOAD && state.DOWNLOAD.paused);
+  try {
+    const r = await api('/api/download/pause', { on: !paused });
+    if (!r.ok) return toast(r.error || '操作失败', 4000);
+    toast(r.paused ? '已暂停下载（.part 保留，可继续）' : '已继续下载', 3000);
+  } catch (e) { toast('请求失败：' + e.message, 4000); }
+  load();
+}
+
+async function onDlQueueCancel(e) {
+  const btn = e.target.closest('[data-dlq-cancel]');
+  if (!btn) return;
+  const tk = btn.dataset.dlqCancel;
+  try {
+    const r = await api('/api/download/cancel', { tokens: [tk] });
+    toast(r.ok ? `已取消 ${tk}` : (r.error || '取消失败'), 3000);
+  } catch (err) { toast('请求失败', 3000); }
+  load();
+}
+
+function initDownloadQueue() {
+  const openDrawer = () => {
+    renderDownloadQueue(state.DOWNLOAD || {});
+    $('#dlDrawer').classList.add('on');
+  };
+  $('#btnDlQueue').onclick = openDrawer;
+  // 进度条本身也可以点开队列（✕ 按钮除外）
+  $('#prog').addEventListener('click', e => { if (!e.target.closest('button')) openDrawer(); });
+  $('#dlClose').onclick = () => $('#dlDrawer').classList.remove('on');
+  $('#dlDrawer').onclick = e => { if (e.target.id === 'dlDrawer') $('#dlDrawer').classList.remove('on'); };
+  $('#dlPause').onclick = toggleDownloadPause;
+  $('#dlCancelAll').onclick = cancelAllDownloads;
+  $('#dlActiveList').addEventListener('click', onDlQueueCancel);
+  $('#dlFailList').addEventListener('click', onDlQueueCancel);
+}
+
 function paintProject(ws) {
   const el = $('#wsInfo');
   if (!el) return;
@@ -156,6 +266,7 @@ async function load() {
     paintCovers(S);
     paintProject(_WS);
     paintDownload(s.download);
+    renderDownloadQueue(s.download || {});
 
     $('#logbox').innerHTML = (s.log || []).slice().reverse()
       .map(l => `<div><span class="t">${l.time}</span> [${l.kind}] ${l.message}</div>`).join('')
@@ -446,6 +557,7 @@ initPanels();
 initControls();
 initToolbar();
 initBulk();
+initDownloadQueue();
 
 onEvent('reload', load);
 onEvent('play', tk => doPlay(tk));

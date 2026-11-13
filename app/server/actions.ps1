@@ -631,15 +631,16 @@ function Stop-AllDownloadProcesses {
 }
 
 function Get-DownloadInfo {
-    <#  返回下载器的当前状态：进程是否活着 + 进度文件内容  #>
+    <#  返回下载器的当前状态：进程是否活着 + 进度文件内容 + 是否暂停  #>
     param([switch]$Fresh)
-    $info = [ordered]@{ running = $false; phase = ''; total = 0; done = 0; failed = 0; bytes = 0; speed = 0; active = @(); errors = @() }
+    $info = [ordered]@{ running = $false; paused = $false; phase = ''; total = 0; done = 0; failed = 0; queued = 0; pausedCount = 0; bytes = 0; speed = 0; active = @(); errors = @() }
     if (Test-Path $DlProgress) {
         try {
             $p = Get-Content $DlProgress -Raw -Encoding UTF8 | ConvertFrom-Json
-            foreach ($k in @('phase', 'total', 'done', 'failed', 'bytes', 'speed')) {
+            foreach ($k in @('phase', 'total', 'done', 'failed', 'queued', 'pausedCount', 'bytes', 'speed')) {
                 if ($null -ne $p.$k) { $info[$k] = $p.$k }
             }
+            if ($null -ne $p.paused) { $info.paused = [bool]$p.paused }
             if ($p.active) { $info.active = @($p.active) }
             if ($p.errors) { $info.errors = @($p.errors) }
             if ($p.items) { $info.items = @($p.items) }
@@ -718,11 +719,13 @@ function Start-Download {
     $argList = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', (ConvertTo-QuotedArg $DlScript),
         '-QueueFile', (ConvertTo-QuotedArg $DlQueue), '-Dir', (ConvertTo-QuotedArg $dir),
         '-Concurrent', "$conc", '-ProgressFile', (ConvertTo-QuotedArg $DlProgress),
-        '-CancelFile', (ConvertTo-QuotedArg $DlCancel))
+        '-CancelFile', (ConvertTo-QuotedArg $DlCancel), '-PauseFile', (ConvertTo-QuotedArg $DlPause))
     if ($proxy) { $argList += @('-Proxy', (ConvertTo-QuotedArg $proxy)) }
 
     Remove-Item $DlProgress -Force -ErrorAction SilentlyContinue
     Remove-Item $DlCancel -Force -ErrorAction SilentlyContinue
+    # 上一轮可能停在「暂停」状态：新任务从运行态开始
+    Remove-Item $DlPause -Force -ErrorAction SilentlyContinue
     # 队列里的条目立刻标成 downloading，UI 与筛选都能看到
     foreach ($q in $queue) {
         $row = $State.Ledger | Where-Object { $_.token -eq $q.token } | Select-Object -First 1
@@ -769,6 +772,26 @@ function Cancel-DownloadItems {
     return @{ ok = $true; count = $list.Count }
 }
 
+function Set-DownloadPause {
+    <#  暂停/继续内置下载器：写一个标记文件，下载器下一轮 poll 生效。
+        暂停会杀掉正在跑的 curl 但保留 .part，继续时用 curl -C - 续传；
+        下载器进程本身不退出，所以队列、进度、并发位都还在。  #>
+    param([bool]$On)
+
+    $info = Get-DownloadInfo -Fresh
+    if (-not $info.running) { return @{ ok = $false; error = '没有正在进行的下载' } }
+
+    if ($On) {
+        Set-Content -Path $DlPause -Value '1' -Encoding ASCII -Force
+    } else {
+        Remove-Item $DlPause -Force -ErrorAction SilentlyContinue
+    }
+    if ($State.Download) { $State.Download.Paused = $On }
+    Touch-State
+    Write-Log 'download' $(if ($On) { '下载已暂停（保留 .part，可继续）' } else { '下载已继续' })
+    return @{ ok = $true; paused = $On }
+}
+
 function Stop-Download {
     <#  停止所有下载：既结束跟踪的下载器，也清掉服务重启后遗留的孤儿 curl  #>
     $killed = 0
@@ -781,6 +804,7 @@ function Stop-Download {
     $runStarted = if ($State.Download) { $State.Download.Started } else { '' }
     $State.Download = $null
     Reset-DownloadProbe
+    Remove-Item $DlPause -Force -ErrorAction SilentlyContinue
     [void](Apply-DeadFromProgress -RunStarted $runStarted)
     $reverted = Revert-Downloading
     Touch-State
@@ -809,6 +833,7 @@ function Step-Download {
     $count = $State.Download.Count
     $runStarted = $State.Download.Started
     $State.Download = $null
+    Remove-Item $DlPause -Force -ErrorAction SilentlyContinue
     [void](Apply-DeadFromProgress -RunStarted $runStarted)
     $reverted = Revert-Downloading -OnlyIfMissing
     try { [void](Repair-PartFiles) } catch { }
@@ -892,6 +917,8 @@ function Step-DownloadGuard {
     <#  兜底：没有任何下载进程，却还有 downloading 状态的行 → 说明是上次失败/崩溃留下的，回退  #>
     if ($State.Download -and $State.Download.Pid) { return }
     if ((Get-DownloadProcesses).Count -gt 0) { return }
+    # 进程已经没了还留着暂停标记 → 清掉，避免下次误判成「暂停中」
+    if (Test-Path $DlPause) { Remove-Item $DlPause -Force -ErrorAction SilentlyContinue }
     $n = Revert-Downloading
     if ($n -gt 0) { Write-Log 'download' "没有下载进程，回退 $n 条「下载中」状态" }
 }

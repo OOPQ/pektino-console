@@ -110,6 +110,7 @@ $DlScript = Join-Path $Root 'cli\download.ps1'
 $DlQueue = Join-Path $WS.DataDir '.queue.json'
 $DlProgress = Join-Path $WS.DataDir 'download.json'
 $DlCancel = Join-Path $WS.DataDir '.dl-cancel.json'
+$DlPause = Join-Path $WS.DataDir '.dl-pause'
 
 # ---------- 内存态 ----------
 # 配置只管代理/并发；内容目录固定在项目里（$WS.Content），不再可配置
@@ -423,6 +424,11 @@ function Handle-Request {
             }
             '/api/download/repair' {
                 Send-Json -Stream $Stream -Object ([pscustomobject](Repair-PartFiles))
+                return
+            }
+            '/api/download/pause' {
+                $on = [bool]$body.on
+                Send-Json -Stream $Stream -Object (Set-DownloadPause -On $on)
                 return
             }
             '/api/scrape' {

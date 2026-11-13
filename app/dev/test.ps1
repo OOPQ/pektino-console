@@ -197,6 +197,18 @@ try {
         foreach ($k in 'root', 'media', 'videoCount', 'exists') { if ($null -eq $r.project.$k) { throw "缺少 $k" } }
         "root=$($r.project.root) videoCount=$($r.project.videoCount)"
     }
+    Test-Item 'GET /api/download（含 paused 字段）' {
+        $r = Invoke-RestMethod "$base/api/download" -TimeoutSec 10
+        if (-not $r.ok) { throw 'ok!=true' }
+        if ($null -eq $r.download.paused) { throw '缺少 paused 字段' }
+        "running=$($r.download.running) paused=$($r.download.paused)"
+    }
+    Test-Item 'POST /api/download/pause 空闲时 → ok=false' {
+        $r = Invoke-RestMethod "$base/api/download/pause" -Method Post -ContentType 'application/json' `
+            -Body (@{ on = $true } | ConvertTo-Json) -TimeoutSec 10
+        if ($r.ok -ne $false) { throw '没有下载任务时应当返回 ok=false' }
+        "ok=false error=$($r.error)"
+    }
     Test-Item 'GET /api/events（SSE 握手）' {
         $curl = (Get-Command curl.exe -ErrorAction SilentlyContinue).Source
         if (-not $curl) { $curl = 'C:\Windows\System32\curl.exe' }

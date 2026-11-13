@@ -18,6 +18,10 @@ param(
     [int]$Concurrent = 3,
     [Parameter(Mandatory = $true)][string]$ProgressFile,
     [string]$CancelFile = '',
+    # 暂停标记文件：内容为 1 时暂停（不启动新条目，正在跑的杀掉并保留 .part）
+    [string]$PauseFile = '',
+    # 显式不走代理（默认跟随 -Proxy / 系统代理）
+    [switch]$NoProxy,
     [int]$Retries = 3
 )
 
@@ -64,7 +68,7 @@ try {
 if (-not $queue.Count) { Write-Error '队列为空'; exit 2 }
 if (-not (Test-Path $Dir)) { New-Item -ItemType Directory -Path $Dir -Force | Out-Null }
 
-$proxyArg = Get-ProxyArg -p $Proxy
+$proxyArg = if ($NoProxy) { '' } else { Get-ProxyArg -p $Proxy }
 
 # ---------------- 状态表 ----------------
 $states = @{}   # token -> @{ state; bytes; expected; error }
@@ -194,6 +198,17 @@ $jobs = @{}          # token -> @{ proc; part; final; log; expected; lastBytes; 
 $pending = New-Object System.Collections.Queue
 foreach ($it in $queue) { $pending.Enqueue($it) }
 
+function Test-Paused {
+    <#  暂停标记由控制台写：文件存在且内容为 1 就暂停。
+        进程不退出，继续时不用重起，进度和队列都还在。  #>
+    if (-not $PauseFile) { return $false }
+    try {
+        if (-not (Test-Path -LiteralPath $PauseFile)) { return $false }
+        $v = Get-Content -LiteralPath $PauseFile -Raw -ErrorAction Stop
+        return ([string]$v).Trim() -eq '1'
+    } catch { return $false }
+}
+
 function Read-CancelTokens {
     if (-not $CancelFile -or -not (Test-Path $CancelFile)) { return @() }
     try {
@@ -205,8 +220,22 @@ function Read-CancelTokens {
     } catch { return @() }
 }
 
+$paused = $false
 try {
-    while ($pending.Count -gt 0 -or $jobs.Count -gt 0) {
+    while ($pending.Count -gt 0 -or $jobs.Count -gt 0 -or $paused) {
+        $paused = Test-Paused
+
+        # ---- 暂停：杀掉正在跑的 curl，保留 .part，记成 paused（继续时 -C - 续传）----
+        if ($paused) {
+            foreach ($tk in @($jobs.Keys)) {
+                $j = $jobs[$tk]
+                try { & taskkill.exe /PID $j.proc.Id /T /F 2>&1 | Out-Null } catch { }
+                try { $j.proc.Kill() } catch { }
+                $states[$tk].state = 'paused'
+                $jobs.Remove($tk)
+            }
+        }
+
         # 取消请求
         foreach ($tk in (Read-CancelTokens)) {
             if ($jobs.ContainsKey($tk)) {
@@ -215,17 +244,29 @@ try {
                 try { $j.proc.Kill() } catch { }
                 $states[$tk].state = 'cancelled'
                 $jobs.Remove($tk)
-            } elseif ($states.ContainsKey($tk) -and $states[$tk].state -eq 'queued') {
+            } elseif ($states.ContainsKey($tk) -and ($states[$tk].state -eq 'queued' -or $states[$tk].state -eq 'paused')) {
                 $states[$tk].state = 'cancelled'
-                # 从待跑队列里剔除
+            }
+            # 不管原来是什么状态，都从待跑队列里剔除
+            if ($states.ContainsKey($tk) -and $states[$tk].state -eq 'cancelled') {
                 $keep = @()
                 while ($pending.Count -gt 0) { $x = $pending.Dequeue(); if ([string]$x.token -ne $tk) { $keep += $x } }
                 foreach ($x in $keep) { $pending.Enqueue($x) }
             }
         }
 
+        # ---- 继续：paused → queued，重新排队（.part 还在，curl 会续传）----
+        if (-not $paused) {
+            foreach ($tk in @($states.Keys)) {
+                if ($states[$tk].state -eq 'paused') {
+                    $states[$tk].state = 'queued'
+                    if ($queueMap.ContainsKey($tk)) { $pending.Enqueue($queueMap[$tk]) }
+                }
+            }
+        }
+
         # 补满并发：先把这一批的远端大小并行问出来，再一起启动，避免逐条 HEAD 拖慢
-        $slots = $Concurrent - $jobs.Count
+        $slots = if ($paused) { 0 } else { $Concurrent - $jobs.Count }
         if ($slots -gt 0 -and $pending.Count -gt 0) {
             $batch = @()
             while ($batch.Count -lt $slots -and $pending.Count -gt 0) {
@@ -331,6 +372,7 @@ try {
 
         # 汇总进度
         $bytes = 0; $speed = 0; $doneCount = 0; $failCount = 0; $active = @()
+        $pausedCount = 0; $queuedCount = 0
         foreach ($tk in $states.Keys) {
             $st = $states[$tk]
             $bytes += [int64]$st.bytes
@@ -338,16 +380,21 @@ try {
                 'done' { $doneCount++ }
                 'failed' { $failCount++ }
                 'downloading' { $active += $tk }
+                'paused' { $pausedCount++ }
+                'queued' { $queuedCount++ }
             }
         }
         foreach ($tk in $jobs.Keys) { $speed += $jobs[$tk].speed }
 
         Write-ProgressFile @{
             running   = $true
+            paused    = [bool]$paused
             phase     = 'download'
             total     = $queue.Count
             done      = $doneCount
             failed    = $failCount
+            queued    = $queuedCount
+            pausedCount = $pausedCount
             bytes     = $bytes
             speed     = [math]::Round($speed, 2)
             active    = @($active)
@@ -367,7 +414,7 @@ try {
         elseif ($states[$tk].state -eq 'failed') { $failCount++; $errs += @{ token = $tk; error = $states[$tk].error } }
     }
     Write-ProgressFile @{
-        running = $false; phase = 'done'; total = $queue.Count; done = $doneCount; failed = $failCount;
+        running = $false; paused = $false; phase = 'done'; total = $queue.Count; done = $doneCount; failed = $failCount;
         bytes = $bytes; speed = 0; errors = @($errs | Select-Object -Last 20); startedAt = $startAt;
         items = @($states.Keys | ForEach-Object { [pscustomobject]@{ token = $_; state = $states[$_].state; bytes = $states[$_].bytes; error = $states[$_].error } });
         finishedAt = (Get-Date).ToString('s')

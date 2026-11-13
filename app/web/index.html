@@ -99,6 +99,7 @@
   <button id="btnImport" title="扫描内容目录，把本站视频录入台账">本地入库</button>
   <span class="divider"></span>
   <button class="primary" id="btnDownload" title="用内置下载器直接下载（支持续传/并发）">下载待下载</button>
+  <button id="btnDlQueue" title="下载队列：进行中 / 已完成，可暂停继续">下载队列<span class="badge" id="dlBadge" hidden>0</span></button>
   <button id="btnSendNew">投递迅雷</button>
   <button id="btnPreview">预览 dry-run</button>
   <button id="btnGacha" title="从在盘条目里随机抽一个（快捷键 R）">🎲 抽一卡</button>
@@ -228,6 +229,26 @@
     <h3 style="margin-top:16px">日志</h3>
     <div class="logbox" id="logbox"><div>暂无日志</div></div>
     <div style="margin-top:14px" class="sub" id="diag">自检：–</div>
+  </div>
+</div>
+
+<!-- ===== 下载队列（独立抽屉：进行中 / 已完成 / 失败） ===== -->
+<div class="drawer" id="dlDrawer">
+  <div class="sheet">
+    <h3>下载队列</h3>
+    <div class="sub" id="dlHead" style="margin-bottom:12px">–</div>
+    <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
+      <button id="dlPause" disabled>⏸ 暂停</button>
+      <button class="ghost" id="dlCancelAll">全部取消</button>
+      <span class="spacer"></span>
+      <button class="ghost" id="dlClose">关闭</button>
+    </div>
+    <div class="sub" id="dlActiveInfo">–</div>
+    <div class="dq" id="dlActiveList"></div>
+    <h3 style="margin-top:16px">已完成 <span class="sub" id="dlDoneInfo"></span></h3>
+    <div class="dq" id="dlDoneList"></div>
+    <h3 style="margin-top:16px" id="dlFailHead" hidden>失败 <span class="sub" id="dlFailInfo"></span></h3>
+    <div class="dq" id="dlFailList"></div>
   </div>
 </div>
 

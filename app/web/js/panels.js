@@ -206,6 +206,7 @@ export function initPanels() {
     if (e.key === 'Escape') {
       if ($('#gacha').classList.contains('on')) $('#gacha').classList.remove('on');
       else if ($('#lightbox').classList.contains('on')) closeLightbox();
+      else if ($('#dlDrawer').classList.contains('on')) $('#dlDrawer').classList.remove('on');
       else if ($('#drawer').classList.contains('on')) $('#drawer').classList.remove('on');
       else if ($('#ctxmenu').classList.contains('on')) emit('close-ctx');
       else if (document.activeElement === $('#q')) emit('clear-query');

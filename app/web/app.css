@@ -218,3 +218,20 @@ td.playable:hover{color:#cfe6ff}
 .logbox div{padding:1px 0}
 .logbox .t{color:#5b6773}
 #banner{border-color:#7a2b2b;background:#2a1414;color:#ffd8d8;padding:8px 12px;border-radius:8px;margin-bottom:8px;display:none}
+
+/* ---------- 下载队列抽屉 ---------- */
+.badge{display:inline-block;min-width:18px;padding:0 5px;margin-left:5px;border-radius:9px;background:var(--acc);color:#04101f;font-size:11px;font-weight:700;line-height:18px;text-align:center;vertical-align:middle}
+.badge[hidden]{display:none}
+.dq{display:flex;flex-direction:column;gap:6px;margin-top:6px}
+.dq-item{background:var(--panel2);border:1px solid var(--line);border-radius:6px;padding:6px 8px}
+.dq-top{display:flex;gap:8px;align-items:center;font-size:12px}
+.dq-top .tk{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dq-top .sub{flex:none}
+.dq-bar{height:4px;background:#1d242e;border-radius:3px;margin-top:6px;overflow:hidden}
+.dq-bar i{display:block;height:100%;background:var(--acc);transition:width .3s}
+.dq-item.paused .dq-bar i{background:var(--warn)}
+.dq-item.done .dq-bar i{background:var(--ok)}
+.dq-item.failed .dq-bar i{background:var(--bad)}
+.dq-item .rowbtn{font-size:11px;padding:1px 6px}
+.dq-empty{color:var(--faint);font-size:12px;padding:2px 0}
+

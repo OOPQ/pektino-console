@@ -173,6 +173,10 @@ new ──投递/开始下载──▶ sent / downloading ──磁盘命中─�
 - 先写 `<token>.mp4.part`，大小等于远端 `Content-Length` 才改名成 `.mp4`
 - 并发 1–8（配置里存，默认 3）；代理留空时跟随注册表里的系统代理
 - 取消：控制台写取消文件，下载器下一轮 poll 时 kill 对应进程，`.part` 保留可续传
+- 暂停/继续：控制台写 `data\.dl-pause`（内容 `1`），下载器下一轮 poll 生效：
+  暂停时不再发起新条目、杀掉正在跑的 curl 并把状态记成 `paused`（`.part` 保留），
+  继续时 `paused → queued` 重新排队，`curl -C -` 从断点续传。
+  下载器进程在暂停期间**不退出**，所以队列、进度、并发位都还在。
 - 403/404/410 先用 1 字节 Range GET 复核，确认后标 `failed` 且不再重试；
   本地已有 `.mp4`/`.part` 的绝不判死
 
@@ -217,6 +221,7 @@ POST /api/import    {tokens?,threads}                                异步扫�
 POST /api/job/cancel                                                 取消当前抓取/导入
 POST /api/download  {tokens|status,limit,force}                      开始内置下载
 POST /api/download/cancel {tokens?}                                  取消单条/全部
+POST /api/download/pause {on}                                        暂停 / 继续（保留 .part）
 POST /api/download/repair                                            整理 .part
 POST /api/send      {tokens|status,dryRun,force}                     投迅雷（dryRun 只返回链接）
 POST /api/mark      {tokens,status}                                  改状态

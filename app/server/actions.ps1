@@ -684,21 +684,16 @@ function Get-DownloadInfo {
 }
 
 function Start-Download {
-    <#  把选中/待下载条目交给内置下载器（独立进程，支持续传与并发）  #>
+    <#
+      把选中/待下载条目交给内置下载器（独立进程，支持续传与并发）。
+      如果已经有下载器在跑：新条目**追加**到它的队列里（下载器每轮 poll 追加文件），
+      不再直接拒绝 —— 这就是「任务队列」语义。
+    #>
     param($Tokens, [string]$Status = 'new', [int]$Limit = 0, [switch]$Force)
 
-    if ($State.Job -and $State.Job.handle -and $State.Job.handle.State -eq 'Running') {
-        return @{ ok = $false; error = '抓取任务正在运行，等它结束再下载' }
-    }
+    # 抓取/入库是独立进程，不再阻塞下载（反过来 Start-Scrape 也只挡同类任务）
     # 先清掉可能残留的孤儿下载进程，否则会一直挡住新任务
     if (-not ($State.Download -and $State.Download.Pid)) { [void](Stop-AllDownloadProcesses) }
-    # 这里必须是新鲜结果：刚取消/刚结束的任务不能因为缓存被判成「还在跑」
-    $dlInfo = Get-DownloadInfo -Fresh
-    if ($dlInfo.running) {
-        $why = if ($dlInfo.paused) { '下载已暂停：先在「下载队列」点「继续」，或点「全部取消」' }
-               else { '已有一个下载任务在跑：等它结束，或在「下载队列」里取消' }
-        return @{ ok = $false; error = $why }
-    }
 
     # 必须和启动时同一份配置（数据目录下的 config.json），否则下载会落到旧路径
     $cfg = Read-Config -Root $Root -DataDir $WS.DataDir -DefaultContentDir $WS.Content
@@ -735,6 +730,27 @@ function Start-Download {
     }
 
     $queue = @($targets | ForEach-Object { [pscustomobject]@{ token = $_.token; url = $_.url } })
+
+    # 已有下载器在跑 → 把新条目追加进它的队列（下载器每轮 poll 追加文件），不另起进程
+    $dlInfo = Get-DownloadInfo -Fresh
+    if ($dlInfo.running) {
+        $inRun = @{}
+        if ($dlInfo.items) { foreach ($i in $dlInfo.items) { if ($i.token) { $inRun[[string]$i.token] = $true } } }
+        $add = @($queue | Where-Object { -not $inRun.ContainsKey([string]$_.token) })
+        if (-not $add.Count) {
+            return @{ ok = $true; appended = 0; count = 0; note = '这些条目已经在当前下载队列里' }
+        }
+        (ConvertTo-Json -InputObject $add -Depth 4) | Set-Content -Path $DlAdd -Encoding UTF8 -Force
+        foreach ($q in $add) {
+            $row = $State.Ledger | Where-Object { $_.token -eq $q.token } | Select-Object -First 1
+            if ($row -and -not $row.file_name) { $row.status = 'downloading' }
+        }
+        Save-Ledger -Rows $State.Ledger -Path $LedgerPath
+        Touch-State
+        Write-Log 'download' "追加 $($add.Count) 条到当前下载队列（共 $($dlInfo.total) 条）"
+        return @{ ok = $true; appended = $add.Count; count = $add.Count }
+    }
+
     (ConvertTo-Json -InputObject $queue -Depth 4) | Set-Content -Path $DlQueue -Encoding UTF8 -Force
 
     $conc = if ($cfg.concurrent) { [int]$cfg.concurrent } else { 3 }
@@ -745,11 +761,13 @@ function Start-Download {
     $argList = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', (ConvertTo-QuotedArg $DlScript),
         '-QueueFile', (ConvertTo-QuotedArg $DlQueue), '-Dir', (ConvertTo-QuotedArg $dir),
         '-Concurrent', "$conc", '-ProgressFile', (ConvertTo-QuotedArg $DlProgress),
-        '-CancelFile', (ConvertTo-QuotedArg $DlCancel), '-PauseFile', (ConvertTo-QuotedArg $DlPause))
+        '-CancelFile', (ConvertTo-QuotedArg $DlCancel), '-PauseFile', (ConvertTo-QuotedArg $DlPause),
+        '-AddFile', (ConvertTo-QuotedArg $DlAdd))
     if ($proxy) { $argList += @('-Proxy', (ConvertTo-QuotedArg $proxy)) }
 
     Remove-Item $DlProgress -Force -ErrorAction SilentlyContinue
     Remove-Item $DlCancel -Force -ErrorAction SilentlyContinue
+    Remove-Item $DlAdd -Force -ErrorAction SilentlyContinue
     # 上一轮可能停在「暂停」状态：新任务从运行态开始
     Remove-Item $DlPause -Force -ErrorAction SilentlyContinue
     # 队列里的条目立刻标成 downloading，UI 与筛选都能看到
@@ -833,6 +851,7 @@ function Stop-Download {
     $State.Download = $null
     Reset-DownloadProbe
     Remove-Item $DlPause -Force -ErrorAction SilentlyContinue
+    Remove-Item $DlAdd -Force -ErrorAction SilentlyContinue
     [void](Apply-DeadFromProgress -RunStarted $runStarted)
     $reverted = Revert-Downloading
     Touch-State
@@ -852,6 +871,7 @@ function Reset-DownloadState {
     $State.Download = $null
     Remove-Item $DlPause -Force -ErrorAction SilentlyContinue
     Remove-Item $DlCancel -Force -ErrorAction SilentlyContinue
+    Remove-Item $DlAdd -Force -ErrorAction SilentlyContinue
     Reset-DownloadProbe
     $reverted = Revert-Downloading
     Touch-State

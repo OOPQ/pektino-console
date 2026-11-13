@@ -129,6 +129,7 @@ $DlQueue = Join-Path $WS.DataDir '.queue.json'
 $DlProgress = Join-Path $WS.DataDir 'download.json'
 $DlCancel = Join-Path $WS.DataDir '.dl-cancel.json'
 $DlPause = Join-Path $WS.DataDir '.dl-pause'
+$DlAdd = Join-Path $WS.DataDir '.dl-add.json'
 
 # ---------- 内存态 ----------
 # 配置只管代理/并发；内容目录固定在项目里（$WS.Content），不再可配置
@@ -291,7 +292,7 @@ function Handle-Request {
         $payload = [ordered]@{
             ok       = $true
             # 接口版本：前端用它判断服务端是不是旧进程（旧版没有这个字段）
-            api      = 3
+            api      = 4
             rev      = $State.Rev
             rowsRev  = $ledgerRev
             stats    = Get-Stats

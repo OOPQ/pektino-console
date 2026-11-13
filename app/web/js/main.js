@@ -413,11 +413,19 @@ async function scanDir() {
 async function downloadNew() {
   const n = state.STATS.new || 0;
   if (!n) return toast('没有可下载的条目');
-  if (!confirm(`用内置下载器下载 ${n} 条？\n保存到：${state.STATS.contentDir || ''}\n\n支持断点续传，可在进度条上取消。`)) return;
+  const running = !!(state.DOWNLOAD && state.DOWNLOAD.running);
+  const msg = running
+    ? `当前有下载任务在跑，把这 ${n} 条追加到它的队列？\n\n队列会按并发数继续下载。`
+    : `用内置下载器下载 ${n} 条？\n保存到：${state.STATS.contentDir || ''}\n\n支持断点续传，可在进度条上取消。`;
+  if (!confirm(msg)) return;
   try {
     const r = await api('/api/download', { status: 'new' });
     if (!r.ok) return toast('失败：' + r.error, 5000);
-    toast(`已开始下载 ${r.count} 条（并发 ${r.concurrent}）`, 3500);
+    if (r.appended !== undefined) {
+      toast(r.appended > 0 ? `已追加 ${r.appended} 条到当前下载队列` : (r.note || '这些条目已经在队列里'), 3500);
+    } else {
+      toast(`已开始下载 ${r.count} 条（并发 ${r.concurrent}）`, 3500);
+    }
     load();
   } catch (e) { toast('请求失败：' + e.message); }
 }

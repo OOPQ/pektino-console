@@ -20,6 +20,8 @@ param(
     [string]$CancelFile = '',
     # 暂停标记文件：内容为 1 时暂停（不启动新条目，正在跑的杀掉并保留 .part）
     [string]$PauseFile = '',
+    # 追加队列：控制台在运行中写入的新条目（JSON 数组），每轮读一次就删掉
+    [string]$AddFile = '',
     # 显式不走代理（默认跟随 -Proxy / 系统代理）
     [switch]$NoProxy,
     [int]$Retries = 3
@@ -211,6 +213,18 @@ function Test-Paused {
     } catch { return $false }
 }
 
+function Read-AddedItems {
+    <#  运行中追加的条目：控制台把新 token 写进 AddFile，这里读完就删  #>
+    if (-not $AddFile -or -not (Test-Path -LiteralPath $AddFile)) { return @() }
+    try {
+        $raw = Get-Content -LiteralPath $AddFile -Raw -Encoding UTF8 -ErrorAction Stop
+        if (-not $raw) { Remove-Item -LiteralPath $AddFile -Force -ErrorAction SilentlyContinue; return @() }
+        $list = @($raw | ConvertFrom-Json)
+        Remove-Item -LiteralPath $AddFile -Force -ErrorAction SilentlyContinue
+        return $list
+    } catch { return @() }
+}
+
 function Read-CancelTokens {
     if (-not $CancelFile -or -not (Test-Path $CancelFile)) { return @() }
     try {
@@ -236,6 +250,15 @@ try {
                 $states[$tk].state = 'paused'
                 $jobs.Remove($tk)
             }
+        }
+
+        # ---- 追加队列：控制台在运行中新增的条目 ----
+        foreach ($it in (Read-AddedItems)) {
+            $tk = [string]$it.token
+            if (-not $tk -or $states.ContainsKey($tk)) { continue }
+            $queueMap[$tk] = $it
+            $states[$tk] = @{ state = 'queued'; bytes = 0; expected = 0; error = '' }
+            $pending.Enqueue($it)
         }
 
         # 取消请求
@@ -392,7 +415,7 @@ try {
             running   = $true
             paused    = [bool]$paused
             phase     = 'download'
-            total     = $queue.Count
+            total     = $states.Count
             done      = $doneCount
             failed    = $failCount
             queued    = $queuedCount
@@ -416,7 +439,7 @@ try {
         elseif ($states[$tk].state -eq 'failed') { $failCount++; $errs += @{ token = $tk; error = $states[$tk].error } }
     }
     Write-ProgressFile @{
-        running = $false; paused = $false; phase = 'done'; total = $queue.Count; done = $doneCount; failed = $failCount;
+        running = $false; paused = $false; phase = 'done'; total = $states.Count; done = $doneCount; failed = $failCount;
         bytes = $bytes; speed = 0; errors = @($errs | Select-Object -Last 20); startedAt = $startAt;
         items = @($states.Keys | ForEach-Object { [pscustomobject]@{ token = $_; state = $states[$_].state; bytes = $states[$_].bytes; error = $states[$_].error } });
         finishedAt = (Get-Date).ToString('s')

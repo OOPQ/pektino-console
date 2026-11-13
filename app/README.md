@@ -170,6 +170,9 @@ new ──投递/开始下载──▶ sent / downloading ──磁盘命中─�
 
 内置：`Start-Download` 写队列 JSON → 起独立 `download.ps1` 进程 →
 
+- 已经有下载器在跑时，新条目**追加**进同一个队列（`data\.dl-add.json`，下载器每轮
+  读一次就删），不另起进程；返回 `{appended:N}`
+- 抓取/入库（`Start-Job`）与下载（独立进程）互不阻塞；抓取/入库自身仍是单任务槽位
 - 优先 `aria2c.exe`（`-x8 -s8`），否则 `curl.exe -C -` 续传
 - 先写 `<token>.mp4.part`，大小等于远端 `Content-Length` 才改名成 `.mp4`
 - 并发 1–16（配置里存，默认 3）；代理留空时跟随注册表里的系统代理
@@ -226,7 +229,7 @@ GET  /api/export                    ledger.csv 下载（强制生成快照）
 POST /api/scrape    {rank,pages,limit,threads,incremental,freshDays}  异步抓取
 POST /api/import    {tokens?,threads}                                异步扫本地文件入库
 POST /api/job/cancel                                                 取消当前抓取/导入
-POST /api/download  {tokens|status,limit,force}                      开始内置下载
+POST /api/download  {tokens|status,limit,force}                      开始内置下载；已在跑则追加（返回 appended）
 POST /api/download/cancel {tokens?}                                  取消单条/全部
 POST /api/download/pause {on}                                        暂停 / 继续（保留 .part）
 POST /api/download/reset                                             强制解除「已有任务在跑」

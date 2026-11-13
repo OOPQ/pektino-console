@@ -301,6 +301,8 @@ function Handle-Request {
             download = (Get-DownloadInfo)
             project  = (Get-ProjectSummary -Paths $WS)
             settings = [pscustomobject]@{ proxy = [string]$Config.proxy; concurrent = $(if ($Config.concurrent) { [int]$Config.concurrent } else { 3 }) }
+            # 浏览器内播放用的媒体服务地址（前端拼成 <base>/<token>.mp4?k=<key>）
+            media    = $(if ($State.Media) { [pscustomobject]@{ base = [string]$State.Media.Base; key = [string]$State.Media.Key } } else { $null })
             metrics  = [pscustomobject]@{
                 total        = $State.Metrics.total
                 avgMs        = if ($State.Metrics.total -gt 0) { [math]::Round($State.Metrics.sumMs / $State.Metrics.total, 1) } else { 0 }
@@ -548,7 +550,7 @@ function Handle-Request {
                 return
             }
             '/api/play' {
-                Send-Json -Stream $Stream -Object (Invoke-Play -Token ([string]$body.token))
+                Send-Json -Stream $Stream -Object (Invoke-Play -Token ([string]$body.token) -CountOnly:([bool]$body.count))
                 return
             }
             '/api/reveal' {
@@ -722,6 +724,48 @@ if (-not $listener) {
     Stop-WithMessage "8791-8809 全部端口都被占用，无法启动。请先关掉占用方，或用 .\console.ps1 -Port 9000 换端口。"
 }
 
+# ---- 浏览器内播放：独立媒体服务 ----
+# 主循环是单线程的，视频流不能走这里（一次几百 MB 会把 SSE 和所有接口堵死）。
+# 另起一个进程专门做 Range 流式传输，只服务媒体目录，父进程退出后自动结束。
+function Start-MediaServer {
+    $cfg = Read-Config -Root $Root -DataDir $WS.DataDir -DefaultContentDir $WS.Content
+    $dir = if ($cfg.contentDir) { [string]$cfg.contentDir } else { $WS.Content }
+    if (-not [System.IO.Path]::IsPathRooted($dir)) {
+        $dir = [System.IO.Path]::GetFullPath((Join-Path $WS.ProjectRoot $dir))
+    }
+    if (-not (Test-Path $dir)) { return $null }
+
+    $key = if ($State.Media -and $State.Media.Key) { [string]$State.Media.Key } else { [guid]::NewGuid().ToString('N') }
+    $from = if ($State.Media -and $State.Media.Port) { [int]$State.Media.Port } else { $bindPort + 40 }
+    $port = 0
+    for ($i = 0; $i -lt 30; $i++) {
+        $p = $from + $i
+        try {
+            $probe = New-Object System.Net.Sockets.TcpListener([System.Net.IPAddress]::Loopback, $p)
+            $probe.Start(); $probe.Stop()
+            $port = $p
+            break
+        } catch { }
+    }
+    if (-not $port) { Write-FileLog 'media server: no free port'; return $null }
+
+    $mediaScript = Join-Path $Root 'server\media.ps1'
+    $mediaLog = Join-Path (Split-Path -Parent $LogFile) 'media.log'
+    $argList = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', (ConvertTo-QuotedArg $mediaScript),
+        '-MediaDir', (ConvertTo-QuotedArg $dir), '-Port', "$port", '-Key', $key,
+        '-ParentPid', "$PID", '-LogFile', (ConvertTo-QuotedArg $mediaLog))
+    try {
+        $proc = Start-Process -FilePath 'powershell.exe' -ArgumentList $argList -WindowStyle Hidden -PassThru
+    } catch {
+        Write-FileLog "media server start failed: $($_.Exception.Message)"
+        return $null
+    }
+    $State.Media = @{ Base = "http://127.0.0.1:$port"; Key = $key; Port = $port; Pid = $proc.Id; Dir = $dir }
+    Write-FileLog "media server pid=$($proc.Id) port=$port dir=$dir"
+    return $State.Media
+}
+$null = Start-MediaServer
+
 $url = "http://127.0.0.1:$bindPort/"
 Write-Host ''
 Write-Host "  控制台已启动: $url" -ForegroundColor Green
@@ -792,6 +836,15 @@ try {
                 try { Step-DownloadGuard } catch { }
             }
         }
+        # 媒体服务掉了就拉起来（被任务管理器结束、异常退出等），30 秒检查一次
+        if (-not $script:MediaRetryAt -or ((Get-Date) - [datetime]$script:MediaRetryAt).TotalSeconds -ge 30) {
+            $script:MediaRetryAt = (Get-Date).ToString('s')
+            $mediaAlive = $false
+            if ($State.Media -and $State.Media.Pid) {
+                $mediaAlive = [bool](Get-Process -Id $State.Media.Pid -ErrorAction SilentlyContinue)
+            }
+            if (-not $mediaAlive) { $null = Start-MediaServer }
+        }
         # 空闲扫盘：优先在「这一轮没有待处理请求」时跑，这样 media\ 里有几千个文件时，
         # 扫描不会拉长任何一次页面请求的响应时间。
         # 但持续轮询（前端任务期间 1.2s 一次）可能让 Poll 一直是 true、永远等不到空闲 →
@@ -812,6 +865,9 @@ try {
 } catch {
     try { Write-FileLog "main loop crashed: $($_.Exception.Message) / $($_.ScriptStackTrace)" } catch { }
 } finally {
+    if ($State.Media -and $State.Media.Pid) {
+        try { & taskkill.exe /PID $State.Media.Pid /T /F 2>&1 | Out-Null } catch { }
+    }
     foreach ($c in @($script:SseClients)) { try { $c.Stream.Close() } catch { }; try { $c.Socket.Close() } catch { } }
     $listener.Stop()
     try { Save-Ledger -Rows @($State.Ledger) -Path $LedgerPath -ForceSnapshot } catch { }

@@ -494,11 +494,23 @@ function Resolve-RowFile {
 }
 
 function Invoke-Play {
-    param([string]$Token, [switch]$Reveal, [switch]$NoRecord)
+    param([string]$Token, [switch]$Reveal, [switch]$NoRecord, [switch]$CountOnly)
     $row = @($State.Ledger | Where-Object { $_.token -eq $Token }) | Select-Object -First 1
     if (-not $row) { return @{ ok = $false; error = '台账里没有这个条目' } }
     $file = Resolve-RowFile $row
     if (-not $file -or -not (Test-Path $file)) { return @{ ok = $false; error = '本地还没有这个文件（先下载）' } }
+
+    # 浏览器内播放：不打开系统播放器，只记一次播放
+    if ($CountOnly) {
+        $n = 0
+        try { $n = [int]$row.play_count } catch { }
+        $row.play_count = [string]($n + 1)
+        $row.last_play = (Get-Date -Format 'yyyy-MM-dd HH:mm:ss')
+        Save-Ledger -Rows @($row) -NoSnapshot
+        Touch-State
+        Write-Log 'play' "浏览器播放 $($row.token)（第 $($row.play_count) 次）"
+        return @{ ok = $true; plays = $row.play_count; last_play = $row.last_play; file = $file }
+    }
     try {
         if ($Reveal) {
             Start-Process -FilePath 'explorer.exe' -ArgumentList "/select,`"$file`""

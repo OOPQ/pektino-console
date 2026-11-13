@@ -448,6 +448,7 @@ async function load() {
     $('#diag').textContent = `自检：前端 OK · API OK · 渲染 ${state.ROWS.length} 行 · 磁盘命中 ${S.downloaded}`;
 
     state.DOWNLOAD = s.download || null;
+    state.MEDIA = s.media || null;
     // 下载队列里的活跃条目变了（开始/取消/完成）也要重绘表格：
     // 行内按钮要在「下载 / 取消」之间切换，状态列要显示/隐藏下载中的蓝点
     const dlItems = (s.download && s.download.items) || [];

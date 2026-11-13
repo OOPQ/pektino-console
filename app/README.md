@@ -25,6 +25,7 @@ app\
   server\
     transport.ps1      HTTP 传输：Send-Bytes / Send-Json / Read-Request / Push-Sse
     actions.ps1        业务：统计、扫描、抓取/导入 Job、收藏/评分/观看、播放、删除、下载器、源地址刷新
+    media.ps1          浏览器内播放的独立媒体服务（Range 流式、单次 8MB、只服务 media\ 下的 mp4）
     covers.ps1         封面补齐（含主循环里的自动补封面）
   lib\
     project.ps1        项目（数据单元）解析、初始化、媒体识别
@@ -247,7 +248,7 @@ POST /api/mark      {tokens,status}                                  改状态�
 POST /api/fav       {tokens,on}                                      收藏
 POST /api/watched   {tokens,on}                                      已看/未看
 POST /api/rate      {tokens,value}                                   评分 0–5（0 = 清除）
-POST /api/play      {token}                                          默认播放器打开 + 记一次播放
+POST /api/play      {token, count?}                                  默认播放器打开 + 记一次播放；count=true 只计数（浏览器内播放）
 POST /api/reveal    {token}                                          资源管理器定位
 POST /api/delete    {tokens,purge,permanent}                         删文件（默认回收站）
 POST /api/scan                                                       重新扫描内容目录
@@ -330,7 +331,9 @@ clientErrors[] / clientWarns / uptime`。单请求 ≥800ms 会进 `slow` 列表
 
 限制：
 
-- **单线程**：长请求会顺延 SSE 和页面响应；所有重活都靠子进程 + 节流规避，架构上限仍在
+- **单线程**：长请求会顺延 SSE 和页面响应；所有重活都靠子进程 + 节流规避，架构上限仍在。
+  视频流不走主循环，由 `server\media.ps1` 独立进程提供（Range + 单次 8MB），
+  `/api/state` 的 `media.base` / `media.key` 给前端拼播放地址
 - 榜单排名只信 DOM 顺序；站点改版会让 JSON-LD 解析直接抛错（不会静默返回空）
 - 视频直链带 `?tag=NN` 签名参数，别删参数
 - 只认 `<token>.mp4` 命名；迅雷存成别的名字需要手动改名或「标记完成」

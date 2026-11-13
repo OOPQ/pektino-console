@@ -56,18 +56,100 @@ function loadCover(img, box, token) {
   if (img.complete && img.naturalWidth) fitMedia(img, box);
 }
 
-/* ================= 灯箱 ================= */
-export function openLightbox(tk) {
+/* ================= 灯箱（预览 + 浏览器内播放） ================= */
+let lbList = [];      // 当前筛选结果里的 token 顺序，用于 ←/→ 切换
+let lbIdx = -1;
+let lbPlaying = false;
+
+function lbPaint(tk) {
   const r = state.ROWS.find(x => x.token === tk);
-  if (!r) return;
+  if (!r) return false;
   state.LB_TOKEN = tk;
-  loadCover($('#lbImg'), boxOf('#lightbox'), tk);
+  const box = boxOf('#lightbox');
+  box.classList.remove('nocover');
+  loadCover($('#lbImg'), box, tk);
   $('#lbToken').textContent = tk;
   $('#lbMeta').innerHTML = metaRows(r);
   $('#lbFav').textContent = r.fav === '1' ? '★ 已收藏' : '☆ 收藏';
+  $('#lbCount').textContent = lbList.length ? `${lbIdx + 1} / ${lbList.length}` : '';
+  return true;
+}
+
+function lbStopVideo() {
+  const v = $('#lbVideo');
+  if (!v) return;
+  lbPlaying = false;
+  try { v.pause(); } catch { }
+  v.hidden = true;
+  v.removeAttribute('src');
+  try { v.load(); } catch { }
+  const img = $('#lbImg');
+  if (img) img.hidden = false;
+  const ov = $('#lbPlayOverlay');
+  if (ov) ov.hidden = false;
+}
+
+function lbPlayVideo(tk, forcedW) {
+  const m = state.MEDIA;
+  if (!m || !m.base) {
+    toast('媒体服务没有启动：用 start.cmd -Restart 重启控制台后重试', 5000);
+    return;
+  }
+  const v = $('#lbVideo'), img = $('#lbImg');
+  if (!v || !img) return;
+  const w = forcedW || img.getBoundingClientRect().width || parseFloat(img.style.width) || 420;
+  v.hidden = false;
+  img.hidden = true;
+  const ov = $('#lbPlayOverlay');
+  if (ov) ov.hidden = true;
+  v.style.width = Math.round(w) + 'px';
+  v.onerror = () => {
+    toast('浏览器播不了这个文件，试试「本地播放器」', 5000);
+    v.hidden = true;
+    img.hidden = false;
+    if (ov) ov.hidden = false;
+    lbPlaying = false;
+  };
+  v.src = `${m.base}/${encodeURIComponent(tk)}.mp4?k=${encodeURIComponent(m.key)}`;
+  const p = v.play();
+  if (p && p.catch) p.catch(() => { });
+  lbPlaying = true;
+  // 记一次播放（浏览器内播放，不打开系统播放器）
+  api('/api/play', { token: tk, count: true }).then(r => {
+    if (!r || !r.ok) return;
+    const row = state.ROWS.find(x => x.token === tk);
+    if (row) { row.play_count = r.plays; row.last_play = r.last_play; }
+  }).catch(() => { });
+}
+
+export function openLightbox(tk) {
+  const r = state.ROWS.find(x => x.token === tk);
+  if (!r) return;
+  // 切换范围 = 当前筛选/排序后的整份列表（跨页也能连续翻）
+  lbList = visible().map(x => x.token);
+  lbIdx = lbList.indexOf(tk);
+  lbPlaying = false;
+  lbStopVideo();
+  lbPaint(tk);
   $('#lightbox').classList.add('on');
 }
-const closeLightbox = () => { $('#lightbox').classList.remove('on'); state.LB_TOKEN = null; };
+
+export function navLightbox(delta) {
+  if (!$('#lightbox').classList.contains('on') || !lbList.length) return;
+  lbIdx = (lbIdx + delta + lbList.length) % lbList.length;
+  const tk = lbList[lbIdx];
+  const wasPlaying = lbPlaying;
+  const keepW = wasPlaying ? $('#lbVideo').getBoundingClientRect().width : 0;
+  lbStopVideo();
+  if (!lbPaint(tk)) return;
+  if (wasPlaying) lbPlayVideo(tk, keepW);
+}
+
+const closeLightbox = () => {
+  lbStopVideo();
+  $('#lightbox').classList.remove('on');
+  state.LB_TOKEN = null;
+};
 
 /* ================= 抽卡 ================= */
 function gachaPool() {
@@ -135,6 +217,11 @@ export function initPanels() {
   /* 灯箱 */
   $('#lbClose').onclick = closeLightbox;
   $('#lightbox').onclick = e => { if (e.target.id === 'lightbox') closeLightbox(); };
+  // 点封面 / 播放按钮：原地切到浏览器内播放
+  $('#lbImg').onclick = () => { if (state.LB_TOKEN) lbPlayVideo(state.LB_TOKEN); };
+  $('#lbPlayOverlay').onclick = () => { if (state.LB_TOKEN) lbPlayVideo(state.LB_TOKEN); };
+  $('#lbPrev').onclick = () => navLightbox(-1);
+  $('#lbNext').onclick = () => navLightbox(1);
   $('#lbPlay').onclick = () => { if (state.LB_TOKEN) doPlay(state.LB_TOKEN); };
   $('#lbReveal').onclick = async () => {
     try { const r = await api('/api/reveal', { token: state.LB_TOKEN }); if (!r.ok) toast('定位失败：' + (r.error || '文件不在本地')); } catch (e) { toast('定位失败'); }
@@ -187,7 +274,14 @@ export function initPanels() {
 
   /* 窗口缩放时重新适配图片 */
   window.addEventListener('resize', () => {
-    if ($('#lightbox').classList.contains('on')) fitMedia($('#lbImg'), boxOf('#lightbox'));
+    if ($('#lightbox').classList.contains('on')) {
+      fitMedia($('#lbImg'), boxOf('#lightbox'));
+      if (lbPlaying) {
+        const v = $('#lbVideo');
+        const w = parseFloat($('#lbImg').style.width);
+        if (v && w) v.style.width = Math.round(w) + 'px';
+      }
+    }
     if ($('#gacha').classList.contains('on')) fitMedia($('#gImg'), boxOf('#gacha'));
   });
 
@@ -200,6 +294,13 @@ export function initPanels() {
   document.addEventListener('keydown', e => {
     const typing = ['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement.tagName);
     const gachaOpen = $('#gacha').classList.contains('on');
+    const lbOpen = $('#lightbox').classList.contains('on');
+    // 预览里用 ←/→ 切换上一项/下一项；视频控件聚焦时让方向键留给进度条
+    if (lbOpen && !typing && e.target.tagName !== 'VIDEO' && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
+      e.preventDefault();
+      navLightbox(e.key === 'ArrowLeft' ? -1 : 1);
+      return;
+    }
     if (gachaOpen && /^[1-5]$/.test(e.key) && !typing) { e.preventDefault(); rateGacha(parseInt(e.key)); return; }
     if (e.key === '/' && !typing) { e.preventDefault(); $('#q').focus(); return; }
     if ((e.key === 'r' || e.key === 'R') && !typing) { e.preventDefault(); drawCard(); return; }

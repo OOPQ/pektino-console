@@ -310,13 +310,20 @@
 <!-- ===== 预览灯箱 ===== -->
 <div class="lightbox" id="lightbox">
   <div class="box">
-    <img id="lbImg" alt="">
+    <div class="lbMedia" id="lbMedia">
+      <img id="lbImg" alt="" title="点击用浏览器播放">
+      <video id="lbVideo" controls playsinline preload="metadata" hidden></video>
+      <button class="lbPlayOverlay" id="lbPlayOverlay" title="浏览器内播放">▶</button>
+      <button class="lbNav prev" id="lbPrev" title="上一项（←）">‹</button>
+      <button class="lbNav next" id="lbNext" title="下一项（→）">›</button>
+      <span class="lbCount" id="lbCount"></span>
+    </div>
     <div class="meta">
       <h3 id="lbToken">–</h3>
       <div class="big mstats" id="lbMeta"></div>
       <div class="actions">
         <button class="ghost" id="lbFav">☆ 收藏</button>
-        <button class="ghost" id="lbPlay">播放</button>
+        <button class="ghost" id="lbPlay">本地播放器</button>
         <button class="ghost" id="lbReveal">定位</button>
         <button class="ghost" id="lbCopy">复制链接</button>
         <button class="ghost" id="lbCopyToken">复制 token</button>

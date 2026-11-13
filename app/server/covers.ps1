@@ -51,6 +51,17 @@ public static class ShellThumb {
     }
 } catch { }
 
+function Test-SafeTokenName {
+    <#  封面/缩略图文件名直接用 token：允许中文，但必须挡掉路径分隔符和 ..  #>
+    param([string]$Token)
+    if (-not $Token) { return $false }
+    if ($Token.Length -gt 180) { return $false }
+    if ($Token -match '[\\/:*?"<>|]') { return $false }
+    if ($Token -match '\.\.') { return $false }
+    if ($Token.Trim() -ne $Token) { return $false }
+    return $true
+}
+
 function New-LocalCover {
     <#  本地有视频、但没有封面 → 用视频帧生成 cache\covers\<token>.jpg
         返回是否成功；失败不抛异常（比如文件被占用）  #>
@@ -99,7 +110,7 @@ function Get-LocalCoverMissingCount {
     foreach ($r in @($State.Ledger)) {
         if (-not $r.file_name) { continue }
         $tk = [string]$r.token
-        if (-not $tk -or $tk -notmatch '^[A-Za-z0-9_\-]+$') { continue }
+        if (-not (Test-SafeTokenName $tk)) { continue }
         $f = Join-Path $CoverDir ($tk + '.jpg')
         if ((Test-Path $f) -and ((Get-Item $f).Length -gt 1024)) { continue }
         $n++
@@ -124,7 +135,7 @@ function Repair-Covers {
     foreach ($r in @($State.Ledger)) {
         if ($localTried -ge 60) { break }
         $tk = [string]$r.token
-        if (-not $tk -or $tk -notmatch '^[A-Za-z0-9_\-]+$') { continue }
+        if (-not (Test-SafeTokenName $tk)) { continue }
         if (-not $r.file_name) { continue }
         $dest = Join-Path $CoverDir ($tk + '.jpg')
         if ((Test-Path $dest) -and ((Get-Item $dest).Length -gt 1024)) { continue }

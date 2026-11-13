@@ -296,6 +296,8 @@ clientErrors[] / clientWarns / uptime`。单请求 ≥800ms 会进 `slow` 列表
   关灯箱时若画中画在播则保留视频继续播放
 - **封面清晰度**：表格和画廊都用原图（`/api/cover?...&full=1`，失败回退缩略图）；
   下载队列卡片和灯箱的降级路径仍用 120px 缩略图（省流量）
+- **本地视频封面**：没有封面但有本地视频的条目，用 Shell 缩略图抽一帧存成
+  `cache\covers\<token>.jpg`；token 允许中文（`Test-SafeTokenName` 挡掉 `\/:*?"<>|` 和 `..`）
 - **入队反馈**：`renderDownloadQueue` 比较上一次的 `total`，变大就触发
   `pulseDlQueue()`（按钮脉冲 + 浮出「+N 已加入队列」）
 - **完成提示音**：`playDing()` 用 Web Audio 现场合成（无音频文件），

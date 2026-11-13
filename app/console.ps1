@@ -322,7 +322,7 @@ function Handle-Request {
     if ($method -eq 'GET' -and $path -eq '/api/cover') {
         $tk = [string]$Req.Query['token']
         $full = ($Req.Query['full'] -eq '1')
-        if ($tk -match '^[A-Za-z0-9_\-]+$') {
+        if (Test-SafeTokenName $tk) {
             $thumb = Join-Path $ThumbDir ($tk + '.jpg')
             $orig = Join-Path $CoverDir ($tk + '.jpg')
             $file = $null

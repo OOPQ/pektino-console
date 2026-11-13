@@ -140,16 +140,21 @@ function lbPlayVideo(tk) {
   }).catch(() => { });
 }
 
-export function openLightbox(tk) {
+export function openLightbox(tk, opts = {}) {
   const r = state.ROWS.find(x => x.token === tk);
   if (!r) return;
-  // 切换范围 = 当前筛选/排序后的整份列表（跨页也能连续翻）
-  lbList = visible().map(x => x.token);
+  // 切换范围 = 当前筛选/排序后的整份列表（跨页也能连续翻）。
+  // 从下载队列点进来时，条目可能不在当前筛选结果里 → 退回全量列表
+  let list = visible().map(x => x.token);
+  if (!list.includes(tk)) list = state.ROWS.map(x => x.token);
+  lbList = list;
   lbIdx = lbList.indexOf(tk);
   lbPlaying = false;
   lbStopVideo();
   lbPaint(tk);
   $('#lightbox').classList.add('on');
+  // 从下载队列进来：直接开播（预览封面 + 视频立即播放）
+  if (opts.autoplay && r.file_name) lbPlayVideo(tk);
 }
 
 export function navLightbox(delta) {

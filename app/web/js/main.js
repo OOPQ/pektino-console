@@ -1,8 +1,8 @@
 /* main.js — 数据加载、工具条、批量操作、初始化 */
 import { $, state, PREFS, savePrefs, api, toast, onEvent } from './core.js';
 import { render, markActiveKpi, initTable } from './table.js';
-import { initRows, doPlay, delFiles } from './rows.js';
-import { initPanels, connectSse } from './panels.js';
+import { initRows, delFiles } from './rows.js';
+import { initPanels, connectSse, openLightbox } from './panels.js';
 import { setFav, setWatched, setStatus, setRating, reload, copyText } from './actions.js';
 
 /* ================= 任务进度条 ================= */
@@ -200,6 +200,7 @@ function dlItemHtml(i) {
         ${canResume ? `<button class="ghost accent" data-dq-resume="${i.token}">▶ 继续</button>` : ''}
         ${canCancel ? `<button class="ghost danger" data-dq-cancel="${i.token}">取消</button>` : ''}
         <button class="ghost" data-dq-fav="${i.token}">${fav ? '★ 已收藏' : '☆ 收藏'}</button>
+        ${hasFile ? `<button class="ghost" data-dq-play="${i.token}">▶ 播放</button>` : ''}
         ${hasFile ? `<button class="ghost" data-dq-reveal="${i.token}">定位</button>` : ''}
       </div>
     </div>
@@ -286,7 +287,8 @@ async function toggleDownloadPause() {
 
 async function onDqAction(e) {
   const play = e.target.closest('[data-dq-play]');
-  if (play) return doPlay(play.dataset.dqPlay);
+  // 队列里点播放：打开灯箱预览并直接开始播放（不再调用系统播放器）
+  if (play) return openLightbox(play.dataset.dqPlay, { autoplay: true });
 
   const pauseBtn = e.target.closest('[data-dq-pause]');
   if (pauseBtn) {
@@ -783,7 +785,6 @@ initBulk();
 initDownloadQueue();
 
 onEvent('reload', load);
-onEvent('play', tk => doPlay(tk));
 onEvent('delete', d => delFiles(d.tokens, d.purge));
 onEvent('clear-query', () => {
   $('#q').value = '';

@@ -1,4 +1,4 @@
-﻿quires -Version 5.1
+﻿#Requires -Version 5.1
 <#
 .SYNOPSIS
   控制台冒烟测试：验证服务可用、静态资源可访问、核心接口返回结构正确。

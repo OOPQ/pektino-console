@@ -181,7 +181,8 @@ function lbPaint(tk) {
   box.classList.remove('nocover');
   loadCover($('#lbImg'), box, tk);
   $('#lbToken').textContent = tk;
-  $('#lbMeta').innerHTML = metaRows(r);
+  $('#lbMeta').innerHTML = metaRows(r, { ratingHtml: '<span class="rt" id="lbRate" title="点击打分，再点同一颗清除；数字键 1–5"></span>' });
+  renderLRate(+r.rating || 0);
   $('#lbFav').textContent = r.fav === '1' ? '★ 已收藏' : '☆ 收藏';
   $('#lbCount').textContent = lbList.length ? `${lbIdx + 1} / ${lbList.length}` : '';
   const multi = lbList.length > 1;
@@ -294,6 +295,22 @@ async function rateGacha(v) {
   toast(val ? `已打 ${val} 星` : '已清除评分');
 }
 
+/* 灯箱预览里的打分：点同一颗清空，数字键 1–5 也可以 */
+function renderLRate(v) {
+  const el = $('#lbRate');
+  if (el) el.innerHTML = starsInner(v);
+}
+async function rateLightbox(v) {
+  const row = state.ROWS.find(x => x.token === state.LB_TOKEN);
+  if (!row) return;
+  const val = ((+row.rating || 0) === v) ? 0 : v;
+  const r = await setRating([row.token], val);
+  if (!r || !r.ok) { toast((r && r.error) || '打分失败', 4000); return; }
+  renderLRate(val);
+  render();
+  toast(val ? `已打 ${val} 星` : '已清除评分', 1800);
+}
+
 const closeGacha = () => {
   const v = $('#gVideo');
   if (isPip(v)) { gPlaying = false; }
@@ -378,8 +395,10 @@ export function initPanels() {
 
   /* 星星是动态生成的 → 事件委托 */
   document.addEventListener('click', e => {
-    const star = e.target.closest('#gRate i');
-    if (star) rateGacha(parseInt(star.dataset.v));
+    const gstar = e.target.closest('#gRate i');
+    if (gstar) { rateGacha(parseInt(gstar.dataset.v)); return; }
+    const lstar = e.target.closest('#lbRate i');
+    if (lstar) rateLightbox(parseInt(lstar.dataset.v));
   });
 
   /* 窗口缩放时重新适配图片 */
@@ -404,6 +423,7 @@ export function initPanels() {
       navLightbox(e.key === 'ArrowLeft' ? -1 : 1);
       return;
     }
+    if (lbOpen && !typing && /^[1-5]$/.test(e.key)) { e.preventDefault(); rateLightbox(parseInt(e.key)); return; }
     if (gachaOpen && /^[1-5]$/.test(e.key) && !typing) { e.preventDefault(); rateGacha(parseInt(e.key)); return; }
     // 播放快捷键：空格 播放/暂停，F 全屏，M 静音（灯箱和抽卡都生效）
     if ((lbOpen || gachaOpen) && !typing) {

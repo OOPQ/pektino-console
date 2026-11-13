@@ -216,6 +216,14 @@ function initDownloadQueue() {
   $('#dlDrawer').onclick = e => { if (e.target.id === 'dlDrawer') $('#dlDrawer').classList.remove('on'); };
   $('#dlPause').onclick = toggleDownloadPause;
   $('#dlCancelAll').onclick = cancelAllDownloads;
+  $('#dlReset').onclick = async () => {
+    if (!confirm('结束内置下载进程并解除「已有任务在跑」的占用？已下载的 .part 会保留。')) return;
+    try {
+      const r = await api('/api/download/reset', {});
+      toast(r.ok ? `已解除（进程 ${r.killed || 0} 个）` : (r.error || '失败'), 3500);
+    } catch (e) { toast('请求失败：' + e.message, 4000); }
+    load();
+  };
   $('#dlActiveList').addEventListener('click', onDlQueueCancel);
   $('#dlFailList').addEventListener('click', onDlQueueCancel);
   $('#dlConc').onchange = async e => {

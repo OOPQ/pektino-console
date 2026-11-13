@@ -571,19 +571,31 @@ function Invoke-Send {
 # ---------------- 内置下载器 ----------------
 
 function Get-DownloadProcesses {
-    <#  找出所有"正在下载"的进程：下载器本身 + 它起的 curl/aria2c
-        不依赖 State.Download.Pid，服务重启后也能清理孤儿进程。
-        按进程名过滤（服务端筛选）而不是枚举全部进程：全量 Win32_Process 要 100~200ms  #>
+    <#
+      只认「本程序的下载器」，不再按名字模糊匹配：
+        - powershell.exe 的命令行必须包含 cli\download.ps1 的**完整路径**
+        - curl/aria2c 的命令行必须同时包含内容目录和 .mp4.part
+
+      以前 powershell 只匹配 'download.ps1' 这个文件名，结果任何命令行里提到它的
+      进程（编辑器、终端、测试脚本、甚至一段包含这串字的命令）都会被当成下载器，
+      表现就是永远提示「已经有一个下载任务在跑」。
+    #>
     $out = @()
+    $scriptPath = [string]$DlScript
+    $contentDir = [string]$Config.contentDir
     try {
-        foreach ($n in @('curl.exe', 'aria2c.exe', 'powershell.exe')) {
+        foreach ($p in @(Get-CimInstance Win32_Process -Filter "Name='powershell.exe'" -ErrorAction SilentlyContinue)) {
+            if ($p.ProcessId -eq $PID) { continue }
+            if (-not $p.CommandLine) { continue }
+            if (-not $scriptPath) { continue }
+            if ($p.CommandLine.IndexOf($scriptPath, [System.StringComparison]::OrdinalIgnoreCase) -ge 0) { $out += $p }
+        }
+        foreach ($n in @('curl.exe', 'aria2c.exe')) {
             foreach ($p in @(Get-CimInstance Win32_Process -Filter "Name='$n'" -ErrorAction SilentlyContinue)) {
                 if (-not $p.CommandLine) { continue }
-                if ($n -eq 'powershell.exe') {
-                    if ($p.CommandLine -match 'download\.ps1') { $out += $p }
-                } elseif ($p.CommandLine -match '\.mp4\.part') {
-                    $out += $p
-                }
+                if ($p.CommandLine -notmatch '\.mp4\.part') { continue }
+                if ($contentDir -and $p.CommandLine.IndexOf($contentDir, [System.StringComparison]::OrdinalIgnoreCase) -lt 0) { continue }
+                $out += $p
             }
         }
     } catch { }
@@ -630,6 +642,20 @@ function Stop-AllDownloadProcesses {
     return $killed
 }
 
+function Test-TrackedDownloader {
+    <#  跟踪的下载器是否还活着：PID 与启动时间都要对得上。
+        PID 会被系统复用，只比 PID 可能把别人的进程当成下载器 → 永远「已有任务在跑」。  #>
+    if (-not $State.Download -or -not $State.Download.Pid) { return $false }
+    $p = Get-Process -Id $State.Download.Pid -ErrorAction SilentlyContinue
+    if (-not $p) { return $false }
+    if ($State.Download.ProcStart) {
+        try {
+            if ($p.StartTime.ToString('s') -ne [string]$State.Download.ProcStart) { return $false }
+        } catch { }
+    }
+    return $true
+}
+
 function Get-DownloadInfo {
     <#  返回下载器的当前状态：进程是否活着 + 进度文件内容 + 是否暂停  #>
     param([switch]$Fresh)
@@ -646,10 +672,7 @@ function Get-DownloadInfo {
             if ($p.items) { $info.items = @($p.items) }
         } catch { }
     }
-    $alive = $false
-    if ($State.Download -and $State.Download.Pid) {
-        $alive = [bool](Get-Process -Id $State.Download.Pid -ErrorAction SilentlyContinue)
-    }
+    $alive = Test-TrackedDownloader
     if (-not $alive) {
         # 服务重启后 State 丢了，但 curl 可能还在跑（孤儿）。探测走 5 秒缓存，
         # 避免 /api/state 每次轮询都付一次进程枚举的代价
@@ -670,8 +693,11 @@ function Start-Download {
     # 先清掉可能残留的孤儿下载进程，否则会一直挡住新任务
     if (-not ($State.Download -and $State.Download.Pid)) { [void](Stop-AllDownloadProcesses) }
     # 这里必须是新鲜结果：刚取消/刚结束的任务不能因为缓存被判成「还在跑」
-    if ((Get-DownloadInfo -Fresh).running) {
-        return @{ ok = $false; error = '已经有一个下载任务在跑' }
+    $dlInfo = Get-DownloadInfo -Fresh
+    if ($dlInfo.running) {
+        $why = if ($dlInfo.paused) { '下载已暂停：先在「下载队列」点「继续」，或点「全部取消」' }
+               else { '已有一个下载任务在跑：等它结束，或在「下载队列」里取消' }
+        return @{ ok = $false; error = $why }
     }
 
     # 必须和启动时同一份配置（数据目录下的 config.json），否则下载会落到旧路径
@@ -733,7 +759,9 @@ function Start-Download {
     }
     Save-Ledger -Rows $State.Ledger -Path $LedgerPath
     $proc = Start-Process -FilePath 'powershell.exe' -ArgumentList $argList -WindowStyle Hidden -PassThru
-    $State.Download = @{ Pid = $proc.Id; Started = (Get-Date).ToString('s'); Count = $queue.Count; Dir = $dir }
+    $startStamp = ''
+    try { $startStamp = $proc.StartTime.ToString('s') } catch { }
+    $State.Download = @{ Pid = $proc.Id; ProcStart = $startStamp; Started = (Get-Date).ToString('s'); Count = $queue.Count; Dir = $dir }
     Touch-State
 
     $proxyText = if ($proxy) { "，代理 $proxy" } else { '，代理跟随系统' }
@@ -815,11 +843,27 @@ function Stop-Download {
     @{ ok = $true; killed = $killed + $orphans; reverted = $reverted }
 }
 
+function Reset-DownloadState {
+    <#  强制解除「已有任务在跑」的占用：
+        杀掉经精确匹配确认属于本程序的下载器 / curl 进程，清掉跟踪状态与标记文件。
+        用于误判或异常退出留下的锁。  #>
+    $killed = Stop-AllDownloadProcesses
+    $hadTracked = [bool]$State.Download
+    $State.Download = $null
+    Remove-Item $DlPause -Force -ErrorAction SilentlyContinue
+    Remove-Item $DlCancel -Force -ErrorAction SilentlyContinue
+    Reset-DownloadProbe
+    $reverted = Revert-Downloading
+    Touch-State
+    Write-Log 'download' "强制解除下载占用（跟踪=$hadTracked，进程 $killed 个，状态回退 $reverted 条）"
+    return @{ ok = $true; killed = $killed; reverted = $reverted; tracked = $hadTracked }
+}
+
 function Step-Download {
     <#  主循环里每轮调用：进程结束后补一次扫描，运行中则节流推 SSE  #>
     if (-not $State.Download -or -not $State.Download.Pid) { return }
 
-    $alive = [bool](Get-Process -Id $State.Download.Pid -ErrorAction SilentlyContinue)
+    $alive = Test-TrackedDownloader
     if ($alive) {
         # 每 2 秒推一次 rev，让前端拿到进度
         if (-not $State.Download.LastPush -or ((Get-Date) - [datetime]$State.Download.LastPush).TotalSeconds -ge 2) {

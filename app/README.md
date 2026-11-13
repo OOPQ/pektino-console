@@ -177,6 +177,11 @@ new ──投递/开始下载──▶ sent / downloading ──磁盘命中─�
   暂停时不再发起新条目、杀掉正在跑的 curl 并把状态记成 `paused`（`.part` 保留），
   继续时 `paused → queued` 重新排队，`curl -C -` 从断点续传。
   下载器进程在暂停期间**不退出**，所以队列、进度、并发位都还在。
+- 进程识别（`Get-DownloadProcesses`）：只认命令行里带 `cli\download.ps1` **完整路径**的
+  PowerShell，以及命令行同时带内容目录和 `.mp4.part` 的 curl/aria2c；
+  跟踪进程时再用 PID + 启动时间双重校验，避免 PID 被系统复用后误判
+- `POST /api/download/reset`：强制解除「已有任务在跑」的占用（结束残留进程、清标记），
+  `.part` 保留
 - 403/404/410 先用 1 字节 Range GET 复核，确认后标 `failed` 且不再重试；
   本地已有 `.mp4`/`.part` 的绝不判死
 
@@ -222,6 +227,7 @@ POST /api/job/cancel                                                 取消当�
 POST /api/download  {tokens|status,limit,force}                      开始内置下载
 POST /api/download/cancel {tokens?}                                  取消单条/全部
 POST /api/download/pause {on}                                        暂停 / 继续（保留 .part）
+POST /api/download/reset                                             强制解除「已有任务在跑」
 POST /api/download/repair                                            整理 .part
 POST /api/send      {tokens|status,dryRun,force}                     投迅雷（dryRun 只返回链接）
 POST /api/mark      {tokens,status}                                  改状态

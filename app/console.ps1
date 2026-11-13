@@ -431,6 +431,10 @@ function Handle-Request {
                 Send-Json -Stream $Stream -Object (Set-DownloadPause -On $on)
                 return
             }
+            '/api/download/reset' {
+                Send-Json -Stream $Stream -Object (Reset-DownloadState)
+                return
+            }
             '/api/scrape' {
                 $rank = if ($body.rank) { [string]$body.rank } else { 'daily' }
                 if (@('daily', 'weekly', 'monthly', 'all') -notcontains $rank) {

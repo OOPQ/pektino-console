@@ -216,6 +216,23 @@ try {
         if ($r.ok -ne $false) { throw '没有下载任务时应当返回 ok=false' }
         "ok=false error=$($r.error)"
     }
+    Test-Item '无关的 powershell 不会被误判成下载器' {
+        # 命令行里只是提到 download.ps1 的进程，以前会被当成下载器 → 永远「已有任务在跑」
+        $decoy = Start-Process powershell -ArgumentList @('-NoProfile', '-Command', 'Start-Sleep 8; # download.ps1') -PassThru -WindowStyle Hidden
+        try {
+            Start-Sleep -Milliseconds 700
+            $r = Invoke-RestMethod "$base/api/download" -TimeoutSec 10
+            if ($r.download.running) { throw '把无关进程误判成了下载器' }
+            "running=false（诱饵 PID=$($decoy.Id)）"
+        } finally {
+            Stop-Process -Id $decoy.Id -Force -ErrorAction SilentlyContinue
+        }
+    }
+    Test-Item 'POST /api/download/reset（空闲时幂等）' {
+        $r = Invoke-RestMethod "$base/api/download/reset" -Method Post -ContentType 'application/json' -Body '{}' -TimeoutSec 15
+        if (-not $r.ok) { throw '应当返回 ok=true' }
+        "ok=true killed=$($r.killed) reverted=$($r.reverted)"
+    }
     Test-Item 'GET /api/events（SSE 握手）' {
         $curl = (Get-Command curl.exe -ErrorAction SilentlyContinue).Source
         if (-not $curl) { $curl = 'C:\Windows\System32\curl.exe' }

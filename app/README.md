@@ -129,9 +129,14 @@ app\
 ```
 new ──开始下载（队列里显示进度）──▶ done（磁盘命中）
  │
- └──源失效──▶ failed ──刷新源地址──▶ new
-忽略（ignored）只能手动设置；扫描到文件时任何状态都会被推成 done。
+ ├──源失效──▶ failed ──刷新源地址──▶ new
+ │
+ └──手动/右键──▶ recycled（回收站）
 ```
+
+`recycled`（回收站）只能手动设置：主列表和画廊不显示它，只在「更多 → 回收站」里维护；
+扫描到文件时**不会**把 recycled 推回 done，恢复（改成 new）后才会按磁盘命中变 done。
+回收站列表只显示 token / 时长 / 分辨率 / 入库日期，**不显示封面**。
 
 > 旧的 `sent`（迅雷已投递）与 `downloading`（下载中）在启动时自动迁移成 `new` / `done`。
 > 下载进度看队列（`data\download.json`），不再占用台账状态。
@@ -244,7 +249,7 @@ POST /api/download/pause {on}                                        暂停 / �
 POST /api/download/reset                                             强制解除「已有任务在跑」
 POST /api/download/clear-done                                        清理队列里的完成记录（不动文件/台账）
 POST /api/download/repair                                            整理 .part
-POST /api/mark      {tokens,status}                                  改状态（new/done/ignored/failed）
+POST /api/mark      {tokens,status}                                  改状态（new/done/recycled/failed）
 POST /api/fav       {tokens,on}                                      收藏
 POST /api/watched   {tokens,on}                                      已看/未看
 POST /api/rate      {tokens,value}                                   评分 0–5（0 = 清除）

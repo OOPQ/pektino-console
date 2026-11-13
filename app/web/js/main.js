@@ -52,6 +52,9 @@ function paintKpis(S) {
   // 主按钮上直接显示待下载数量，点之前就知道要下多少
   const dlBtn = $('#btnDownload');
   if (dlBtn) dlBtn.textContent = `下载待下载 (${S.new || 0})`;
+  // 「更多 → 回收站」上的数量角标
+  const bc = $('#binCount');
+  if (bc) bc.textContent = S.recycled ? `(${S.recycled})` : '';
 }
 
 function paintDir(S) {
@@ -382,6 +385,79 @@ function initDownloadQueue() {
   };
 }
 
+/* ================= 回收站 ================= */
+function binRows() {
+  return state.ROWS.filter(r => r.status === 'recycled' || r.status === 'ignored');
+}
+
+function renderBin() {
+  const rows = binRows();
+  const head = $('#binHead');
+  if (head) {
+    head.textContent = rows.length
+      ? `共 ${rows.length} 条 · 「恢复」回到待下载；「彻底删除」会连同本地文件一起删掉`
+      : '回收站是空的';
+  }
+  const emptyBtn = $('#binEmpty');
+  if (emptyBtn) emptyBtn.disabled = rows.length === 0;
+  const el = $('#binList');
+  if (!el) return;
+  if (!rows.length) {
+    el.innerHTML = '<div class="bin-empty">回收站是空的<br><span class="sub">在表格或画廊里右键 →「移入回收站」</span></div>';
+    return;
+  }
+  // 回收站只列文本信息，不显示封面
+  el.innerHTML = rows.map(r => {
+    const meta = [r.duration, r.res, r.first_seen ? String(r.first_seen).slice(0, 10) : ''].filter(Boolean).join(' · ');
+    return `<div class="bin-row" data-bin="${r.token}">
+      <div class="bin-main">
+        <span class="mono">${r.token}</span>
+        <span class="sub">${meta || '—'}</span>
+      </div>
+      <div class="bin-actions">
+        <button class="ghost" data-bin-restore="${r.token}">恢复</button>
+        <button class="ghost danger" data-bin-del="${r.token}">彻底删除</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function openBinDrawer() {
+  renderBin();
+  $('#binDrawer').classList.add('on');
+}
+
+async function binRestore(tokens) {
+  const r = await api('/api/mark', { tokens, status: 'new' });
+  if (!r || !r.ok) { toast((r && r.error) || '恢复失败', 4000); return; }
+  toast(`已恢复 ${r.count} 条`, 2500);
+  await load();
+  renderBin();
+}
+
+async function binDelete(tokens) {
+  if (!tokens.length) return;
+  if (!confirm(`彻底删除 ${tokens.length} 条？会同时删除本地文件，无法撤销。`)) return;
+  const r = await api('/api/delete', { tokens, purge: true, permanent: true });
+  if (!r || !r.ok) { toast((r && r.error) || '删除失败', 5000); return; }
+  const bad = (r.failed || []).length;
+  toast(bad ? `已删除 ${tokens.length - bad} 条，${bad} 条跳过（看日志）` : `已彻底删除 ${tokens.length} 条`, 3500);
+  await load();
+  renderBin();
+}
+
+function initBin() {
+  $('#binClose').onclick = () => $('#binDrawer').classList.remove('on');
+  $('#binDrawer').onclick = e => { if (e.target.id === 'binDrawer') $('#binDrawer').classList.remove('on'); };
+  $('#binEmpty').onclick = () => binDelete(binRows().map(r => r.token));
+  $('#binList').addEventListener('click', e => {
+    const re = e.target.closest('[data-bin-restore]');
+    if (re) { binRestore([re.dataset.binRestore]); return; }
+    const del = e.target.closest('[data-bin-del]');
+    if (del) { binDelete([del.dataset.binDel]); return; }
+  });
+}
+
 function paintProject(ws) {
   const el = $('#wsInfo');
   if (!el) return;
@@ -662,6 +738,7 @@ function initToolbar() {
       if (act === 'scan') return scanDir();
       if (act === 'refreshCovers') return repairCovers();
       if (act === 'export') { window.location.href = '/api/export'; return; }
+      if (act === 'recycle-bin') return openBinDrawer();
       if (act === 'reset-download') {
         if (!confirm('结束残留下载进程并解除「已有任务在跑」？已下载的 .part 会保留。')) return;
         try {
@@ -783,6 +860,7 @@ initControls();
 initToolbar();
 initBulk();
 initDownloadQueue();
+initBin();
 
 onEvent('reload', load);
 onEvent('delete', d => delFiles(d.tokens, d.purge));

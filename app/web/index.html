@@ -41,7 +41,6 @@
     <option value="new">待下载</option>
     <option value="done">已完成</option>
     <option value="failed">下载失败</option>
-    <option value="ignored">忽略</option>
   </select>
   <select id="fFlag" title="按标记筛选（可叠加在上面的状态之上）">
     <option value="none">不限标记</option>
@@ -110,6 +109,8 @@
       <button data-more="scan" title="重新扫描内容目录">重新扫描目录</button>
       <button data-more="refreshCovers" title="重新抓详情页补封面">修复缺失封面</button>
       <button data-more="export">导出 CSV</button>
+      <div class="menu-sep"></div>
+      <button data-more="recycle-bin" title="回收站：恢复或彻底删除">🗑 回收站 <span id="binCount" class="sub"></span></button>
       <div class="menu-sep"></div>
       <button data-more="reset-download" title="异常时用：结束残留下载进程、解除「已有任务在跑」">解除下载占用</button>
     </div>
@@ -304,6 +305,20 @@
     <div class="dq" id="dlFailList"></div>
     <h3 style="margin-top:16px" id="dlCancelHead" hidden>已取消 <span class="sub" id="dlCancelInfo"></span></h3>
     <div class="dq" id="dlCancelList"></div>
+  </div>
+</div>
+
+<!-- ===== 回收站 ===== -->
+<div class="drawer" id="binDrawer">
+  <div class="sheet">
+    <h3>回收站</h3>
+    <div class="sub" id="binHead" style="margin-bottom:12px">–</div>
+    <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;align-items:center">
+      <button class="ghost danger" id="binEmpty" disabled title="彻底删除回收站里的全部条目（含本地文件）">清空回收站</button>
+      <span class="spacer"></span>
+      <button class="ghost" id="binClose">关闭</button>
+    </div>
+    <div class="bin-list" id="binList"></div>
   </div>
 </div>
 

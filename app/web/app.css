@@ -115,7 +115,7 @@ tbody td:last-child{white-space:nowrap}
 .tag{display:inline-block;padding:5px 8px;border-radius:999px;font-size:11px;border:1px solid;white-space:nowrap}
 .tag.new{color:var(--acc);border-color:#2b5c8f;background:#12253a}
 .tag.done{color:var(--ok);border-color:#2c5c33;background:#13241a}
-.tag.ignored{color:var(--dim);border-color:#3a434f;background:#1a1f26}
+.tag.recycled,.tag.ignored{color:var(--dim);border-color:#3a434f;background:#1a1f26}
 .tag.failed{color:var(--bad);border-color:#7a2b2b;background:#2a1414}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.55}}
 
@@ -317,6 +317,16 @@ details.adv[open] summary:before{content:'▾'}
 .dq-item.cancelled{opacity:.55}
 .dq-item.cancelled .dq-bar i{background:#4a5563}
 
+button.danger{color:var(--bad);border-color:#5c2d2d}
+button.danger:hover:not(:disabled){background:#3a1d1d;border-color:#7a2b2b;color:#ff8b84}
+/* ---------- 回收站 ---------- */
+.bin-list{display:flex;flex-direction:column;gap:8px}
+.bin-row{display:flex;align-items:center;gap:10px;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:8px 10px}
+.bin-main{display:flex;flex-direction:column;gap:2px;min-width:0;flex:1}
+.bin-main .mono{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bin-actions{display:flex;gap:6px;flex-shrink:0}
+.bin-actions button{padding:3px 8px;font-size:12px}
+.bin-empty{padding:44px 0;text-align:center;color:var(--dim);line-height:1.9}
 /* ---------- 表格 / 画廊切换 ---------- */
 .seg{display:inline-flex;border:1px solid var(--line);border-radius:7px;overflow:hidden}
 .seg button{background:transparent;border:0;color:var(--dim);padding:3px 10px;font-size:12px;cursor:pointer}

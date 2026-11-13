@@ -19,7 +19,7 @@ function Get-Stats {
       台账几千行时是明显的纯开销；现在一次遍历算完。
     #>
     $rows = @($State.Ledger)
-    $counts = @{ new = 0; done = 0; ignored = 0; failed = 0 }
+    $counts = @{ new = 0; done = 0; recycled = 0; failed = 0 }
     $resCount = @{}
     $secs = 0
     $bytes = 0.0
@@ -61,7 +61,7 @@ function Get-Stats {
         total       = $rows.Count
         new         = $counts['new']
         done        = $counts['done']
-        ignored     = $counts['ignored']
+        recycled    = $counts['recycled']
         failed      = $counts['failed']
         hours       = [math]::Round($secs / 3600, 2)
         todayAdded  = $todayAdded
@@ -108,8 +108,8 @@ function Invoke-Scan {
             $r.file_size = $f.size
             $r.file_date = $f.date
             $found++
-            # 磁盘上有文件 → 一律以文件为准
-            if ($r.status -ne 'done') {
+            # 磁盘上有文件 → 一律以文件为准（回收站里的条目除外：保持回收状态）
+            if ($r.status -ne 'done' -and $r.status -ne 'recycled') {
                 $r.status = 'done'
                 $r.note = 'auto:file'
                 $changed++
@@ -131,9 +131,14 @@ function Invoke-Scan {
         if (-not $ledgerKeys.ContainsKey($k)) { $orphans += $idx.Files[$k] }
     }
 
-    # 旧版本把死链标成 ignored，这里统一迁到 failed（可在「失败」里查看/重试）
+    # 旧版本把死链标成 ignored，这里统一迁到 failed（可在「失败」里查看/重试）；
+    # 其余 ignored 一律并入回收站 recycled
     foreach ($r in @($State.Ledger)) {
-        if ($r.status -eq 'ignored' -and ($r.note -like 'dead:*' -or $r.note -like 'unreachable*' -or $r.note -like 'removed*')) { $r.status = 'failed'; $changed++ }
+        if ($r.status -eq 'ignored' -and ($r.note -like 'dead:*' -or $r.note -like 'unreachable*' -or $r.note -like 'removed*')) {
+            $r.status = 'failed'; $changed++
+        } elseif ($r.status -eq 'ignored') {
+            $r.status = 'recycled'; $changed++
+        }
         # 旧措辞迁移：dead:http:x → unreachable:http:x；removed → removed:site
         if ($r.note -like 'dead:http:*') { $r.note = 'unreachable' + $r.note.Substring(4); $changed++ }
         elseif ($r.note -eq 'removed') { $r.note = 'removed:site'; $changed++ }
@@ -342,7 +347,8 @@ function Invoke-Fav {
 function Invoke-Mark {
     param([string[]]$Tokens, [string]$Status = 'done', [string]$Note = '')
     if (-not $Tokens) { return @{ ok = $false; error = '没选条目' } }
-    if (@('new', 'done', 'ignored', 'failed') -notcontains $Status) { return @{ ok = $false; error = "非法状态: $Status" } }
+    if ($Status -eq 'ignored') { $Status = 'recycled' }   # 兼容旧前端的「忽略」
+    if (@('new', 'done', 'recycled', 'failed') -notcontains $Status) { return @{ ok = $false; error = "非法状态: $Status" } }
     $changed = New-Object System.Collections.ArrayList
     foreach ($r in @($State.Ledger)) {
         if ($Tokens -contains $r.token) { [void]$changed.Add($r) }
@@ -1064,7 +1070,7 @@ function Apply-DeadFromProgress {
             $row = $State.Ledger | Where-Object { $_.token -eq $d.token } | Select-Object -First 1
             if (-not $row) { continue }
             if ($row.file_name) { continue }                 # 已经有文件了，绝不改状态
-            if ($row.status -eq 'done' -or $row.status -eq 'ignored') { continue }
+            if ($row.status -eq 'done' -or $row.status -eq 'recycled') { continue }
 
             # 本地已经有 .mp4 / .part → 还能续传，不判死
             $tk = [string]$row.token

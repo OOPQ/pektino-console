@@ -96,7 +96,7 @@ function ctxItemsFor(row) {
     { sep: true },
     { act: 'done', label: '标记完成' },
     { act: 'new', label: '重置为待下载' },
-    { act: 'ignore', label: '忽略' },
+    { act: 'recycle', label: '🗑 移入回收站' },
     { sep: true },
     { act: 'delete', label: '🗑 删除本地文件（回收站）', off: !hasFile },
     { act: 'purge', label: '🗑 删除文件并从台账移除' },
@@ -182,10 +182,10 @@ async function onCtxAction(act) {
     case 'purge': return delFiles([tk], true);
     case 'done':
     case 'new':
-    case 'ignore': {
-      const st = act === 'ignore' ? 'ignored' : act;
+    case 'recycle': {
+      const st = act === 'recycle' ? 'recycled' : act;
       const r = await setStatus([tk], st);
-      if (r.ok) { render(); toast(`已标记 ${STATUS_LABEL[st] || st}`); }
+      if (r.ok) { render(); toast(st === 'recycled' ? '已移入回收站' : `已标记 ${STATUS_LABEL[st] || st}`); }
       return;
     }
   }

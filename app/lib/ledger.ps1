@@ -6,7 +6,7 @@
 .DESCRIPTION
   out\ledger.csv 是唯一事实来源：
     - token 是唯一键；重复抓取只更新元数据，保留 status / first_seen / fav
-    - status: new(待下载) / sent(已投迅雷) / done(已完成) / ignored(忽略)
+    - status: new(待下载) / sent(已投迅雷) / done(已完成) / recycled(回收站)
     - fav: '1' 表示收藏
     - 扫描内容目录时，文件名 `<token>.mp4` 命中即写入 file_name/file_size/file_date 并置 done
 #>
@@ -237,11 +237,15 @@ function ConvertTo-Seconds {
 }
 
 function Repair-Statuses {
-    <#  旧状态迁移：sent（迅雷投递）/ downloading（下载中）已经并回 new / done  #>
+    <#  旧状态迁移：sent（迅雷投递）/ downloading（下载中）已经并回 new / done；
+        ignored（忽略）并入回收站 recycled  #>
     $n = 0
     foreach ($r in @($State.Ledger)) {
         if ($r.status -eq 'sent' -or $r.status -eq 'downloading') {
             $r.status = if ($r.file_name) { 'done' } else { 'new' }
+            $n++
+        } elseif ($r.status -eq 'ignored') {
+            $r.status = 'recycled'
             $n++
         }
     }

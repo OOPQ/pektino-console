@@ -18,9 +18,11 @@ export function applyCols() {
 /* ---------- 过滤 ---------- */
 const RES_RANK = { '4k': 2160, '1080': 1080, '720': 720 };
 function passFilter(r) {
+  /* 回收站条目只在「更多 → 回收站」里出现 */
+  if (r.status === 'recycled' || r.status === 'ignored') return false;
   /* 状态：任务生命周期（单选） */
   const st = state.FILTER.status;
-  if (['new', 'done', 'ignored', 'failed'].includes(st) && r.status !== st) return false;
+  if (['new', 'done', 'failed'].includes(st) && r.status !== st) return false;
 
   /* 标记：资源属性（单选，可与状态叠加） */
   const fl = state.FILTER.flag;
@@ -75,7 +77,7 @@ const SORTS = {
   plays: r => (+r.play_count || 0),
   rating: r => (+r.rating || 0),
   token: r => (r.token || ''),
-  status: r => ['failed', 'new', 'done', 'ignored'].indexOf(r.status),
+  status: r => ['failed', 'new', 'done', 'recycled', 'ignored'].indexOf(r.status),
   disk: r => (+r.file_size || 0),
   first_seen: r => (r.first_seen || '')
 };

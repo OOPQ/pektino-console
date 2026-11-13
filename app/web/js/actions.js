@@ -85,7 +85,7 @@ export async function setWatched(tokens, on) {
   return r;
 }
 
-/* ---------- 状态（完成 / 待下载 / 忽略） ---------- */
+/* ---------- 状态（完成 / 待下载 / 回收站） ---------- */
 export async function setStatus(tokens, status) {
   const list = Array.isArray(tokens) ? tokens : [tokens];
   let r;

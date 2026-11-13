@@ -19,3 +19,6 @@ agent-browser.exe
 Thumbs.db
 desktop.ini
 .DS_Store
+
+# ---------- 本地诊断产物（DSH 权限修复报告等，不入库） ----------
+acl-report/

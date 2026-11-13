@@ -2,13 +2,18 @@
 <#
 .SYNOPSIS
   控制台冒烟测试：验证服务可用、静态资源可访问、核心接口返回结构正确。
+.DESCRIPTION
+  -Start 时会用一个**独立项目目录**起临时服务：默认建在系统临时目录，测完自动删除，
+  不会碰你正在用的项目（数据库/媒体/日志）。想指定目录就 -Project。
 .EXAMPLE
-  .\test.ps1                 # 测 127.0.0.1:8791（需先启动服务）
-  .\test.ps1 -Port 8791 -Start   # 自己起一个临时服务再测
+  .\test.ps1                      # 测 127.0.0.1:8791（需先启动服务）
+  .\test.ps1 -Port 8791 -Start    # 自己起一个临时服务再测（临时项目，跑完删除）
+  .\test.ps1 -Start -Project D:\tmp\smoke   # 用指定目录当测试项目（不会自动删）
 #>
 param(
     [int]$Port = 8791,
-    [switch]$Start
+    [switch]$Start,
+    [string]$Project = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -16,6 +21,7 @@ $root = $PSScriptRoot
 $base = "http://127.0.0.1:$Port"
 $pass = 0; $fail = 0
 $proc = $null
+$tempProject = ''
 
 function Test-Item($name, $scriptBlock) {
     try {
@@ -29,10 +35,23 @@ function Test-Item($name, $scriptBlock) {
 }
 
 if ($Start) {
-    Write-Host "启动临时服务 :$Port ..." -ForegroundColor Cyan
-    $proc = Start-Process -FilePath 'powershell.exe' `
-        -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', (Join-Path (Split-Path $root -Parent) 'console.ps1'), '-Port', $Port, '-NoBrowser') `
-        -PassThru -WindowStyle Hidden
+    if (-not $Project) {
+        # 临时项目：和真实数据完全隔离
+        $Project = Join-Path ([System.IO.Path]::GetTempPath()) ('pektino-smoke-' + [guid]::NewGuid().ToString('N').Substring(0, 8))
+        $tempProject = $Project
+    }
+    Write-Host "启动临时服务 :$Port（项目 $Project）..." -ForegroundColor Cyan
+    # 连「最近项目」记录一起隔离：console 把它写在 %APPDATA%\pektino\projects.json，
+    # 不隔离的话每跑一次冒烟测试就会把临时项目塞进你真实的最近项目列表
+    $savedAppData = $env:APPDATA
+    $env:APPDATA = Join-Path $Project '.appdata'
+    try {
+        $proc = Start-Process -FilePath 'powershell.exe' `
+            -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', (Join-Path (Split-Path $root -Parent) 'console.ps1'), '-Port', $Port, '-NoBrowser', '-Project', $Project) `
+            -PassThru -WindowStyle Hidden
+    } finally {
+        $env:APPDATA = $savedAppData
+    }
     $deadline = (Get-Date).AddSeconds(25)
     while ((Get-Date) -lt $deadline) {
         try {
@@ -62,13 +81,13 @@ try {
         "200 text/css"
     }
     Test-Item '静态资源路径穿越被拒' {
-        try {
-            $r = Invoke-WebRequest "$base/static/js/../../../windows/win.ini" -UseBasicParsing -TimeoutSec 10
-            throw "未被拒绝，返回 $($r.StatusCode)"
-        } catch [System.Net.WebException] {
-            $code = [int]$_.Exception.Response.StatusCode
-            "已拒绝 ($code)"
-        }
+        # 必须用 --path-as-is：Invoke-WebRequest 会在客户端就把 ..\ 规范化掉，等于没测到服务端
+        $curl = (Get-Command curl.exe -ErrorAction SilentlyContinue).Source
+        if (-not $curl) { $curl = 'C:\Windows\System32\curl.exe' }
+        $code = (& $curl -s -o NUL -w '%{http_code}' --path-as-is "$base/static/js/../../../../windows/win.ini" 2>$null)
+        $code = ([string]$code).Trim()
+        if ($code -ne '404') { throw "期望 404，实际 $code" }
+        "已拒绝 (404)"
     }
 
     Write-Host "`n== 核心接口 ==" -ForegroundColor Cyan
@@ -97,6 +116,20 @@ try {
         if ($r.StatusCode -ne 200) { throw "状态码 $($r.StatusCode)" }
         "200 ($([math]::Round($r.RawContentLength/1KB,1))KB)"
     }
+    Test-Item '临时项目隔离（不碰真实数据）' {
+        if (-not $Project) { return '跳过（未用 -Project）' }
+        $st = Invoke-RestMethod "$base/api/state" -TimeoutSec 15
+        $got = [System.IO.Path]::GetFullPath([string]$st.project.root).TrimEnd('\')
+        $want = [System.IO.Path]::GetFullPath($Project).TrimEnd('\')
+        if ($got -ne $want) { throw "项目根不符：$got ≠ $want" }
+        "root=$got"
+    }
+    Test-Item 'POST /api/scan（结构正确）' {
+        $r = Invoke-RestMethod "$base/api/scan" -Method Post -ContentType 'application/json' -Body '{}' -TimeoutSec 20
+        if (-not $r.ok) { throw '返回 ok=false' }
+        foreach ($k in 'files', 'downloaded', 'changed') { if ($null -eq $r.$k) { throw "缺少 $k" } }
+        "files=$($r.files) downloaded=$($r.downloaded) changed=$($r.changed)"
+    }
     Test-Item 'POST /api/mark（非法参数应返回 ok=false）' {
         $r = Invoke-RestMethod "$base/api/mark" -Method Post -ContentType 'application/json' `
             -Body (@{ tokens = @(); status = 'bogus' } | ConvertTo-Json) -TimeoutSec 10
@@ -116,11 +149,93 @@ try {
             -Body (@{ tokens = @($tk); value = 0 } | ConvertTo-Json) -TimeoutSec 10
         "写入 5 → 读回 5 → 已还原"
     }
+
+    Write-Host "`n== 边界与拒绝路径 ==" -ForegroundColor Cyan
+    Test-Item 'POST 非法 JSON → 400' {
+        # 用 curl 取原始状态码：Invoke-WebRequest 在 5.1 / 7 抛的异常类型不同，跨版本不好判断
+        $curl = (Get-Command curl.exe -ErrorAction SilentlyContinue).Source
+        if (-not $curl) { $curl = 'C:\Windows\System32\curl.exe' }
+        $code = (& $curl -s -o NUL -w '%{http_code}' -X POST -H 'Content-Type: application/json' --data '{bad' "$base/api/mark" 2>$null)
+        $code = ([string]$code).Trim()
+        if ($code -ne '400') { throw "期望 400，实际 $code" }
+        '400 Bad Request'
+    }
+    Test-Item 'POST /api/play 不存在的 token → ok=false（不抛 500）' {
+        $r = Invoke-RestMethod "$base/api/play" -Method Post -ContentType 'application/json' `
+            -Body (@{ token = '__nope__' } | ConvertTo-Json) -TimeoutSec 10
+        if ($r.ok -ne $false) { throw '应当返回 ok=false' }
+        "ok=false error=$($r.error)"
+    }
+    Test-Item 'POST /api/delete 台账外 token → ok=false' {
+        $r = Invoke-RestMethod "$base/api/delete" -Method Post -ContentType 'application/json' `
+            -Body (@{ tokens = @('__nope__') } | ConvertTo-Json) -TimeoutSec 10
+        if ($r.ok -ne $false) { throw '应当返回 ok=false' }
+        "ok=false error=$($r.error)"
+    }
+    Test-Item 'POST /api/config 非法代理 → ok=false' {
+        $r = Invoke-RestMethod "$base/api/config" -Method Post -ContentType 'application/json' `
+            -Body (@{ proxy = 'not a proxy !!' } | ConvertTo-Json) -TimeoutSec 10
+        if ($r.ok -ne $false) { throw '应当返回 ok=false' }
+        "ok=false error=$($r.error)"
+    }
+    Test-Item 'POST /api/config 并发越界 → ok=false' {
+        $r = Invoke-RestMethod "$base/api/config" -Method Post -ContentType 'application/json' `
+            -Body (@{ concurrent = 99 } | ConvertTo-Json) -TimeoutSec 10
+        if ($r.ok -ne $false) { throw '应当返回 ok=false' }
+        "ok=false error=$($r.error)"
+    }
+    Test-Item 'POST /api/scrape 非法榜单 → ok=false（不启动任务）' {
+        $r = Invoke-RestMethod "$base/api/scrape" -Method Post -ContentType 'application/json' `
+            -Body (@{ rank = 'bogus' } | ConvertTo-Json) -TimeoutSec 10
+        if ($r.ok -ne $false) { throw '应当返回 ok=false' }
+        "ok=false error=$($r.error)"
+    }
+    Test-Item 'GET /api/project（结构正确）' {
+        $r = Invoke-RestMethod "$base/api/project" -TimeoutSec 10
+        if (-not $r.ok) { throw 'ok!=true' }
+        foreach ($k in 'root', 'media', 'videoCount', 'exists') { if ($null -eq $r.project.$k) { throw "缺少 $k" } }
+        "root=$($r.project.root) videoCount=$($r.project.videoCount)"
+    }
+    Test-Item 'GET /api/events（SSE 握手）' {
+        $curl = (Get-Command curl.exe -ErrorAction SilentlyContinue).Source
+        if (-not $curl) { $curl = 'C:\Windows\System32\curl.exe' }
+        # 长连接不会自己结束，给它 2 秒然后看已经收到的头
+        $out = (& $curl -s -i --max-time 2 "$base/api/events" 2>$null) -join "`n"
+        if ($out -notmatch 'text/event-stream') { throw 'Content-Type 不是 text/event-stream' }
+        if ($out -notmatch 'event: hello') { throw '没有收到 hello 事件' }
+        'text/event-stream + hello'
+    }
+    Test-Item 'rows 按需下发（rowsRev 契约）' {
+        if (-not $Start) { return '跳过（未用 -Start）' }
+        $s0 = Invoke-RestMethod "$base/api/state" -TimeoutSec 15
+        if (-not ($s0.rows -is [array])) { throw '首次请求必须带 rows' }
+        if ($null -eq $s0.rowsRev) { throw '缺少 rowsRev' }
+        # 造一个媒体文件，让台账真的变一次
+        $media = Join-Path $Project 'media'
+        [System.IO.File]::WriteAllBytes((Join-Path $media 'revprobe.mp4'), (New-Object byte[] 8))
+        $imp = Invoke-RestMethod "$base/api/project/import" -Method Post -ContentType 'application/json' -Body '{}' -TimeoutSec 20
+        if ($imp.added -lt 1) { throw "识别没有新增（added=$($imp.added)）" }
+        $s1 = Invoke-RestMethod "$base/api/state?rowsRev=$($s0.rowsRev)" -TimeoutSec 15
+        if (-not ($s1.rows -is [array])) { throw '台账变化后应重新下发 rows' }
+        if ($s1.rowsRev -le $s0.rowsRev) { throw "rowsRev 没有前进：$($s0.rowsRev) → $($s1.rowsRev)" }
+        $s2 = Invoke-RestMethod "$base/api/state?rowsRev=$($s1.rowsRev)" -TimeoutSec 15
+        if ($null -ne $s2.rows) { throw '台账未变时不应再下发 rows' }
+        "rowsRev $($s0.rowsRev) → $($s1.rowsRev)，未变时省略 rows"
+    }
 }
 finally {
     if ($proc) {
         Write-Host "`n停止临时服务..." -ForegroundColor DarkGray
         Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
+        Start-Sleep -Milliseconds 800
+    }
+    if ($tempProject -and (Test-Path $tempProject)) {
+        try {
+            Remove-Item -LiteralPath $tempProject -Recurse -Force -ErrorAction Stop
+            Write-Host "已删除临时项目 $tempProject" -ForegroundColor DarkGray
+        } catch {
+            Write-Host "临时项目未删除（可手动删）：$tempProject" -ForegroundColor DarkYellow
+        }
     }
 }
 

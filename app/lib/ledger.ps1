@@ -42,12 +42,25 @@ function Read-Ledger {
     return $rows
 }
 
+# 行数据版本号：只在「台账行真的变了」时 +1。
+# /api/state 用它决定要不要把整份 rows 下发给前端 —— 下载进度这类每 2 秒一次的
+# rev 变化不需要重传几千行数据。
+$script:LedgerRev = 0
+
+function Get-LedgerRev { return [int]$script:LedgerRev }
+
+function Touch-Ledger {
+    <#  台账内容发生变化时调用（绕过 Save-Ledger 的路径，例如 purge 直接删库）  #>
+    $script:LedgerRev++
+}
+
 function Save-Ledger {
     param($Rows, [string]$Path, [switch]$ForceSnapshot, [switch]$NoSnapshot)
     if (-not $Path) { $Path = Get-LedgerPath }
 
     if ($script:DbConn) {
         Save-StoreItems -Rows @($Rows)
+        Touch-Ledger
         if (-not $NoSnapshot) { Write-CsvSnapshot -Rows @($Rows) -Path $Path -Force:$ForceSnapshot }
         return
     }
@@ -58,6 +71,7 @@ function Save-Ledger {
     $tmp = "$Path.tmp"
     @($Rows) | Select-Object $script:LedgerColumns | Export-Csv -Path $tmp -NoTypeInformation -Encoding UTF8
     Move-Item -Path $tmp -Destination $Path -Force
+    Touch-Ledger
 }
 
 function Merge-Ledger {

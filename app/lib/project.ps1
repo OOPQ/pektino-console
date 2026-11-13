@@ -173,8 +173,20 @@ function Resolve-ProjectRoot {
     return (New-Project -Root $abs)
 }
 
+$script:ProjectSummaryCache = $null
+
 function Get-ProjectSummary {
-    param($Paths)
+    <#
+      /api/state 在任务运行期间每 1.2 秒被轮询一次，而这里要枚举 media\*.mp4 统计数量和体积。
+      文件一多（几千个）就变成每次请求都扫一遍目录 → 缓存 10 秒，界面看不出差别。
+    #>
+    param($Paths, [switch]$Refresh, [int]$MaxAgeSeconds = 10)
+
+    $cache = $script:ProjectSummaryCache
+    if (-not $Refresh -and $cache -and $cache.root -eq $Paths.ProjectRoot -and
+        ((Get-Date) - $cache.at).TotalSeconds -lt $MaxAgeSeconds) {
+        return $cache.value
+    }
 
     $files = 0; $gb = 0
     if (Test-Path $Paths.Content) {
@@ -187,7 +199,7 @@ function Get-ProjectSummary {
     $dbMB = 0
     if (Test-Path $Paths.Database) { $dbMB = [math]::Round((Get-Item $Paths.Database).Length / 1MB, 2) }
 
-    [pscustomobject]@{
+    $summary = [pscustomobject]@{
         root       = $Paths.ProjectRoot
         data       = $Paths.DataDir
         media      = $Paths.Content
@@ -199,17 +211,37 @@ function Get-ProjectSummary {
         coverCount = $covers
         exists     = (Test-Path $Paths.ProjectRoot)
     }
+    $script:ProjectSummaryCache = @{ root = $Paths.ProjectRoot; at = (Get-Date); value = $summary }
+    return $summary
 }
 
 function Import-ProjectFiles {
-    <#  识别项目 media\ 里已有的 mp4：台账里没有的补成 done 记录  #>
-    param($Paths)
+    <#
+      识别项目 media\ 里已有的 mp4：台账里没有的补成 done 记录。
+
+      以前这个函数直接读写 $State / $LedgerPath —— 那是 console.ps1 作用域的变量，
+      靠「点源到同一作用域」才碰巧能跑，单独调用就炸。现在改成显式契约：
+        -Rows      当前台账行（不给就从库/CSV 自己读）
+        -SavePath  落盘路径（给了才持久化，并在 console 里补 Touch-State / 日志）
+      返回的 rows 是合并后的完整行集，调用方自己决定要不要写回 $State。
+    #>
+    param(
+        $Paths,
+        $Rows = $null,
+        [string]$SavePath = ''
+    )
+
+    if ($null -eq $Rows) { $Rows = @(Read-Ledger -Path $Paths.LedgerCsv) }
+
+    $list = New-Object System.Collections.ArrayList
+    $known = @{}
+    foreach ($r in @($Rows)) {
+        [void]$list.Add($r)
+        if ($r.token) { $known[([string]$r.token).ToLower()] = $true }
+    }
 
     $added = 0; $skipped = 0
-    if (-not (Test-Path $Paths.Content)) { return [pscustomobject]@{ added = 0; skipped = 0 } }
-
-    $known = @{}
-    foreach ($r in @($State.Ledger)) { if ($r.token) { $known[([string]$r.token).ToLower()] = $true } }
+    if (-not (Test-Path $Paths.Content)) { return [pscustomobject]@{ added = 0; skipped = 0; rows = @($list) } }
 
     foreach ($f in @(Get-ChildItem -Path $Paths.Content -Filter '*.mp4' -File -ErrorAction SilentlyContinue)) {
         $tk = [System.IO.Path]::GetFileNameWithoutExtension($f.Name)
@@ -225,15 +257,16 @@ function Import-ProjectFiles {
             file_name = $f.Name; file_size = $f.Length; file_date = $f.LastWriteTime.ToString('yyyy-MM-dd HH:mm:ss')
             play_count = ''; last_play = ''; rating = ''
         }
-        $State.Ledger = @($State.Ledger) + $row
+        [void]$list.Add($row)
         $known[$tk.ToLower()] = $true
         $added++
     }
 
-    if ($added -gt 0) {
-        Save-Ledger -Rows $State.Ledger -Path $LedgerPath
-        Touch-State
-        Write-Log 'project' "识别已有媒体：新增 $added 条，跳过 $skipped 条"
+    if ($added -gt 0 -and $SavePath) {
+        Save-Ledger -Rows @($list) -Path $SavePath
+        # 启动早期调用时这两个函数可能还没加载，别让它们把已落盘的结果吞掉
+        if (Get-Command Touch-State -ErrorAction SilentlyContinue) { Touch-State }
+        if (Get-Command Write-Log -ErrorAction SilentlyContinue) { Write-Log 'project' "识别已有媒体：新增 $added 条，跳过 $skipped 条" }
     }
-    return [pscustomobject]@{ added = $added; skipped = $skipped }
+    return [pscustomobject]@{ added = $added; skipped = $skipped; rows = @($list) }
 }

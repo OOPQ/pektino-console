@@ -45,10 +45,12 @@ $script:StartedAt = Get-Date
 . (Join-Path $Root 'lib\project.ps1')
 
 function Test-ConsoleAlive {
+    <#  判断端口上跑的是不是「我们」：只回 {"ok":true} 的别的服务不能算，
+        否则会误以为已有实例、直接退出，而真正该启动的新实例起不来  #>
     param([int]$P)
     try {
         $r = Invoke-RestMethod -Uri "http://127.0.0.1:$P/api/state" -TimeoutSec 2
-        return [bool]$r.ok
+        return ([bool]$r.ok -and $null -ne $r.stats -and $null -ne $r.project)
     } catch { return $false }
 }
 
@@ -236,34 +238,39 @@ function Handle-Request {
 
     if ($method -eq 'GET' -and $path -eq '/api/state') {
         if ($State.Job) { try { Update-Job } catch { } }
-        # 10 秒内的扫描结果直接复用，避免每次轮询都读盘
-        $stale = $true
-        if ($State.Scan -and $State.Scan.lastScan) {
-            try { $stale = ((Get-Date) - [datetime]$State.Scan.lastScan).TotalSeconds -gt 10 } catch { $stale = $true }
+        # 扫盘与 CSV 快照都不在这里做：它们在主循环的空闲轮次里跑（见文件末尾），
+        # 请求路径上只读内存态，目录/台账再大也不拉长本次轮询。
+
+        # 行数据按需下发：前端带 rowsRev（它手里的行版本），只有台账真的变了才回 rows。
+        # 下载进度那种每 2 秒一次的 rev 变化不会再重传几千行 JSON。
+        $ledgerRev = Get-LedgerRev
+        $knownRows = -1
+        $hasRowsRev = $Req.Query.ContainsKey('rowsRev')
+        if ($hasRowsRev) { try { $knownRows = [int]$Req.Query['rowsRev'] } catch { $knownRows = -1 } }
+
+        $payload = [ordered]@{
+            ok       = $true
+            rev      = $State.Rev
+            rowsRev  = $ledgerRev
+            stats    = Get-Stats
+            log      = @($State.Log | Select-Object -Last 40)
+            job      = (Get-JobInfo)
+            download = (Get-DownloadInfo)
+            project  = (Get-ProjectSummary -Paths $WS)
+            settings = [pscustomobject]@{ proxy = [string]$Config.proxy; concurrent = $(if ($Config.concurrent) { [int]$Config.concurrent } else { 3 }) }
+            metrics  = [pscustomobject]@{
+                total        = $State.Metrics.total
+                avgMs        = if ($State.Metrics.total -gt 0) { [math]::Round($State.Metrics.sumMs / $State.Metrics.total, 1) } else { 0 }
+                maxMs        = $State.Metrics.maxMs
+                maxPath      = $State.Metrics.maxPath
+                slow         = @($State.Metrics.slow)
+                clientErrors = @($State.Metrics.clientErrors)
+                clientWarns  = $State.Metrics.clientWarns
+                uptime       = [math]::Round(((Get-Date) - $script:StartedAt).TotalMinutes, 1)
+            }
         }
-        if ($stale) { try { [void](Invoke-Scan -Silent) } catch { } }
-        # CSV 快照节流刷新（30s 一次），DB 是事实来源
-        try { Write-CsvSnapshot -Rows @($State.Ledger) -Path $LedgerPath } catch { }
-        Send-Json -Stream $Stream -Object ([pscustomobject]@{
-                ok      = $true
-                stats   = Get-Stats
-                rows    = @($State.Ledger)
-                log     = @($State.Log | Select-Object -Last 40)
-                job     = (Get-JobInfo)
-                download = (Get-DownloadInfo)
-                project = (Get-ProjectSummary -Paths $WS)
-                settings = [pscustomobject]@{ proxy = [string]$Config.proxy; concurrent = $(if ($Config.concurrent) { [int]$Config.concurrent } else { 3 }) }
-                metrics = [pscustomobject]@{
-                    total        = $State.Metrics.total
-                    avgMs        = if ($State.Metrics.total -gt 0) { [math]::Round($State.Metrics.sumMs / $State.Metrics.total, 1) } else { 0 }
-                    maxMs        = $State.Metrics.maxMs
-                    maxPath      = $State.Metrics.maxPath
-                    slow         = @($State.Metrics.slow)
-                    clientErrors = @($State.Metrics.clientErrors)
-                    clientWarns  = $State.Metrics.clientWarns
-                    uptime       = [math]::Round(((Get-Date) - $script:StartedAt).TotalMinutes, 1)
-                }
-            })
+        if (-not $hasRowsRev -or $knownRows -ne $ledgerRev) { $payload['rows'] = @($State.Ledger) }
+        Send-Json -Stream $Stream -Object $payload
         return
     }
 
@@ -298,7 +305,11 @@ function Handle-Request {
     if ($method -eq 'GET' -and $path -eq '/api/export') {
         $tmp = Join-Path (Split-Path $LedgerPath -Parent) '.export.csv'
         Write-CsvSnapshot -Rows @($State.Ledger) -Path $tmp -Force
-        $bytes = [Text.Encoding]::UTF8.GetBytes((Get-Content $tmp -Raw -Encoding UTF8))
+        # 空台账时文件是空的，Get-Content -Raw 返回 $null，
+        # 直接丢给 UTF8.GetBytes 会抛异常 → 导出接口 500
+        $txt = Get-Content $tmp -Raw -Encoding UTF8 -ErrorAction SilentlyContinue
+        if ($null -eq $txt) { $txt = '' }
+        $bytes = [Text.Encoding]::UTF8.GetBytes([string]$txt)
         Remove-Item $tmp -Force -ErrorAction SilentlyContinue
         Send-Bytes -Stream $Stream -Bytes $bytes -ContentType 'text/csv; charset=utf-8' -ExtraHeaders @{ 'Content-Disposition' = 'attachment; filename=ledger.csv' }
         return
@@ -351,6 +362,12 @@ function Handle-Request {
             '/api/refresh-url' {
                 $tokens = @()
                 if ($body.tokens) { $tokens = @($body.tokens | ForEach-Object { [string]$_ }) }
+                # 每条都要同步抓详情页（单条超时 25 秒），一次最多刷新 20 条，避免把主循环按死
+                $requested = $tokens.Count
+                if ($requested -gt 20) {
+                    $tokens = @($tokens | Select-Object -First 20)
+                    Write-Log 'refresh' "一次最多刷新 20 条（本次请求 $requested 条，只处理前 20 条）"
+                }
                 Send-Json -Stream $Stream -Object ([pscustomobject](Refresh-ItemUrls -Tokens $tokens))
                 return
             }
@@ -360,14 +377,18 @@ function Handle-Request {
                 return
             }
             '/api/project/import' {
-                $r = Import-ProjectFiles -Paths $WS
+                $r = Import-ProjectFiles -Paths $WS -Rows $State.Ledger -SavePath $LedgerPath
+                if ($r.added -gt 0) { $State.Ledger = @($r.rows) }
                 Send-Json -Stream $Stream -Object ([pscustomobject]@{ ok = $true; added = $r.added; skipped = $r.skipped })
                 return
             }
             '/api/covers/repair' {
+                # 只解析一次；上限 200（每条都要抓详情页 + 封面，主循环是单线程）
                 $limit = 40
-                if ($null -ne $body.limit) { $n = 0; if ([int]::TryParse([string]$body.limit, [ref]$n) -and $n -gt 0 -and $n -le 500) { $limit = $n } }
-                if ($body.limit) { $limit = [int]$body.limit }
+                if ($null -ne $body.limit) {
+                    $n = 0
+                    if ([int]::TryParse([string]$body.limit, [ref]$n) -and $n -gt 0 -and $n -le 200) { $limit = $n }
+                }
                 $r = Repair-Covers -Limit $limit
                 Send-Json -Stream $Stream -Object ([pscustomobject]$r)
                 return
@@ -597,8 +618,11 @@ try {
 # 首次使用（台账为空）：把项目 media\ 里已有的视频识别进来
 try {
     if (@($State.Ledger).Count -eq 0) {
-        $imp = Import-ProjectFiles -Paths $WS
-        if ($imp.added -gt 0) { Write-Host "  识别到已有文件 $($imp.added) 条" -ForegroundColor Green }
+        $imp = Import-ProjectFiles -Paths $WS -Rows $State.Ledger -SavePath $LedgerPath
+        if ($imp.added -gt 0) {
+            $State.Ledger = @($imp.rows)
+            Write-Host "  识别到已有文件 $($imp.added) 条" -ForegroundColor Green
+        }
     }
 } catch { Write-FileLog "project import failed: $($_.Exception.Message)" }
 
@@ -708,6 +732,21 @@ try {
                 $script:GuardAt = (Get-Date).ToString('s')
                 try { Step-DownloadGuard } catch { }
             }
+        }
+        # 空闲扫盘：优先在「这一轮没有待处理请求」时跑，这样 media\ 里有几千个文件时，
+        # 扫描不会拉长任何一次页面请求的响应时间。
+        # 但持续轮询（前端任务期间 1.2s 一次）可能让 Poll 一直是 true、永远等不到空闲 →
+        # 加一条兜底：超过 30 秒没扫就强制扫一次，避免扫描被轮询饿死。
+        $lastScan = $null
+        if ($State.Scan -and $State.Scan.lastScan) { try { $lastScan = [datetime]$State.Scan.lastScan } catch { } }
+        $scanAge = if ($lastScan) { ((Get-Date) - $lastScan).TotalSeconds } else { [double]::MaxValue }
+        if ($scanAge -ge 10 -and (-not $pending -or $scanAge -ge 30)) {
+            try { [void](Invoke-Scan -Silent) } catch { try { Write-FileLog "idle scan failed: $($_.Exception.Message)" } catch { } }
+        }
+        # CSV 快照（内部 30 秒节流）也放空闲轮次：几千行时 Export-Csv 要一两百毫秒。
+        # DB 才是事实来源，CSV 只是导出快照，晚一点写没有影响（导出接口会强制生成）。
+        if (-not $pending) {
+            try { Write-CsvSnapshot -Rows @($State.Ledger) -Path $LedgerPath } catch { }
         }
         } catch { try { Write-FileLog "loop step error: $($_.Exception.Message)" } catch { }; Start-Sleep -Milliseconds 200 }
     }

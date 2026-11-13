@@ -2,49 +2,70 @@
 # Business actions: stats, scan, jobs, fav/rate/watch, play, delete, send
 
 function Get-Stats {
+    <#
+      /api/state 每次轮询都要算一次。以前用 7 遍 Where-Object 扫全表（O(7n)），
+      台账几千行时是明显的纯开销；现在一次遍历算完。
+    #>
     $rows = @($State.Ledger)
-    $byStatus = @{}
-    foreach ($s in @('new', 'sent', 'done', 'ignored', 'failed', 'downloading')) {
-        $byStatus[$s] = @($rows | Where-Object { $_.status -eq $s }).Count
-    }
+    $counts = @{ new = 0; sent = 0; done = 0; ignored = 0; failed = 0; downloading = 0 }
+    $resCount = @{}
     $secs = 0
-    foreach ($r in $rows) { if ($r.seconds) { $secs += [int]$r.seconds } }
+    $bytes = 0.0
+    $onDisk = 0
+    $watched = 0
+    $toWatch = 0
+    $favorites = 0
     $today = (Get-Date).ToString('yyyy-MM-dd')
-    $todayAdded = @($rows | Where-Object { $_.first_seen -like "$today*" }).Count
+    $todayAdded = 0
+    $lastSeen = ''
 
-    $resGroups = @()
-    foreach ($g in ($rows | Where-Object { $_.res } | Group-Object res | Sort-Object Count -Descending | Select-Object -First 6)) {
-        $resGroups += [pscustomobject]@{ res = $g.Name; count = $g.Count }
+    foreach ($r in $rows) {
+        $st = [string]$r.status
+        if ($counts.ContainsKey($st)) { $counts[$st]++ }
+        if ($r.seconds) { $secs += [int]$r.seconds }
+        if ($r.file_size) { $bytes += [double]$r.file_size }
+        if ($r.file_name) {
+            $onDisk++
+            if (-not $r.last_play) { $toWatch++ }
+        }
+        if ($r.last_play) { $watched++ }
+        if ($r.fav -eq '1') { $favorites++ }
+        if ($r.first_seen -like "$today*") { $todayAdded++ }
+        if ($r.res) {
+            $k = [string]$r.res
+            $resCount[$k] = 1 + [int]$resCount[$k]
+        }
+        # 时间格式是 yyyy-MM-dd HH:mm:ss，字符串比较等价于时间比较
+        if ($r.last_seen -and ([string]$r.last_seen -gt $lastSeen)) { $lastSeen = [string]$r.last_seen }
     }
 
-    $onDisk = @($rows | Where-Object { $_.file_name }).Count
-    $bytes = 0
-    foreach ($r in $rows) { if ($r.file_size) { $bytes += [double]$r.file_size } }
-    $watched = @($rows | Where-Object { $_.last_play }).Count
+    $resGroups = @($resCount.GetEnumerator() | Sort-Object Value -Descending | Select-Object -First 6 |
+        ForEach-Object { [pscustomobject]@{ res = $_.Key; count = $_.Value } })
+
     $orphans = @()
     if ($State.Scan) { $orphans = @($State.Scan.orphans) }
 
     [pscustomobject]@{
         total       = $rows.Count
-        new         = $byStatus['new']
-        sent        = $byStatus['sent']
-        done        = $byStatus['done']
-        ignored     = $byStatus['ignored']
-        failed      = $byStatus['failed']
-        downloading = $byStatus['downloading']
+        new         = $counts['new']
+        sent        = $counts['sent']
+        done        = $counts['done']
+        ignored     = $counts['ignored']
+        failed      = $counts['failed']
+        downloading = $counts['downloading']
         hours       = [math]::Round($secs / 3600, 2)
         todayAdded  = $todayAdded
         byRes       = $resGroups
         ledgerPath  = $LedgerPath
-        lastSeen    = (($rows | Where-Object { $_.last_seen } | Sort-Object last_seen -Descending | Select-Object -First 1).last_seen)
+        lastSeen    = $lastSeen
         busy        = $State.Busy
         downloaded  = $onDisk
         missing     = $rows.Count - $onDisk
-        favorites   = @($rows | Where-Object { $_.fav -eq '1' }).Count
+        favorites   = $favorites
         coverMissing = if ($State.Scan -and $null -ne $State.Scan.coverMissing) { [int]$State.Scan.coverMissing } else { 0 }
         watched     = $watched
         # 只把"有文件且没看过"算作待看，和前端 towatch 过滤口径一致
-        toWatch     = @($rows | Where-Object { $_.file_name -and -not $_.last_play }).Count
+        toWatch     = $toWatch
         diskGB      = [math]::Round($bytes / 1GB, 2)
         contentDir = $Config.contentDir
         dirExists   = [bool]$State.Files.Exists
@@ -109,9 +130,19 @@ function Invoke-Scan {
     }
     if ($changed -gt 0) { Save-Ledger -Rows $State.Ledger -Path $LedgerPath; Touch-State }
 
-    $coverMissing = (Get-CoverMissingList).Count
+    # 缺封面统计要遍历全表逐条 Test-Path；扫描本身 10 秒一次，这里 30 秒算一次就够
+    $prev = $State.Scan
+    $cmAt = if ($prev -and $prev.coverMissingAt) { [datetime]$prev.coverMissingAt } else { [datetime]::MinValue }
+    if ($prev -and ((Get-Date) - $cmAt).TotalSeconds -lt 30) {
+        $coverMissing = [int]$prev.coverMissing
+        $coverMissingAt = $prev.coverMissingAt
+    } else {
+        $coverMissing = (Get-CoverMissingList).Count
+        $coverMissingAt = (Get-Date).ToString('s')
+    }
     $State.Scan = [pscustomobject]@{
         coverMissing = $coverMissing
+        coverMissingAt = $coverMissingAt
         downloaded = $found
         missing    = (@($State.Ledger).Count - $found)
         changed    = $changed
@@ -370,8 +401,9 @@ function Invoke-DeleteFiles {
             else { $failed += "$($r.token): 台账记录有文件但磁盘上找不到（可能目录不可达），已跳过" }
             continue
         }
-        # 只允许删内容目录内的文件
-        $rootFull = [System.IO.Path]::GetFullPath($Config.contentDir).TrimEnd('\')
+        # 只允许删内容目录内的文件；末尾必须带分隔符，
+        # 否则 D:\media 会「包含」D:\media2（前缀匹配而不是目录包含）
+        $rootFull = [System.IO.Path]::GetFullPath($Config.contentDir).TrimEnd('\') + '\'
         $fileFull = [System.IO.Path]::GetFullPath($file)
         if (-not $fileFull.StartsWith($rootFull, [System.StringComparison]::OrdinalIgnoreCase)) {
             $failed += "$($r.token): 不在内容目录内，已跳过"
@@ -403,6 +435,8 @@ function Invoke-DeleteFiles {
         if ($okTokens.Count -gt 0) {
             $rm = Remove-StoreItems -Tokens $okTokens
             $State.Ledger = @($State.Ledger | Where-Object { $okTokens -notcontains $_.token })
+            # 删库不走 Save-Ledger，得手动记一次行数据版本，否则前端不会重新拉 rows
+            if ($rm -gt 0) { Touch-Ledger }
         }
         Write-Log 'delete' "删除文件 $deleted 个，从台账移除 $rm 条"
     } else {
@@ -526,17 +560,46 @@ function Invoke-Send {
 
 function Get-DownloadProcesses {
     <#  找出所有"正在下载"的进程：下载器本身 + 它起的 curl/aria2c
-        不依赖 State.Download.Pid，服务重启后也能清理孤儿进程  #>
+        不依赖 State.Download.Pid，服务重启后也能清理孤儿进程。
+        按进程名过滤（服务端筛选）而不是枚举全部进程：全量 Win32_Process 要 100~200ms  #>
     $out = @()
     try {
-        foreach ($p in @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue)) {
-            if (-not $p.CommandLine) { continue }
-            if ($p.Name -eq 'curl.exe' -and $p.CommandLine -match '\.mp4\.part') { $out += $p }
-            elseif ($p.Name -eq 'aria2c.exe' -and $p.CommandLine -match '\.mp4\.part') { $out += $p }
-            elseif ($p.Name -eq 'powershell.exe' -and $p.CommandLine -match 'download\.ps1') { $out += $p }
+        foreach ($n in @('curl.exe', 'aria2c.exe', 'powershell.exe')) {
+            foreach ($p in @(Get-CimInstance Win32_Process -Filter "Name='$n'" -ErrorAction SilentlyContinue)) {
+                if (-not $p.CommandLine) { continue }
+                if ($n -eq 'powershell.exe') {
+                    if ($p.CommandLine -match 'download\.ps1') { $out += $p }
+                } elseif ($p.CommandLine -match '\.mp4\.part') {
+                    $out += $p
+                }
+            }
         }
     } catch { }
     return $out
+}
+
+$script:DlProbeAt = [datetime]::MinValue
+$script:DlProbeAlive = $false
+
+function Test-DownloadProcessCached {
+    <#
+      /api/state 每次都要回答「下载器还活着吗」，而进程探测是这条路径上最贵的一步。
+      下载器是分钟级进程，5 秒缓存足够；需要精确结果时用 -Force。
+    #>
+    param([switch]$Force, [int]$MaxAgeSeconds = 5)
+
+    if (-not $Force -and ((Get-Date) - $script:DlProbeAt).TotalSeconds -lt $MaxAgeSeconds) {
+        return $script:DlProbeAlive
+    }
+    $script:DlProbeAt = Get-Date
+    $script:DlProbeAlive = ((Get-DownloadProcesses).Count -gt 0)
+    return $script:DlProbeAlive
+}
+
+function Reset-DownloadProbe {
+    <#  刚杀完进程/刚起完进程时调用，别让 5 秒缓存给出过期答案  #>
+    $script:DlProbeAt = [datetime]::MinValue
+    $script:DlProbeAlive = $false
 }
 
 function Stop-AllDownloadProcesses {
@@ -551,11 +614,13 @@ function Stop-AllDownloadProcesses {
             try { Stop-Process -Id $p.ProcessId -Force -ErrorAction SilentlyContinue; $killed++ } catch { }
         }
     }
+    if ($killed -gt 0) { Reset-DownloadProbe }
     return $killed
 }
 
 function Get-DownloadInfo {
     <#  返回下载器的当前状态：进程是否活着 + 进度文件内容  #>
+    param([switch]$Fresh)
     $info = [ordered]@{ running = $false; phase = ''; total = 0; done = 0; failed = 0; bytes = 0; speed = 0; active = @(); errors = @() }
     if (Test-Path $DlProgress) {
         try {
@@ -573,8 +638,9 @@ function Get-DownloadInfo {
         $alive = [bool](Get-Process -Id $State.Download.Pid -ErrorAction SilentlyContinue)
     }
     if (-not $alive) {
-        # 服务重启后 State 丢了，但 curl 可能还在跑（孤儿）
-        $alive = ((Get-DownloadProcesses).Count -gt 0)
+        # 服务重启后 State 丢了，但 curl 可能还在跑（孤儿）。探测走 5 秒缓存，
+        # 避免 /api/state 每次轮询都付一次进程枚举的代价
+        $alive = Test-DownloadProcessCached -Force:$Fresh
     }
     $info.running = $alive
     $info.pid = if ($State.Download) { $State.Download.Pid } else { 0 }
@@ -590,7 +656,8 @@ function Start-Download {
     }
     # 先清掉可能残留的孤儿下载进程，否则会一直挡住新任务
     if (-not ($State.Download -and $State.Download.Pid)) { [void](Stop-AllDownloadProcesses) }
-    if (Get-DownloadInfo | ForEach-Object { $_.running }) {
+    # 这里必须是新鲜结果：刚取消/刚结束的任务不能因为缓存被判成「还在跑」
+    if ((Get-DownloadInfo -Fresh).running) {
         return @{ ok = $false; error = '已经有一个下载任务在跑' }
     }
 
@@ -698,6 +765,7 @@ function Stop-Download {
     $orphans = Stop-AllDownloadProcesses
     $runStarted = if ($State.Download) { $State.Download.Started } else { '' }
     $State.Download = $null
+    Reset-DownloadProbe
     [void](Apply-DeadFromProgress -RunStarted $runStarted)
     $reverted = Revert-Downloading
     Touch-State
@@ -830,10 +898,15 @@ function Apply-DeadFromProgress {
             } catch { }
         }
 
-        # 每轮最多核对 10 条：核对含网络复核，太多会把主循环卡住（前端 SSE 会停）
-        $dead = @($pj.items | Where-Object { $_.state -eq 'dead' } | Select-Object -First 10)
+        # 主循环是单线程，而这里每条都要做「复核 + 等 1.5 秒 + 再复核」的网络请求：
+        # 以前一次最多 10 条，最坏能把 SSE 和页面请求卡住半分钟以上。改成 4 条 + 6 秒预算，
+        # 剩下的条目下一轮继续处理（进度文件还在，不会漏）。
+        $dead = @($pj.items | Where-Object { $_.state -eq 'dead' } | Select-Object -First 4)
+        $budgetMs = 6000
+        $startedAt = Get-Date
         $n = 0
         foreach ($d in $dead) {
+            if (((Get-Date) - $startedAt).TotalMilliseconds -gt $budgetMs) { break }
             $row = $State.Ledger | Where-Object { $_.token -eq $d.token } | Select-Object -First 1
             if (-not $row) { continue }
             if ($row.file_name) { continue }                 # 已经有文件了，绝不改状态
@@ -929,6 +1002,8 @@ function Refresh-ItemUrls {
     param([string[]]$Tokens)
 
     if (-not $Tokens -or -not $Tokens.Count) { return @{ ok = $false; error = '没指定条目' } }
+    # 防御：函数内部是同步 HTTP（每条超时 25 秒），一次最多 20 条，避免被批量调用拖死主循环
+    if ($Tokens.Count -gt 20) { $Tokens = @($Tokens | Select-Object -First 20) }
     $refreshed = 0; $unchanged = 0; $removed = 0; $errors = 0
 
     foreach ($tk in $Tokens) {

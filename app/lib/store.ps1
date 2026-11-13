@@ -16,6 +16,8 @@
 $script:DbConn = $null
 $script:DbPath = $null
 $script:LastSnapshot = [datetime]::MinValue
+# 写入计数（200 次一 checkpoint）；显式初始化，别依赖 $null + 1 的隐式行为
+$script:SaveCount = 0
 
 function Get-DbPath {
     param([string]$Root = $PSScriptRoot, [string]$DataDir = '')

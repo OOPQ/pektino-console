@@ -34,7 +34,13 @@ export const state = {
   PER: PREFS.per,
   SHOW_COVERS: PREFS.covers,
   LB_TOKEN: null,
-  GACHA_TOKEN: null
+  GACHA_TOKEN: null,
+  // 由 load() 每次填充；在这里声明，避免「运行时才挂属性」的隐式字段
+  DOWNLOAD: null,
+  SETTINGS: null,
+  // 行数据版本：/api/state?rowsRev=N 让服务端只在台账变化时才回 rows
+  HAVE_ROWS: false,
+  ROWS_REV: 0
 };
 
 /* ---------- 事件总线（解耦模块之间的调用） ---------- */

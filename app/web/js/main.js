@@ -128,13 +128,21 @@ function paintOrphans(S) {
 async function load() {
   if (location.protocol === 'file:') $('#banner').style.display = 'block';
   try {
-    const s = await api('/api/state');
+    // 带上已知的行版本：台账没变时服务端只回统计/进度，不回几千行数据。
+    // 下载进度那种每 2 秒一次的变化走 SSE，但 rows 不会跟着重传。
+    const s = await api(state.HAVE_ROWS ? `/api/state?rowsRev=${state.ROWS_REV}` : '/api/state');
     state.STATS = s.stats || {};
-    state.ROWS = s.rows || [];
-    // 选中的条目可能已被删除：清掉不再存在的 token，避免浮条计数虚高
-    if (state.SEL && state.SEL.size) {
-      const alive = new Set((s.rows || []).map(r => r.token));
-      for (const tk of [...state.SEL]) { if (!alive.has(tk)) state.SEL.delete(tk); }
+    let rowsChanged = false;
+    if (Array.isArray(s.rows)) {
+      state.ROWS = s.rows;
+      state.HAVE_ROWS = true;
+      state.ROWS_REV = s.rowsRev;
+      rowsChanged = true;
+      // 选中的条目可能已被删除：清掉不再存在的 token，避免浮条计数虚高
+      if (state.SEL && state.SEL.size) {
+        const alive = new Set(s.rows.map(r => r.token));
+        for (const tk of [...state.SEL]) { if (!alive.has(tk)) state.SEL.delete(tk); }
+      }
     }
     _WS = s.project || _WS;
     const S = state.STATS;
@@ -163,7 +171,8 @@ async function load() {
       if (cc && document.activeElement !== cc) cc.value = String(state.SETTINGS.concurrent || 3);
     }
     renderJob(s.job || {}, s.download);
-    render();
+    // 行没变就不重绘整张表：避免每次进度推送都重建 DOM、重新加载封面
+    if (rowsChanged) render();
     markActiveKpi();
     if ((s.job && s.job.running) || (s.download && s.download.running)) { clearTimeout(load._t); load._t = setTimeout(load, 1200); }
   } catch (e) {
@@ -329,7 +338,8 @@ function initToolbar() {
   $('#btnPreview').onclick = previewLinks;
   $('#btnOpenContent').onclick = openProjectFolder;
   $('#btnScan').onclick = scanDir;
-  $('#btnWsOpen').onclick = async () => { try { await api('/api/project/open', {}); } catch (e) { toast('打开失败'); } };
+  // 「打开数据目录」与「打开项目文件夹」是同一个动作，别绑两份
+  $('#btnWsOpen').onclick = openProjectFolder;
   $('#btnWsImport').onclick = async () => {
     try {
       const r = await api('/api/project/import', {});

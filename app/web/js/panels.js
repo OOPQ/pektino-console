@@ -314,8 +314,8 @@ export function initPanels() {
     const typing = ['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement.tagName);
     const gachaOpen = $('#gacha').classList.contains('on');
     const lbOpen = $('#lightbox').classList.contains('on');
-    // 预览里用 ←/→ 切换上一项/下一项；视频控件聚焦时让方向键留给进度条
-    if (lbOpen && !typing && e.target.tagName !== 'VIDEO' && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
+    // 预览里用 Ctrl+←/→ 切换上一项/下一项（不用单按方向键，避免和视频/页面快捷键冲突）
+    if (lbOpen && !typing && e.ctrlKey && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
       e.preventDefault();
       navLightbox(e.key === 'ArrowLeft' ? -1 : 1);
       return;

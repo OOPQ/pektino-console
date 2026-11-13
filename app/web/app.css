@@ -65,7 +65,7 @@ input:focus,select:focus{outline:none;border-color:var(--acc)}
 .kpi.active .k{color:#cfe6ff}
 .kpi .k{color:var(--dim);font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .kpi .v{font-size:17px;font-weight:650;font-variant-numeric:tabular-nums;margin-top:1px}
-.kpi.new .v{color:var(--acc)} .kpi.sent .v{color:var(--sent)} .kpi.done .v{color:var(--ok)} .kpi.gold .v{color:var(--gold)}
+.kpi.new .v{color:var(--acc)} .kpi.done .v{color:var(--ok)} .kpi.gold .v{color:var(--gold)}
 @media (max-width:1250px){ .kpis{grid-template-columns:repeat(5,1fr)} }
 
 /* ---------- 工具栏 ---------- */
@@ -98,11 +98,9 @@ td.num{font-variant-numeric:tabular-nums}
 tbody td:last-child{white-space:nowrap}
 .tag{display:inline-block;padding:5px 8px;border-radius:999px;font-size:11px;border:1px solid;white-space:nowrap}
 .tag.new{color:var(--acc);border-color:#2b5c8f;background:#12253a}
-.tag.sent{color:var(--sent);border-color:#4b3a75;background:#211a33}
 .tag.done{color:var(--ok);border-color:#2c5c33;background:#13241a}
 .tag.ignored{color:var(--dim);border-color:#3a434f;background:#1a1f26}
 .tag.failed{color:var(--bad);border-color:#7a2b2b;background:#2a1414}
-.tag.downloading{color:#7fd4ff;border-color:#2b6c8f;background:#0f2633;animation:pulse 1.6s ease-in-out infinite}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.55}}
 
 /* 封面 */
@@ -293,20 +291,29 @@ details.adv[open] summary:before{content:'▾'}
 .seg button.on{background:#233246;color:var(--text)}
 
 /* ---------- 画廊视图 ---------- */
-.gallery{flex:1 1 auto;min-height:0;overflow:auto;display:grid;grid-template-columns:repeat(auto-fill,minmax(148px,1fr));gap:10px;padding:2px 2px 8px;align-content:start}
+.gallery{flex:1 1 auto;min-height:0;overflow:auto;width:100%;max-width:1400px;margin:0 auto;display:grid;grid-template-columns:repeat(8,minmax(0,1fr));grid-auto-rows:max-content;align-content:start;gap:14px;padding:4px 2px 12px}
+@media (max-width:1400px){.gallery{grid-template-columns:repeat(7,minmax(0,1fr))}}
+@media (max-width:1200px){.gallery{grid-template-columns:repeat(6,minmax(0,1fr))}}
+@media (max-width:1000px){.gallery{grid-template-columns:repeat(5,minmax(0,1fr))}}
+@media (max-width:820px){.gallery{grid-template-columns:repeat(4,minmax(0,1fr))}}
+@media (max-width:640px){.gallery{grid-template-columns:repeat(3,minmax(0,1fr))}}
 .gallery[hidden]{display:none}
-.card{background:var(--panel2);border:1px solid var(--line);border-radius:8px;overflow:hidden;display:flex;flex-direction:column;transition:border-color .15s,transform .15s}
-.card:hover{border-color:#3a4b5f;transform:translateY(-1px)}
-.card .cover{position:relative;aspect-ratio:3/4;background:#0d1117;cursor:pointer;overflow:hidden}
+.card{background:var(--panel2);border:1px solid var(--line);border-radius:10px;overflow:hidden;display:flex;flex-direction:column;transition:border-color .15s,transform .15s,box-shadow .15s}
+.card:hover{border-color:#3a4b5f;transform:translateY(-2px);box-shadow:0 8px 24px rgba(0,0,0,.35)}
+.card .cover{position:relative;aspect-ratio:2/3;flex:0 0 auto;background:#0d1117;cursor:pointer;overflow:hidden}
 .card .cover img{width:100%;height:100%;object-fit:cover;display:block}
 .card .cover.nocover:after{content:'无封面';position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--faint);font-size:11px}
-.card .cover .playbtn{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:26px;color:#fff;background:rgba(0,0,0,.35);opacity:0;transition:opacity .15s}
+.card .cover .playbtn{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:30px;color:#fff;background:rgba(0,0,0,.35);opacity:0;transition:opacity .15s}
 .card .cover:hover .playbtn{opacity:1}
-.card .st{position:absolute;left:6px;top:6px}
-.card .body{padding:6px 8px;display:flex;flex-direction:column;gap:4px}
-.card .name{font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.card .st{position:absolute;left:7px;top:7px}
+.card .st .tag{font-size:10px;padding:3px 7px;background:rgba(9,13,18,.75);backdrop-filter:blur(2px)}
+.card .body{padding:9px 10px 10px;display:flex;flex-direction:column;gap:6px;flex:0 0 auto;min-height:100px}
+.card .name{font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .card .meta{color:var(--dim);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.card .actions{display:flex;align-items:center;gap:4px;margin-top:2px}
-.card .actions .rt{font-size:12px}
-.card .actions .star{width:22px;height:22px;font-size:13px}
+.card .stars{display:flex;align-items:center;gap:2px;font-size:13px}
+.card .stars .star{width:24px;height:24px;font-size:15px}
+.card .foot{margin-top:auto}
+.card .dlbtn{width:100%;padding:5px 0;font-size:12px;border-radius:6px}
+.card .dlbtn.danger{color:var(--bad);border-color:#5c2d2d}
+.card .dlbtn.ghost{background:transparent}
 

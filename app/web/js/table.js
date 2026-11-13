@@ -118,10 +118,10 @@ function renderGallery(rows, active) {
     const hasFile = !!r.file_name;
     const isActive = active.has(r.token);
     const dlBtn = hasFile
-      ? `<button class="ghost rowbtn" data-play="${r.token}">播放</button>`
+      ? `<button class="dlbtn ghost" data-play="${r.token}">▶ 播放</button>`
       : (isActive
-        ? `<button class="ghost rowbtn danger" data-dl-cancel="${r.token}">取消</button>`
-        : `<button class="ghost rowbtn accent" data-dl="${r.token}">下载</button>`);
+        ? `<button class="dlbtn danger" data-dl-cancel="${r.token}">取消</button>`
+        : `<button class="dlbtn" data-dl="${r.token}">下载</button>`);
     return `<div class="card" data-row="${r.token}">
       <div class="cover" data-lb="${r.token}" title="点击放大">
         <img src="/api/cover?token=${encodeURIComponent(r.token)}" loading="lazy" alt=""
@@ -132,12 +132,11 @@ function renderGallery(rows, active) {
       <div class="body">
         <div class="name mono" title="${r.token}">${r.token}</div>
         <div class="meta">${r.duration || '—'} · ${r.res || '—'}${(+r.play_count) ? ' · ▶' + r.play_count : ''}</div>
-        <div class="actions">
+        <div class="stars">
           <button class="star ${fav ? 'on' : ''}" data-fav="${r.token}" title="收藏">${fav ? '★' : '☆'}</button>
           <span class="rt" data-rate="${r.token}">${starsInner(r.rating)}</span>
-          <span class="spacer"></span>
-          ${dlBtn}
         </div>
+        <div class="foot">${dlBtn}</div>
       </div>
     </div>`;
   }).join('');

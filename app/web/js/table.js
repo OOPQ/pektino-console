@@ -20,7 +20,7 @@ const RES_RANK = { '4k': 2160, '1080': 1080, '720': 720 };
 function passFilter(r) {
   /* 状态：任务生命周期（单选） */
   const st = state.FILTER.status;
-  if (['new', 'sent', 'done', 'ignored', 'downloading', 'failed'].includes(st) && r.status !== st) return false;
+  if (['new', 'done', 'ignored', 'failed'].includes(st) && r.status !== st) return false;
 
   /* 标记：资源属性（单选，可与状态叠加） */
   const fl = state.FILTER.flag;
@@ -75,7 +75,7 @@ const SORTS = {
   plays: r => (+r.play_count || 0),
   rating: r => (+r.rating || 0),
   token: r => (r.token || ''),
-  status: r => ['failed', 'downloading', 'new', 'sent', 'done', 'ignored'].indexOf(r.status),
+  status: r => ['failed', 'new', 'done', 'ignored'].indexOf(r.status),
   disk: r => (+r.file_size || 0),
   first_seen: r => (r.first_seen || '')
 };
@@ -118,6 +118,10 @@ export function render() {
   const rows = all.slice(start, start + per);
 
   const tb = $('#tbody');
+  // 当前在下载队列里的 token（用于把「下载」按钮换成「取消」，并给状态加个下载中圆点）
+  const active = new Set(((state.DOWNLOAD && state.DOWNLOAD.items) || [])
+    .filter(i => ['downloading', 'queued', 'paused'].includes(i.state))
+    .map(i => i.token));
   if (!all.length) {
     tb.innerHTML = '<tr><td colspan="15" class="empty">没有匹配的条目 —— 换个筛选条件，或点「抓取并入库」</td></tr>';
   } else {
@@ -134,18 +138,17 @@ export function render() {
         <td class="num col-plays" title="${r.last_play ? '上次播放 ' + r.last_play : '还没播过'}">${(+r.play_count || 0) > 0 ? '▶' + r.play_count : ''}</td>
         <td class="col-rating">${rateCell(r)}</td>
         <td class="mono playable col-token" data-play="${r.token}" title="${r.file_name || '点击播放'}">${r.token}</td>
-        <td class="col-status"${r.note ? ` title="${r.note}"` : ''}>${stTag(r.status)}</td>
+        <td class="col-status"${r.note ? ` title="${r.note}"` : ''}>${stTag(r.status)}${active.has(r.token) ? '<span class="dl-dot" title="下载中"></span>' : ''}</td>
         <td class="mono col-disk">${r.file_name ? '✓ ' + fmtMB(r.file_size) : '<span style="color:#5b6773">—</span>'}</td>
         <td class="mono col-first_seen">${(r.first_seen || '').slice(5, 16)}</td>
         <td>
           ${r.file_name
             ? `<button class="ghost rowbtn" data-play="${r.token}">播放</button>`
-            : (r.status === 'downloading'
-              ? `<button class="ghost rowbtn" data-dl-cancel="${r.token}" title="取消这一条下载">取消</button>`
-              : `<button class="ghost rowbtn" data-dl="${r.token}" title="用内置下载器下载这一条">下载</button>`)}
+            : (active.has(r.token)
+              ? `<button class="ghost rowbtn danger" data-dl-cancel="${r.token}" title="取消这一条下载">取消</button>`
+              : `<button class="ghost rowbtn accent" data-dl="${r.token}" title="用内置下载器下载这一条">下载</button>`)}
           <button class="ghost rowbtn" data-reveal="${r.token}">定位</button>
           <button class="ghost rowbtn" data-copy="${r.url || ''}">复制</button>
-          <button class="ghost rowbtn" data-th="${r.url || ''}">thunder</button>
         </td>
       </tr>`).join('');
   }
@@ -198,7 +201,6 @@ export function renderSel() {
 const KPI_MAP = {
   kTotal: { status: 'all', flag: 'none' },
   kNew: { status: 'new', flag: 'none' },
-  kSent: { status: 'sent', flag: 'none' },
   kDone: { status: 'done', flag: 'none' },
   kDisk: { status: 'all', flag: 'have' },
   kMiss: { status: 'all', flag: 'miss' },

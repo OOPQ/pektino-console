@@ -3,7 +3,7 @@ import { $, state, PREFS, savePrefs, api, toast, onEvent } from './core.js';
 import { render, markActiveKpi, initTable } from './table.js';
 import { initRows, doPlay, delFiles } from './rows.js';
 import { initPanels, connectSse } from './panels.js';
-import { setFav, setWatched, setStatus, setRating, reload, thunderUrl, copyText } from './actions.js';
+import { setFav, setWatched, setStatus, setRating, reload, copyText } from './actions.js';
 
 /* ================= 任务进度条 ================= */
 const PHASE_LABEL = {
@@ -42,7 +42,6 @@ let _WS = null;
 function paintKpis(S) {
   $('#kTotal').textContent = S.total;
   $('#kNew').textContent = S.new;
-  $('#kSent').textContent = S.sent;
   $('#kDone').textContent = S.done;
   $('#kDisk').textContent = S.downloaded;
   $('#kMiss').textContent = S.missing;
@@ -50,6 +49,9 @@ function paintKpis(S) {
   $('#kWatch').textContent = S.toWatch != null ? S.toWatch : '–';
   $('#kHours').textContent = S.hours;
   $('#kToday').textContent = S.todayAdded;
+  // 主按钮上直接显示待下载数量，点之前就知道要下多少
+  const dlBtn = $('#btnDownload');
+  if (dlBtn) dlBtn.textContent = `下载待下载 (${S.new || 0})`;
 }
 
 function paintDir(S) {
@@ -321,11 +323,10 @@ function initDownloadQueue() {
   $('#dlDrawer').onclick = e => { if (e.target.id === 'dlDrawer') $('#dlDrawer').classList.remove('on'); };
   $('#dlPause').onclick = toggleDownloadPause;
   $('#dlCancelAll').onclick = cancelAllDownloads;
-  $('#dlReset').onclick = async () => {
-    if (!confirm('结束内置下载进程并解除「已有任务在跑」的占用？已下载的 .part 会保留。')) return;
+  $('#dlClearDone').onclick = async () => {
     try {
-      const r = await api('/api/download/reset', {});
-      toast(r.ok ? `已解除（进程 ${r.killed || 0} 个）` : (r.error || '失败'), 3500);
+      const r = await api('/api/download/clear-done', {});
+      toast(r.ok ? (r.removed ? `已清理 ${r.removed} 条已完成记录` : '没有可清理的记录') : (r.error || '失败'), 3500);
     } catch (e) { toast('请求失败：' + e.message, 4000); }
     load();
   };
@@ -484,25 +485,7 @@ async function doCancelJob() {
   load();
 }
 
-async function sendAllNew() {
-  const n = state.STATS.new || 0;
-  if (!n) return toast('没有待下载条目');
-  if (!confirm(`把全部 ${n} 条待下载投进迅雷？（约 ${state.STATS.hours} 小时）`)) return;
-  try {
-    const r = await api('/api/send', { status: 'new' });
-    toast(r.ok ? `已投递 ${r.count} 条` : '失败：' + r.error, 4000);
-  } catch (e) { toast('请求失败：' + e.message); }
-  load();
-}
 
-async function previewLinks() {
-  try {
-    const r = await api('/api/send', { status: 'new', dryRun: true });
-    if (!r.ok) return toast('失败：' + r.error);
-    if (!r.count) return toast('没有待下载条目');
-    await copyText(r.links.join('\n'), `已生成 ${r.count} 条 thunder:// 链接并复制到剪贴板`);
-  } catch (e) { toast('请求失败：' + e.message); }
-}
 
 async function openProjectFolder() {
   try { await api('/api/project/open', {}); } catch (e) { toast('打开失败'); }
@@ -589,8 +572,14 @@ async function repairCovers() {
   load();
 }
 
+function openScrapeModal() { $('#scrapeModal').classList.add('on'); }
+function closeScrapeModal() { $('#scrapeModal').classList.remove('on'); }
+
 function initToolbar() {
-  $('#btnScrape').onclick = doScrape;
+  $('#btnScrape').onclick = openScrapeModal;
+  $('#btnScrapeGo').onclick = () => { closeScrapeModal(); doScrape(); };
+  $('#btnScrapeCancel').onclick = closeScrapeModal;
+  $('#scrapeModal').onclick = e => { if (e.target.id === 'scrapeModal') closeScrapeModal(); };
   $('#btnCancelJob').onclick = doCancelJob;
   $('#btnDownload').onclick = downloadNew;
   $('#btnSaveNet').onclick = saveNet;
@@ -618,17 +607,23 @@ function initToolbar() {
     $('#btnMore').onclick = e => { e.stopPropagation(); more.classList.toggle('on'); };
   }
   if (more) {
-    more.addEventListener('click', e => {
+    more.addEventListener('click', async e => {
       const b = e.target.closest('[data-more]');
       if (!b) return;
       const act = b.dataset.more;
       closeMore();
       if (act === 'import') return doImport();
-      if (act === 'send') return sendAllNew();
-      if (act === 'preview') return previewLinks();
       if (act === 'scan') return scanDir();
       if (act === 'refreshCovers') return repairCovers();
       if (act === 'export') { window.location.href = '/api/export'; return; }
+      if (act === 'reset-download') {
+        if (!confirm('结束残留下载进程并解除「已有任务在跑」？已下载的 .part 会保留。')) return;
+        try {
+          const r = await api('/api/download/reset', {});
+          toast(r.ok ? `已解除（进程 ${r.killed || 0} 个）` : (r.error || '失败'), 3500);
+        } catch (err) { toast('请求失败：' + err.message, 4000); }
+        return load();
+      }
     });
   }
 
@@ -646,15 +641,6 @@ function initToolbar() {
 /* ================= 批量操作 ================= */
 function initBulk() {
   const sel = () => [...state.SEL];
-
-  $('#selSend').onclick = async () => {
-    if (!state.SEL.size) return;
-    try {
-      const r = await api('/api/send', { tokens: sel(), force: true });
-      toast(r.ok ? `已投递 ${r.count} 条` : '失败：' + r.error, 4000);
-    } catch (e) { toast('请求失败'); }
-    load();
-  };
 
   $('#selFavToggle').onclick = async () => {
     if (!state.SEL.size) return;
@@ -693,10 +679,20 @@ function initBulk() {
 
   $('#selDelete').onclick = () => { if (state.SEL.size) delFiles(sel(), false); };
 
-  $('#selThunder').onclick = async () => {
-    const links = state.ROWS.filter(r => state.SEL.has(r.token) && r.url).map(r => thunderUrl(r.url));
-    if (!links.length) return toast('没有可转换的链接');
-    await copyText(links.join('\n'), `已复制 ${links.length} 条 thunder:// 链接，粘到迅雷即可`);
+  $('#selDownload').onclick = async () => {
+    if (!state.SEL.size) return;
+    try {
+      const r = await api('/api/download', { tokens: sel() });
+      if (!r.ok) return toast('失败：' + r.error, 4000);
+      if (r.appended !== undefined) {
+        if (r.appended > 0) pulseDlQueue(r.appended);
+        toast(r.appended > 0 ? `已追加 ${r.appended} 条到下载队列` : (r.note || '这些条目已经在队列里'), 3500);
+      } else {
+        pulseDlQueue(r.count);
+        toast(`已加入下载队列：${r.count} 条`, 3500);
+      }
+    } catch (e) { toast('请求失败：' + e.message); }
+    load();
   };
   $('#selCopy').onclick = async () => {
     const links = state.ROWS.filter(r => state.SEL.has(r.token) && r.url).map(r => r.url);

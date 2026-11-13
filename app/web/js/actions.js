@@ -4,8 +4,6 @@ import { api, state, toast, emit } from './core.js';
 
 export const siteUrl = tk => `https://pektino.com/zh-CN/movie/${tk}`;
 
-export const thunderUrl = url => 'thunder://' + btoa('AA' + url + 'ZZ');
-
 /* 复制到剪贴板（失败给出提示，不抛异常） */
 export async function copyText(text, okMsg = '已复制') {
   if (!text) return toast('没有可复制的内容');

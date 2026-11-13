@@ -4,7 +4,7 @@ import {
 } from './core.js';
 import { visible, render, renderSel } from './table.js';
 import {
-  siteUrl, thunderUrl, copyText, setRating, setFav, setWatched, setStatus, reload
+  siteUrl, copyText, setRating, setFav, setWatched, setStatus, reload
 } from './actions.js';
 
 /* ================= 选择（Shift 范围） ================= */
@@ -87,7 +87,6 @@ function ctxItemsFor(row) {
     { act: 'reveal', label: '📂 在文件夹中定位', off: !hasFile },
     { sep: true },
     { act: 'copy', label: '复制 URL' },
-    { act: 'thunder', label: '复制 thunder://' },
     { act: 'copytoken', label: '复制 token' },
     { sep: true },
     { act: 'download', label: '⬇ 用内置下载器下载', off: !row || !row.url || !!row.file_name },
@@ -136,7 +135,6 @@ async function onCtxAction(act) {
       return;
     }
     case 'copy': return copyText(row.url || '', 'URL 已复制');
-    case 'thunder': return copyText(thunderUrl(row.url || ''), 'thunder:// 已复制');
     case 'copytoken': return copyText(tk, 'token 已复制');
     case 'check': {
       const r = await api('/api/check-url', { token: tk });
@@ -250,9 +248,6 @@ async function onRowClick(e) {
 
   const copyBtn = e.target.closest('[data-copy]');
   if (copyBtn) return copyText(copyBtn.dataset.copy, 'URL 已复制');
-
-  const thBtn = e.target.closest('[data-th]');
-  if (thBtn) return copyText(thunderUrl(thBtn.dataset.th), 'thunder:// 已复制');
 }
 
 /* ================= 初始化 ================= */

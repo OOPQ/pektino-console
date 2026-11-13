@@ -204,7 +204,8 @@ export function initPanels() {
     if (e.key === '/' && !typing) { e.preventDefault(); $('#q').focus(); return; }
     if ((e.key === 'r' || e.key === 'R') && !typing) { e.preventDefault(); drawCard(); return; }
     if (e.key === 'Escape') {
-      if ($('#gacha').classList.contains('on')) $('#gacha').classList.remove('on');
+      if ($('#scrapeModal').classList.contains('on')) $('#scrapeModal').classList.remove('on');
+      else if ($('#gacha').classList.contains('on')) $('#gacha').classList.remove('on');
       else if ($('#lightbox').classList.contains('on')) closeLightbox();
       else if ($('#dlDrawer').classList.contains('on')) $('#dlDrawer').classList.remove('on');
       else if ($('#drawer').classList.contains('on')) $('#drawer').classList.remove('on');

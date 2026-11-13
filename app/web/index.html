@@ -24,7 +24,6 @@
 <div class="kpis">
   <div class="kpi"><div class="k">总数</div><div class="v" id="kTotal">–</div></div>
   <div class="kpi new"><div class="k">待下载</div><div class="v" id="kNew">–</div></div>
-  <div class="kpi sent"><div class="k">已投递</div><div class="v" id="kSent">–</div></div>
   <div class="kpi done"><div class="k">已完成</div><div class="v" id="kDone">–</div></div>
   <div class="kpi done"><div class="k">在磁盘</div><div class="v" id="kDisk">–</div></div>
   <div class="kpi"><div class="k">未下载</div><div class="v" id="kMiss">–</div></div>
@@ -40,11 +39,9 @@
   <select id="fStatus" title="按状态筛选（任务生命周期）">
     <option value="all">全部状态</option>
     <option value="new">待下载</option>
-    <option value="downloading">下载中</option>
     <option value="done">已完成</option>
-    <option value="sent">已投递</option>
-    <option value="ignored">忽略</option>
     <option value="failed">下载失败</option>
+    <option value="ignored">忽略</option>
   </select>
   <select id="fFlag" title="按标记筛选（可叠加在上面的状态之上）">
     <option value="none">不限标记</option>
@@ -97,16 +94,7 @@
 
 <!-- ===== 操作条 ===== -->
 <div class="bar actions">
-  <select id="rank" title="榜单">
-    <option value="daily">日榜</option>
-    <option value="weekly">周榜</option>
-    <option value="monthly">月榜</option>
-    <option value="all">总榜</option>
-  </select>
-  <span class="durwrap"><input type="number" id="pageCount" value="3" min="1" max="20" step="1" title="从第 1 页抓到第 N 页"><em>页</em></span>
-  <input type="number" id="limit" value="0" min="0" step="1" title="只抓前 N 条，0 = 全部">
-  <label class="chk" title="跳过最近抓过的条目"><input type="checkbox" id="chkInc" checked>增量</label>
-  <button class="primary" id="btnScrape" title="抓取榜单并写入台账">抓取</button>
+  <button class="primary" id="btnScrape" title="抓取榜单并写入台账（可设置榜单/页数/条数）">抓取榜单</button>
   <span class="divider"></span>
   <button class="primary" id="btnDownload" title="用内置下载器下载（支持续传 / 并发 / 追加）">下载待下载</button>
   <button id="btnDlQueue" title="下载队列：进行中 / 已完成，可暂停继续">下载队列<span class="badge" id="dlBadge" hidden>0</span></button>
@@ -115,14 +103,42 @@
     <button class="ghost" id="btnMore" title="更多操作">更多 ▾</button>
     <div class="menu" id="moreMenu">
       <button data-more="import" title="扫描内容目录，把本站视频录入台账">本地入库</button>
-      <button data-more="send" title="把待下载条目投进迅雷">投递迅雷</button>
-      <button data-more="preview" title="只生成 thunder:// 链接，不投递">预览 dry-run</button>
-      <button data-more="export">导出 CSV</button>
-      <div class="menu-sep"></div>
       <button data-more="scan" title="重新扫描内容目录">重新扫描目录</button>
       <button data-more="refreshCovers" title="重新抓详情页补封面">修复缺失封面</button>
+      <button data-more="export">导出 CSV</button>
+      <div class="menu-sep"></div>
+      <button data-more="reset-download" title="异常时用：结束残留下载进程、解除「已有任务在跑」">解除下载占用</button>
     </div>
   </span>
+</div>
+
+<!-- ===== 抓取设置弹窗 ===== -->
+<div class="modal" id="scrapeModal">
+  <div class="modal-box">
+    <h3>抓取榜单</h3>
+    <div class="field">
+      <label>榜单</label>
+      <select id="rank">
+        <option value="daily">日榜</option>
+        <option value="weekly">周榜</option>
+        <option value="monthly">月榜</option>
+        <option value="all">总榜</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>页数（从第 1 页抓到第 N 页，每页 50 条）</label>
+      <input type="number" id="pageCount" value="3" min="1" max="20" step="1">
+    </div>
+    <div class="field">
+      <label>条数限制（0 = 全部）</label>
+      <input type="number" id="limit" value="0" min="0" step="1">
+    </div>
+    <label class="chk" style="margin-bottom:14px"><input type="checkbox" id="chkInc" checked>增量（跳过最近 3 天抓过的）</label>
+    <div class="modal-actions">
+      <button class="primary" id="btnScrapeGo">开始抓取</button>
+      <button class="ghost" id="btnScrapeCancel">取消</button>
+    </div>
+  </div>
 </div>
 
 <!-- ===== 任务进度 ===== -->
@@ -184,15 +200,14 @@
 <!-- ===== 选中浮条 ===== -->
 <div class="selbar" id="selbar">
   <b id="selCount">已选 0</b>
-  <button class="ghost rowbtn" id="selSend">投递</button>
+  <button class="ghost rowbtn" id="selDownload" title="把选中的条目加入下载队列">⬇ 下载</button>
   <button class="ghost rowbtn" id="selFavToggle">★ 收藏</button>
   <button class="ghost rowbtn" id="selDone">标记完成</button>
   <button class="ghost rowbtn" id="selWatchedToggle">✓ 标记已看</button>
   <span class="sub" style="margin-left:4px">打分</span>
   <span class="rt" id="selRate"></span>
-  <button class="ghost rowbtn" id="selDelete" style="color:#f85149">删除文件</button>
+  <button class="ghost rowbtn danger" id="selDelete">删除文件</button>
   <button class="ghost rowbtn" id="selCopy">复制 URL</button>
-  <button class="ghost rowbtn" id="selThunder" title="生成 thunder:// 链接，丢给迅雷（源地址不可达时试试）">复制 thunder</button>
   <button class="ghost rowbtn" id="selClear">清空</button>
 </div>
 
@@ -267,7 +282,7 @@
     <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;align-items:center">
       <button id="dlPause" disabled>⏸ 暂停</button>
       <button class="ghost" id="dlCancelAll">全部取消</button>
-      <button class="ghost" id="dlReset" title="卡在「已有任务在跑」时用：结束残留下载进程并解除占用">强制解除</button>
+      <button class="ghost" id="dlClearDone" title="只清理队列里的完成记录，不删文件、不改台账">清理已完成</button>
       <span class="sub">并发</span>
       <select id="dlConc" style="padding:2px 4px" title="同时下载的文件数（1-16）"></select>
       <span class="spacer"></span>

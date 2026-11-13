@@ -19,7 +19,7 @@ function Get-Stats {
       台账几千行时是明显的纯开销；现在一次遍历算完。
     #>
     $rows = @($State.Ledger)
-    $counts = @{ new = 0; sent = 0; done = 0; ignored = 0; failed = 0; downloading = 0 }
+    $counts = @{ new = 0; done = 0; ignored = 0; failed = 0 }
     $resCount = @{}
     $secs = 0
     $bytes = 0.0
@@ -60,11 +60,9 @@ function Get-Stats {
     [pscustomobject]@{
         total       = $rows.Count
         new         = $counts['new']
-        sent        = $counts['sent']
         done        = $counts['done']
         ignored     = $counts['ignored']
         failed      = $counts['failed']
-        downloading = $counts['downloading']
         hours       = [math]::Round($secs / 3600, 2)
         todayAdded  = $todayAdded
         byRes       = $resGroups
@@ -110,16 +108,16 @@ function Invoke-Scan {
             $r.file_size = $f.size
             $r.file_date = $f.date
             $found++
-            # 磁盘上有文件 → 一律以文件为准（new/sent/downloading/failed/ignored 都转 done）
-            if ($r.status -eq 'failed' -or $r.status -eq 'ignored' -or $r.status -eq 'new' -or $r.status -eq 'sent' -or $r.status -eq 'downloading' -or -not $r.status) {
+            # 磁盘上有文件 → 一律以文件为准
+            if ($r.status -ne 'done') {
                 $r.status = 'done'
                 $r.note = 'auto:file'
                 $changed++
             }
         } else {
             if ($r.file_name) { $r.file_name = ''; $r.file_size = ''; $r.file_date = ''; $changed++ }
-            if (-not $KeepStatus -and $r.status -eq 'done' -and $r.note -eq 'auto:file') {
-                $r.status = if ($r.sent_at) { 'sent' } else { 'new' }
+            if (-not $KeepStatus -and $r.status -eq 'done' -and ($r.note -eq 'auto:file' -or $r.note -eq 'scan:init')) {
+                $r.status = 'new'
                 $r.note = ''
                 $changed++
             }
@@ -344,7 +342,7 @@ function Invoke-Fav {
 function Invoke-Mark {
     param([string[]]$Tokens, [string]$Status = 'done', [string]$Note = '')
     if (-not $Tokens) { return @{ ok = $false; error = '没选条目' } }
-    if (@('new', 'sent', 'done', 'ignored', 'failed') -notcontains $Status) { return @{ ok = $false; error = "非法状态: $Status" } }
+    if (@('new', 'done', 'ignored', 'failed') -notcontains $Status) { return @{ ok = $false; error = "非法状态: $Status" } }
     $changed = New-Object System.Collections.ArrayList
     foreach ($r in @($State.Ledger)) {
         if ($Tokens -contains $r.token) { [void]$changed.Add($r) }
@@ -456,7 +454,7 @@ function Invoke-DeleteFiles {
         foreach ($r in $rows) {
             if ($okTokens -notcontains $r.token) { continue }
             if ($r.file_name) { $r.file_name = ''; $r.file_size = ''; $r.file_date = ''; $changed++ }
-            if ($r.status -eq 'done') { $r.status = if ($r.sent_at) { 'sent' } else { 'new' }; $changed++ }
+            if ($r.status -eq 'done') { $r.status = 'new'; $changed++ }
             $r.note = 'file:deleted'
         }
         if ($changed -gt 0) { Save-Ledger -Rows $rows -NoSnapshot }
@@ -521,51 +519,6 @@ function Invoke-Play {
         return @{ ok = $false; error = $_.Exception.Message }
     }
     return @{ ok = $true; file = $file; name = [System.IO.Path]::GetFileName($file); plays = $row.play_count; last_play = $row.last_play }
-}
-
-function Invoke-Send {
-    param([string[]]$Tokens, [string]$Status = 'new', [switch]$DryRun, [switch]$Force)
-
-    $targets = @()
-    if ($Tokens -and $Tokens.Count -gt 0) {
-        $targets = @($State.Ledger | Where-Object { $Tokens -contains $_.token })
-    } else {
-        $targets = @($State.Ledger | Where-Object { $_.status -eq $Status })
-    }
-    $targets = @($targets | Where-Object { $_.url })
-    if (-not $Force) {
-        # 已下完（done）、被忽略（ignored）或磁盘上已有文件的，一律跳过
-        $targets = @($targets | Where-Object { $_.status -ne 'done' -and $_.status -ne 'ignored' -and -not $_.file_name })
-    }
-    if ($targets.Count -eq 0) { return @{ ok = $true; count = 0; links = @(); note = '没有需要投递的条目' } }
-
-    $links = @()
-    foreach ($t in $targets) { $links += (New-ThunderLink $t.url) }
-
-    if ($DryRun) {
-        Write-Log 'dryrun' "预览 $($targets.Count) 条（未投递）"
-        return @{ ok = $true; count = $targets.Count; links = $links; dryRun = $true }
-    }
-
-    $sent = 0
-    $sentTokens = @()
-    $failedTokens = @()
-    foreach ($t in $targets) {
-        try {
-            Start-Process (New-ThunderLink $t.url)
-            $sent++
-            $sentTokens += $t.token
-        } catch {
-            $failedTokens += $t.token
-            Write-Log 'error' "投递失败 $($t.token): $($_.Exception.Message)"
-        }
-    }
-    # 只把真正启动成功的标成 sent；失败项留在原状态，下次还能重投
-    if ($sentTokens.Count -gt 0) { [void](Set-LedgerStatus -Rows $State.Ledger -Tokens $sentTokens -Status 'sent') }
-    Save-Ledger -Rows $State.Ledger -Path $LedgerPath
-    Write-Log 'send' "投递 $sent 条到迅雷（失败 $($failedTokens.Count) 条）"
-    Touch-State
-    return @{ ok = $true; count = $sent; failed = $failedTokens.Count; links = @(); dryRun = $false }
 }
 
 # ---------------- 内置下载器 ----------------
@@ -741,11 +694,6 @@ function Start-Download {
             return @{ ok = $true; appended = 0; count = 0; note = '这些条目已经在当前下载队列里' }
         }
         (ConvertTo-Json -InputObject $add -Depth 4) | Set-Content -Path $DlAdd -Encoding UTF8 -Force
-        foreach ($q in $add) {
-            $row = $State.Ledger | Where-Object { $_.token -eq $q.token } | Select-Object -First 1
-            if ($row -and -not $row.file_name) { $row.status = 'downloading' }
-        }
-        Save-Ledger -Rows $State.Ledger -Path $LedgerPath
         Touch-State
         Write-Log 'download' "追加 $($add.Count) 条到当前下载队列（共 $($dlInfo.total) 条）"
         return @{ ok = $true; appended = $add.Count; count = $add.Count }
@@ -770,12 +718,6 @@ function Start-Download {
     Remove-Item $DlAdd -Force -ErrorAction SilentlyContinue
     # 上一轮可能停在「暂停」状态：新任务从运行态开始
     Remove-Item $DlPause -Force -ErrorAction SilentlyContinue
-    # 队列里的条目立刻标成 downloading，UI 与筛选都能看到
-    foreach ($q in $queue) {
-        $row = $State.Ledger | Where-Object { $_.token -eq $q.token } | Select-Object -First 1
-        if ($row -and -not $row.file_name) { $row.status = 'downloading' }
-    }
-    Save-Ledger -Rows $State.Ledger -Path $LedgerPath
     $proc = Start-Process -FilePath 'powershell.exe' -ArgumentList $argList -WindowStyle Hidden -PassThru
     $startStamp = ''
     try { $startStamp = $proc.StartTime.ToString('s') } catch { }
@@ -787,19 +729,6 @@ function Start-Download {
     [pscustomobject]@{ ok = $true; count = $queue.Count; dir = $dir; concurrent = $conc; proxy = $proxy; skipped = $skippedDead }
 }
 
-function Revert-Downloading {
-    <#  把还挂在 downloading 的条目退回 new（下载失败/取消后调用）  #>
-    param([switch]$OnlyIfMissing)
-    $n = 0
-    foreach ($r in @($State.Ledger)) {
-        if ($r.status -ne 'downloading') { continue }
-        if ($OnlyIfMissing -and $r.file_name) { continue }
-        $r.status = if ($r.sent_at) { 'sent' } else { 'new' }
-        $n++
-    }
-    if ($n -gt 0) { Save-Ledger -Rows $State.Ledger -Path $LedgerPath; Touch-State }
-    return $n
-}
 
 function Cancel-DownloadItems {
     <#  单条取消：把 token 写进取消文件，下载器下一轮 poll 会 kill 对应 curl  #>
@@ -807,12 +736,6 @@ function Cancel-DownloadItems {
     if (-not $Tokens -or -not $Tokens.Count) { return @{ ok = $false; error = '没指定条目' } }
     $list = @($Tokens | ForEach-Object { [string]$_ })
     (ConvertTo-Json -InputObject $list -Depth 3) | Set-Content -Path $DlCancel -Encoding UTF8 -Force
-    # 立刻把状态退回去，别等整个队列跑完
-    foreach ($tk in $list) {
-        $row = $State.Ledger | Where-Object { $_.token -eq $tk } | Select-Object -First 1
-        if ($row -and -not $row.file_name) { $row.status = if ($row.sent_at) { 'sent' } else { 'new' } }
-    }
-    Save-Ledger -Rows $State.Ledger -Path $LedgerPath
     Touch-State
     Write-Log 'download' "取消下载 $(($list -join ', '))"
     return @{ ok = $true; count = $list.Count }
@@ -853,13 +776,12 @@ function Stop-Download {
     Remove-Item $DlPause -Force -ErrorAction SilentlyContinue
     Remove-Item $DlAdd -Force -ErrorAction SilentlyContinue
     [void](Apply-DeadFromProgress -RunStarted $runStarted)
-    $reverted = Revert-Downloading
     Touch-State
-    if ($killed -eq 0 -and $orphans -eq 0 -and $reverted -eq 0) {
+    if ($killed -eq 0 -and $orphans -eq 0) {
         return @{ ok = $false; error = '没有正在进行的下载' }
     }
-    Write-Log 'download' "下载已取消（进程 $($killed + $orphans) 个，状态回退 $reverted 条）"
-    @{ ok = $true; killed = $killed + $orphans; reverted = $reverted }
+    Write-Log 'download' "下载已取消（进程 $($killed + $orphans) 个）"
+    @{ ok = $true; killed = $killed + $orphans; reverted = 0 }
 }
 
 function Reset-DownloadState {
@@ -873,10 +795,33 @@ function Reset-DownloadState {
     Remove-Item $DlCancel -Force -ErrorAction SilentlyContinue
     Remove-Item $DlAdd -Force -ErrorAction SilentlyContinue
     Reset-DownloadProbe
-    $reverted = Revert-Downloading
     Touch-State
-    Write-Log 'download' "强制解除下载占用（跟踪=$hadTracked，进程 $killed 个，状态回退 $reverted 条）"
-    return @{ ok = $true; killed = $killed; reverted = $reverted; tracked = $hadTracked }
+    Write-Log 'download' "强制解除下载占用（跟踪=$hadTracked，进程 $killed 个）"
+    return @{ ok = $true; killed = $killed; reverted = 0; tracked = $hadTracked }
+}
+
+function Clear-DownloadDone {
+    <#  清理「已完成」的队列记录：只动 data\download.json，不删文件、不改台账  #>
+    $info = Get-DownloadInfo -Fresh
+    if ($info.running) { return @{ ok = $false; error = '下载进行中，结束后再清理' } }
+    if (-not (Test-Path $DlProgress)) { return @{ ok = $true; removed = 0 } }
+    try {
+        $p = Get-Content $DlProgress -Raw -Encoding UTF8 | ConvertFrom-Json
+        $items = @($p.items)
+        $keep = @($items | Where-Object { $_.state -ne 'done' })
+        $removed = $items.Count - $keep.Count
+        if ($removed -le 0) { return @{ ok = $true; removed = 0 } }
+        $obj = [ordered]@{
+            running = $false; paused = $false; phase = 'done'; total = $keep.Count;
+            done = @($keep | Where-Object { $_.state -eq 'done' }).Count;
+            failed = @($keep | Where-Object { $_.state -eq 'failed' }).Count;
+            bytes = 0; speed = 0; items = @($keep); updatedAt = (Get-Date).ToString('s')
+        }
+        (ConvertTo-Json -InputObject $obj -Depth 5) | Set-Content -Path $DlProgress -Encoding UTF8 -Force
+        Touch-State
+        Write-Log 'download' "清理已完成队列记录 $removed 条（文件未动）"
+        return @{ ok = $true; removed = $removed }
+    } catch { return @{ ok = $false; error = $_.Exception.Message } }
 }
 
 function Step-Download {
@@ -899,12 +844,11 @@ function Step-Download {
     $State.Download = $null
     Remove-Item $DlPause -Force -ErrorAction SilentlyContinue
     [void](Apply-DeadFromProgress -RunStarted $runStarted)
-    $reverted = Revert-Downloading -OnlyIfMissing
     try { [void](Repair-PartFiles) } catch { }
     try { [void](Invoke-Scan -Silent -KeepStatus) } catch { }
     try { Update-Thumbs -CoverDir $CoverDir -ThumbDir $ThumbDir } catch { }
     Touch-State
-    Write-Log 'download' "下载进程结束（队列 $count 条，未完成退回 $reverted 条），已重新扫描目录"
+    Write-Log 'download' "下载进程结束（队列 $count 条），已重新扫描目录"
 }
 
 function Repair-PartFiles {
@@ -978,13 +922,11 @@ function Repair-PartFiles {
 }
 
 function Step-DownloadGuard {
-    <#  兜底：没有任何下载进程，却还有 downloading 状态的行 → 说明是上次失败/崩溃留下的，回退  #>
+    <#  兜底：进程已经没了，清掉可能残留的暂停标记  #>
     if ($State.Download -and $State.Download.Pid) { return }
     if ((Get-DownloadProcesses).Count -gt 0) { return }
     # 进程已经没了还留着暂停标记 → 清掉，避免下次误判成「暂停中」
     if (Test-Path $DlPause) { Remove-Item $DlPause -Force -ErrorAction SilentlyContinue }
-    $n = Revert-Downloading
-    if ($n -gt 0) { Write-Log 'download' "没有下载进程，回退 $n 条「下载中」状态" }
 }
 
 function Apply-DeadFromProgress {
@@ -1016,7 +958,7 @@ function Apply-DeadFromProgress {
             $row = $State.Ledger | Where-Object { $_.token -eq $d.token } | Select-Object -First 1
             if (-not $row) { continue }
             if ($row.file_name) { continue }                 # 已经有文件了，绝不改状态
-            if ($row.status -ne 'downloading') { continue }  # 不是本轮队列成员
+            if ($row.status -eq 'done' -or $row.status -eq 'ignored') { continue }
 
             # 本地已经有 .mp4 / .part → 还能续传，不判死
             $tk = [string]$row.token

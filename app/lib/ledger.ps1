@@ -5,7 +5,7 @@
 
 .DESCRIPTION
   out\ledger.csv 是唯一事实来源：
-    - token 是唯一键；重复抓取只更新元数据，保留 status / first_seen / sent_at / fav
+    - token 是唯一键；重复抓取只更新元数据，保留 status / first_seen / fav
     - status: new(待下载) / sent(已投迅雷) / done(已完成) / ignored(忽略)
     - fav: '1' 表示收藏
     - 扫描内容目录时，文件名 `<token>.mp4` 命中即写入 file_name/file_size/file_date 并置 done
@@ -140,7 +140,6 @@ function Set-LedgerStatus {
     foreach ($r in @($Rows)) {
         if ($Tokens -contains $r.token) {
             $r.status = $Status
-            if ($Status -eq 'sent') { $r.sent_at = $stamp }
             if ($Note) { $r.note = $Note }
             $n++
         }
@@ -235,6 +234,23 @@ function ConvertTo-Seconds {
     if ($v -match '^(\d+):(\d+(?:\.\d+)?)$') { return [int]([int]$Matches[1] * 60 + [double]$Matches[2]) }
     if ($v -match '^\d+(?:\.\d+)?$') { return [int][double]$v }
     return 0
+}
+
+function Repair-Statuses {
+    <#  旧状态迁移：sent（迅雷投递）/ downloading（下载中）已经并回 new / done  #>
+    $n = 0
+    foreach ($r in @($State.Ledger)) {
+        if ($r.status -eq 'sent' -or $r.status -eq 'downloading') {
+            $r.status = if ($r.file_name) { 'done' } else { 'new' }
+            $n++
+        }
+    }
+    if ($n -gt 0) {
+        Save-Ledger -Rows $State.Ledger -Path $LedgerPath
+        if (Get-Command Touch-State -ErrorAction SilentlyContinue) { Touch-State }
+        if (Get-Command Write-Log -ErrorAction SilentlyContinue) { Write-Log 'ledger' "状态迁移 $n 条（sent/downloading → new/done）" }
+    }
+    return $n
 }
 
 function Repair-Durations {

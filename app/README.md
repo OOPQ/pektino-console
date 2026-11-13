@@ -24,7 +24,7 @@ app\
   console.ps1          入口：参数、项目解析、HTTP 循环、路由表（约 740 行）
   server\
     transport.ps1      HTTP 传输：Send-Bytes / Send-Json / Read-Request / Push-Sse
-    actions.ps1        业务：统计、扫描、抓取/导入 Job、收藏/评分/观看、播放、删除、投递、下载器、源地址刷新
+    actions.ps1        业务：统计、扫描、抓取/导入 Job、收藏/评分/观看、播放、删除、下载器、源地址刷新
     covers.ps1         封面补齐（含主循环里的自动补封面）
   lib\
     project.ps1        项目（数据单元）解析、初始化、媒体识别
@@ -118,22 +118,25 @@ app\
 
 ```
 站点元数据   rank page duration seconds res views likes uploaded url page_url site
-生命周期     status first_seen last_seen sent_at note
+生命周期     status first_seen last_seen note（sent_at 为历史列，保留但不再写入）
 本地状态     file_name file_size file_date
 个人数据     fav rating play_count last_play
 ```
 
-状态机：
+状态机（只有四个状态，下载中不再单独入库）：
 
 ```
-new ──投递/开始下载──▶ sent / downloading ──磁盘命中──▶ done
- │                        │
- └──源失效──────────────▶ failed ──刷新源地址──▶ new
+new ──开始下载（队列里显示进度）──▶ done（磁盘命中）
+ │
+ └──源失效──▶ failed ──刷新源地址──▶ new
 忽略（ignored）只能手动设置；扫描到文件时任何状态都会被推成 done。
 ```
 
-- **token 唯一**：重复抓取只更新排名/时长/观看/直链，`status`、`first_seen`、`sent_at`、
-  `fav`、`rating` 一律保留，所以昨天投过的条目今天不会再投一次
+> 旧的 `sent`（迅雷已投递）与 `downloading`（下载中）在启动时自动迁移成 `new` / `done`。
+> 下载进度看队列（`data\download.json`），不再占用台账状态。
+
+- **token 唯一**：重复抓取只更新排名/时长/观看/直链，`status`、`first_seen`、
+  `fav`、`rating` 一律保留，所以已完成的条目不会被重新下载
 - `seconds` 是排序用的整数，`duration` 只是展示文本；历史数据 `seconds=0` 的会在启动时用
   `duration` 回算修正
 - `note` 记录来源：`auto:file`（扫描自动标完成）、`scan:init`（首次识别）、`unreachable:*`、
@@ -166,7 +169,7 @@ new ──投递/开始下载──▶ sent / downloading ──磁盘命中─�
 | 详情页 | mp4 直链、时长、封面、上传时间、观看 | JSON-LD `VideoObject` |
 | 详情页 HTML | 点赞数 | `alt="お気に入り"` 后的 `<span>` |
 
-### 下载（内置下载器 / 迅雷）
+### 下载（内置下载器）
 
 内置：`Start-Download` 写队列 JSON → 起独立 `download.ps1` 进程 →
 
@@ -189,9 +192,11 @@ new ──投递/开始下载──▶ sent / downloading ──磁盘命中─�
 - 403/404/410 先用 1 字节 Range GET 复核，确认后标 `failed` 且不再重试；
   本地已有 `.mp4`/`.part` 的绝不判死
 
-迅雷：`thunder://base64("AA" + url + "ZZ")` 逐条 `Start-Process`，只把真正启动成功的标 `sent`。
+迅雷投递已经从界面移除（迅雷本身支持直接粘贴 URL，复制链接即可）；
+命令行脚本 `cli\thunder.ps1` 仍然保留，给批处理用。
 
-两者都靠「磁盘命中即完成」闭环：`Step-Download` 在进程结束后整理 `.part`、重扫目录、补缩略图。
+下载闭环靠「磁盘命中即完成」：`Step-Download` 在进程结束后整理 `.part`、重扫目录、补缩略图；
+`POST /api/download/clear-done` 只清理队列里的完成记录（不动文件、不动台账）。
 
 ### 回填（扫描）
 
@@ -200,7 +205,7 @@ new ──投递/开始下载──▶ sent / downloading ──磁盘命中─�
 | 情况 | 结果 |
 |---|---|
 | 台账条目在目录里有同名 mp4 | 写 `file_*`，状态推成 `done` |
-| 目录里没有 | 清 `file_*`；原先是扫描标 done 的退回 `sent`/`new` |
+| 目录里没有 | 清 `file_*`；原先是扫描标 done 的退回 `new` |
 | 目录里有、台账没有 | 记为「孤立文件」，不自动入库（避免污染） |
 | `*.mp4.xltd` / `*.mp4.part` | 记「下载中」，不计完成 |
 | **目录不可达**（移动硬盘掉线） | **直接返回上次结果，绝不把 done 打回 new** |
@@ -233,9 +238,9 @@ POST /api/download  {tokens|status,limit,force}                      开始内�
 POST /api/download/cancel {tokens?}                                  取消单条/全部
 POST /api/download/pause {on}                                        暂停 / 继续（保留 .part）
 POST /api/download/reset                                             强制解除「已有任务在跑」
+POST /api/download/clear-done                                        清理队列里的完成记录（不动文件/台账）
 POST /api/download/repair                                            整理 .part
-POST /api/send      {tokens|status,dryRun,force}                     投迅雷（dryRun 只返回链接）
-POST /api/mark      {tokens,status}                                  改状态
+POST /api/mark      {tokens,status}                                  改状态（new/done/ignored/failed）
 POST /api/fav       {tokens,on}                                      收藏
 POST /api/watched   {tokens,on}                                      已看/未看
 POST /api/rate      {tokens,value}                                   评分 0–5（0 = 清除）

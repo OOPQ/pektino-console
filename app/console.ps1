@@ -156,6 +156,8 @@ $State = @{
 }
 # 老数据里时长解析失败（seconds=0）的，用 duration 回算（必须放在 $State 初始化之后）
 try { $fixedSec = Repair-Durations -LedgerPath $LedgerPath; if ($fixedSec -gt 0) { Write-Host "  修正时长 $fixedSec 条" -ForegroundColor DarkGray } } catch { Write-Host "  （时长修正跳过：$($_.Exception.Message)）" -ForegroundColor DarkYellow }
+# 旧状态（sent 已投递 / downloading 下载中）合并回 new / done
+try { $moved = Repair-Statuses; if ($moved -gt 0) { Write-Host "  状态迁移 $moved 条（已投递/下载中 → 待下载）" -ForegroundColor DarkGray } } catch { Write-Host "  （状态迁移跳过：$($_.Exception.Message)）" -ForegroundColor DarkYellow }
 $script:SseClients = New-Object System.Collections.ArrayList
 
 # ---------- 分层加载 ----------
@@ -201,10 +203,7 @@ function Write-ClientLog {
 
 
 
-function New-ThunderLink {
-    param([string]$Url)
-    'thunder://' + [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes('AA' + $Url + 'ZZ'))
-}
+
 
 
 
@@ -382,7 +381,7 @@ function Handle-Request {
                     return
                 }
                 $status = if ($body.status) { [string]$body.status } else { 'new' }
-                if (@('new', 'sent', 'failed') -notcontains $status) {
+                if (@('new', 'failed') -notcontains $status) {
                     Send-Json -Stream $Stream -Object @{ ok = $false; error = "不认识的状态: $status" }
                     return
                 }
@@ -447,6 +446,10 @@ function Handle-Request {
                 Send-Json -Stream $Stream -Object ([pscustomobject](Repair-PartFiles))
                 return
             }
+            '/api/download/clear-done' {
+                Send-Json -Stream $Stream -Object (Clear-DownloadDone)
+                return
+            }
             '/api/download/pause' {
                 $on = [bool]$body.on
                 Send-Json -Stream $Stream -Object (Set-DownloadPause -On $on)
@@ -489,14 +492,6 @@ function Handle-Request {
             }
             '/api/job/cancel' {
                 Send-Json -Stream $Stream -Object (Stop-CurrentJob)
-                return
-            }
-            '/api/send' {
-                $tokens = @()
-                if ($body.tokens) { $tokens = @($body.tokens | ForEach-Object { [string]$_ }) }
-                $status = if ($body.status) { [string]$body.status } else { 'new' }
-                $r = Invoke-Send -Tokens $tokens -Status $status -DryRun:([bool]$body.dryRun) -Force:([bool]$body.force)
-                Send-Json -Stream $Stream -Object $r
                 return
             }
             '/api/mark' {

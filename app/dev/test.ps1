@@ -97,7 +97,7 @@ try {
         $script:state = Invoke-RestMethod "$base/api/state" -TimeoutSec 15
         if (-not $state.stats) { throw '缺少 stats' }
         if (-not ($state.rows -is [array])) { throw 'rows 不是数组' }
-        foreach ($k in 'total', 'new', 'sent', 'done', 'downloaded', 'missing') {
+        foreach ($k in 'total', 'new', 'done', 'downloaded', 'missing') {
             if ($null -eq $state.stats.$k) { throw "stats 缺少字段 $k" }
         }
         if ($null -eq $state.api) { throw '缺少 api 版本字段（前端靠它识别旧进程）' }

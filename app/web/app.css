@@ -45,6 +45,20 @@ button.primary:hover:not(:disabled){background:#2762a5}
 button.ghost{background:transparent}
 button.icon{padding:4px 9px;font-size:14px;line-height:1}
 input,select{font:inherit;color:var(--text);background:var(--panel2);border:1px solid var(--line);border-radius:7px;padding:5px 8px;min-width:0}
+/* 勾选框：跟随主题的方块 + 钩，替代系统默认样式 */
+input[type=checkbox]{
+  -webkit-appearance:none;appearance:none;width:15px;height:15px;padding:0;margin:0;
+  border:1px solid #3a4654;border-radius:4px;background:var(--panel2);
+  cursor:pointer;position:relative;vertical-align:middle;flex:0 0 auto;transition:border-color .12s,background .12s
+}
+input[type=checkbox]:hover:not(:disabled){border-color:var(--acc)}
+input[type=checkbox]:checked{background:var(--acc);border-color:var(--acc)}
+input[type=checkbox]:checked::after{
+  content:'';position:absolute;left:4px;top:1px;width:4px;height:8px;
+  border:solid #0b1220;border-width:0 2px 2px 0;transform:rotate(45deg)
+}
+input[type=checkbox]:focus-visible{outline:2px solid rgba(77,163,255,.45);outline-offset:2px}
+input[type=checkbox]:disabled{opacity:.4;cursor:not-allowed}
 /* 去掉数字输入框的上下箭头（不用鼠标点微调，直接键入更快） */
 input[type=number]{-moz-appearance:textfield;appearance:textfield}
 input[type=number]::-webkit-inner-spin-button,
@@ -325,7 +339,7 @@ details.adv[open] summary:before{content:'▾'}
 .card .cover:hover .playbtn{opacity:1}
 .card .st{position:absolute;left:7px;top:7px}
 .card .st .tag{font-size:10px;padding:3px 7px;background:rgba(9,13,18,.75);backdrop-filter:blur(2px)}
-.card .body{padding:9px 10px 10px;display:flex;flex-direction:column;gap:6px;flex:0 0 auto;min-height:100px}
+.card .body{padding:9px 10px 10px;display:flex;flex-direction:column;gap:6px;flex:0 0 auto;min-height:80px}
 .card .name{font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .card .meta{color:var(--dim);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .card .stars{display:flex;align-items:center;gap:2px;font-size:13px}

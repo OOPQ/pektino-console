@@ -109,6 +109,7 @@ function ctxItemsFor(row) {
 }
 
 let CTX_TOKEN = null;
+let CTX_FROM_GALLERY = false;
 const closeCtx = () => $('#ctxmenu').classList.remove('on');
 
 async function onCtxRate(e) {
@@ -128,7 +129,10 @@ async function onCtxAction(act) {
   const row = state.ROWS.find(r => r.token === tk);
   if (!row) return;
   switch (act) {
-    case 'play': return doPlay(tk);
+    case 'play':
+      // 画廊右键的播放也走预览内播放，和卡片上的行为一致
+      if (CTX_FROM_GALLERY) return emit('open-lightbox', { token: tk, autoplay: true });
+      return doPlay(tk);
     case 'reveal': {
       const r = await api('/api/reveal', { token: tk });
       if (!r.ok) toast(r.error);
@@ -276,11 +280,13 @@ export function initRows() {
   const gal = $('#gallery');
   if (gal) gal.addEventListener('click', onRowClick);
 
-  $('#tbody').addEventListener('contextmenu', e => {
-    const tr = e.target.closest('tr[data-row]');
-    if (!tr) return;
+  const onContextMenu = e => {
+    // 表格行和画廊卡片都用 data-row 标记，一套右键菜单通吃
+    const item = e.target.closest('[data-row]');
+    if (!item) return;
     e.preventDefault();
-    CTX_TOKEN = tr.dataset.row;
+    CTX_TOKEN = item.dataset.row;
+    CTX_FROM_GALLERY = !!item.closest('#gallery');
     const row = state.ROWS.find(r => r.token === CTX_TOKEN);
     const menu = $('#ctxmenu');
     menu.innerHTML = ctxItemsFor(row).map(i => {
@@ -292,7 +298,9 @@ export function initRows() {
     const w = menu.offsetWidth, h = menu.offsetHeight;
     menu.style.left = Math.max(6, Math.min(e.clientX, innerWidth - w - 8)) + 'px';
     menu.style.top = Math.max(6, Math.min(e.clientY, innerHeight - h - 8)) + 'px';
-  });
+  };
+  $('#tbody').addEventListener('contextmenu', onContextMenu);
+  if (gal) gal.addEventListener('contextmenu', onContextMenu);
 
   $('#ctxmenu').addEventListener('click', async e => {
     if (e.target.closest('.ctxrate')) return onCtxRate(e);

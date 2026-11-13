@@ -119,7 +119,7 @@ function renderGallery(rows, active) {
     const hasFile = !!r.file_name;
     const isActive = active.has(r.token);
     const dlBtn = hasFile
-      ? `<button class="dlbtn ghost" data-play="${r.token}">▶ 播放</button>`
+      ? ''
       : (isActive
         ? `<button class="dlbtn danger" data-dl-cancel="${r.token}">取消</button>`
         : `<button class="dlbtn" data-dl="${r.token}">下载</button>`);
@@ -137,7 +137,7 @@ function renderGallery(rows, active) {
           <button class="star ${fav ? 'on' : ''}" data-fav="${r.token}" title="收藏">${fav ? '★' : '☆'}</button>
           <span class="rt" data-rate="${r.token}">${starsInner(r.rating)}</span>
         </div>
-        <div class="foot">${dlBtn}</div>
+        ${dlBtn ? `<div class="foot">${dlBtn}</div>` : ''}
       </div>
     </div>`;
   }).join('');

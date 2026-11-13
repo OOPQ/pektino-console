@@ -98,10 +98,11 @@ export function visible() {
 /* ---------- 单元格 ---------- */
 function coverCell(r) {
   if (!state.SHOW_COVERS) return '<div class="covbox"><div class="ph"></div></div>';
-  const u = '/api/cover?token=' + encodeURIComponent(r.token);
+  // 列表也用高清原图；加载失败回退缩略图（120px），再失败才显示占位
+  const u = '/api/cover?token=' + encodeURIComponent(r.token) + '&full=1';
   return `<div class="covbox" data-lb="${r.token}" title="点击放大">
       <img src="${u}" loading="lazy" alt=""
-           onerror="this.parentNode.classList.add('nocover');this.remove()">
+           onerror="if(!this.dataset.f){this.dataset.f=1;this.src=this.src.replace('&full=1','');}else{this.parentNode.classList.add('nocover');this.remove();}">
     </div>`;
 }
 function rateCell(r) {

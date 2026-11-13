@@ -281,7 +281,8 @@ clientErrors[] / clientWarns / uptime`。单请求 ≥800ms 会进 `slow` 列表
 - **下载队列卡片**：每条带封面缩略图、进度条、▶ 播放 / ☆ 收藏 / 定位 / 暂停 / 取消；
   队列按状态分区：进行中、已暂停、已完成、失败、已取消（互不混在一起）
 - **画廊视图**：查询条右侧「表格 / 画廊」切换，卡片墙复用同一套行内交互
-  （`data-lb` / `data-play` / `data-fav` / `data-rate` / `data-dl`），选择存 `PREFS.view`
+  （`data-lb` / `data-play` / `data-fav` / `data-rate` / `data-dl`），选择存 `PREFS.view`；
+  封面用原图（`/api/cover?full=1`，失败再回退缩略图），宽屏一行 10 张、窄屏自动减列
 - **入队反馈**：`renderDownloadQueue` 比较上一次的 `total`，变大就触发
   `pulseDlQueue()`（按钮脉冲 + 浮出「+N 已加入队列」）
 - **完成提示音**：`playDing()` 用 Web Audio 现场合成（无音频文件），

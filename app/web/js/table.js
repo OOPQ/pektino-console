@@ -124,8 +124,8 @@ function renderGallery(rows, active) {
         : `<button class="dlbtn" data-dl="${r.token}">下载</button>`);
     return `<div class="card" data-row="${r.token}">
       <div class="cover" data-lb="${r.token}" title="点击放大">
-        <img src="/api/cover?token=${encodeURIComponent(r.token)}" loading="lazy" alt=""
-             onerror="this.parentNode.classList.add('nocover');this.remove()">
+        <img src="/api/cover?token=${encodeURIComponent(r.token)}&full=1" loading="lazy" alt=""
+             onerror="if(!this.dataset.f){this.dataset.f=1;this.src=this.src.replace('&full=1','');}else{this.parentNode.classList.add('nocover');this.remove();}">
         <span class="st">${stTag(r.status)}</span>
         ${hasFile ? `<span class="playbtn" data-play="${r.token}">▶</span>` : ''}
       </div>

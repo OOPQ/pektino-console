@@ -51,6 +51,8 @@ function loadCover(img, box, token) {
     img.onload = null; img.onerror = null;
     img.removeAttribute('src');
     box.classList.add('nocover');
+    // 没有封面时别撑着一整块空白：按占位尺寸收窄
+    box.style.width = (180 + META_W + GAP) + 'px';
   };
   img.src = '/api/cover?token=' + encodeURIComponent(token) + '&full=1';
   if (img.complete && img.naturalWidth) fitMedia(img, box);
@@ -72,6 +74,22 @@ function lbPaint(tk) {
   $('#lbMeta').innerHTML = metaRows(r);
   $('#lbFav').textContent = r.fav === '1' ? '★ 已收藏' : '☆ 收藏';
   $('#lbCount').textContent = lbList.length ? `${lbIdx + 1} / ${lbList.length}` : '';
+  const multi = lbList.length > 1;
+  if ($('#lbPrev')) $('#lbPrev').hidden = !multi;
+  if ($('#lbNext')) $('#lbNext').hidden = !multi;
+
+  // 没下载的条目没有可播文件：隐藏播放入口，避免点了报错
+  const canPlay = !!r.file_name;
+  const img = $('#lbImg'), ov = $('#lbPlayOverlay'), ext = $('#lbPlay');
+  if (ov) ov.hidden = !canPlay;
+  if (img) {
+    img.classList.toggle('canplay', canPlay);
+    img.title = canPlay ? '点击用浏览器播放' : '这条还没下载，先下载再播放';
+  }
+  if (ext) {
+    ext.disabled = !canPlay;
+    ext.textContent = canPlay ? '本地播放器' : '未下载';
+  }
   return true;
 }
 
@@ -83,30 +101,30 @@ function lbStopVideo() {
   v.hidden = true;
   v.removeAttribute('src');
   try { v.load(); } catch { }
-  const img = $('#lbImg');
-  if (img) img.hidden = false;
   const ov = $('#lbPlayOverlay');
   if (ov) ov.hidden = false;
 }
 
-function lbPlayVideo(tk, forcedW) {
+function lbPlayVideo(tk) {
+  const row = state.ROWS.find(x => x.token === tk);
+  if (!row || !row.file_name) {
+    toast('这条还没下载，先下载再播放', 3000);
+    return;
+  }
   const m = state.MEDIA;
   if (!m || !m.base) {
     toast('媒体服务没有启动：用 start.cmd -Restart 重启控制台后重试', 5000);
     return;
   }
-  const v = $('#lbVideo'), img = $('#lbImg');
-  if (!v || !img) return;
-  const w = forcedW || img.getBoundingClientRect().width || parseFloat(img.style.width) || 420;
+  const v = $('#lbVideo');
+  if (!v) return;
+  // 视频绝对定位盖在封面上（尺寸跟封面一致），所以不用改封面/容器的尺寸
   v.hidden = false;
-  img.hidden = true;
   const ov = $('#lbPlayOverlay');
   if (ov) ov.hidden = true;
-  v.style.width = Math.round(w) + 'px';
   v.onerror = () => {
     toast('浏览器播不了这个文件，试试「本地播放器」', 5000);
     v.hidden = true;
-    img.hidden = false;
     if (ov) ov.hidden = false;
     lbPlaying = false;
   };
@@ -117,8 +135,8 @@ function lbPlayVideo(tk, forcedW) {
   // 记一次播放（浏览器内播放，不打开系统播放器）
   api('/api/play', { token: tk, count: true }).then(r => {
     if (!r || !r.ok) return;
-    const row = state.ROWS.find(x => x.token === tk);
-    if (row) { row.play_count = r.plays; row.last_play = r.last_play; }
+    const row2 = state.ROWS.find(x => x.token === tk);
+    if (row2) { row2.play_count = r.plays; row2.last_play = r.last_play; }
   }).catch(() => { });
 }
 
@@ -139,10 +157,10 @@ export function navLightbox(delta) {
   lbIdx = (lbIdx + delta + lbList.length) % lbList.length;
   const tk = lbList[lbIdx];
   const wasPlaying = lbPlaying;
-  const keepW = wasPlaying ? $('#lbVideo').getBoundingClientRect().width : 0;
   lbStopVideo();
   if (!lbPaint(tk)) return;
-  if (wasPlaying) lbPlayVideo(tk, keepW);
+  const target = state.ROWS.find(x => x.token === tk);
+  if (wasPlaying && target && target.file_name) lbPlayVideo(tk);
 }
 
 const closeLightbox = () => {
@@ -217,8 +235,11 @@ export function initPanels() {
   /* 灯箱 */
   $('#lbClose').onclick = closeLightbox;
   $('#lightbox').onclick = e => { if (e.target.id === 'lightbox') closeLightbox(); };
-  // 点封面 / 播放按钮：原地切到浏览器内播放
-  $('#lbImg').onclick = () => { if (state.LB_TOKEN) lbPlayVideo(state.LB_TOKEN); };
+  // 点封面 / 播放按钮：原地切到浏览器内播放（没下载的条目直接忽略）
+  $('#lbImg').onclick = () => {
+    const r = state.ROWS.find(x => x.token === state.LB_TOKEN);
+    if (r && r.file_name) lbPlayVideo(state.LB_TOKEN);
+  };
   $('#lbPlayOverlay').onclick = () => { if (state.LB_TOKEN) lbPlayVideo(state.LB_TOKEN); };
   $('#lbPrev').onclick = () => navLightbox(-1);
   $('#lbNext').onclick = () => navLightbox(1);
@@ -274,14 +295,7 @@ export function initPanels() {
 
   /* 窗口缩放时重新适配图片 */
   window.addEventListener('resize', () => {
-    if ($('#lightbox').classList.contains('on')) {
-      fitMedia($('#lbImg'), boxOf('#lightbox'));
-      if (lbPlaying) {
-        const v = $('#lbVideo');
-        const w = parseFloat($('#lbImg').style.width);
-        if (v && w) v.style.width = Math.round(w) + 'px';
-      }
-    }
+    if ($('#lightbox').classList.contains('on')) fitMedia($('#lbImg'), boxOf('#lightbox'));
     if ($('#gacha').classList.contains('on')) fitMedia($('#gImg'), boxOf('#gacha'));
   });
 

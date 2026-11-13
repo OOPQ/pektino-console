@@ -326,8 +326,8 @@ function Handle-Request {
             $thumb = Join-Path $ThumbDir ($tk + '.jpg')
             $orig = Join-Path $CoverDir ($tk + '.jpg')
             $file = $null
-            if (-not $full -and (Test-Path $thumb)) { $file = $thumb }
-            elseif (Test-Path $orig) { $file = $orig }
+            if (-not $full -and (Test-Path -LiteralPath $thumb)) { $file = $thumb }
+            elseif (Test-Path -LiteralPath $orig) { $file = $orig }
             if ($file) {
                 Send-Bytes -Stream $Stream -Bytes ([System.IO.File]::ReadAllBytes($file)) -ContentType 'image/jpeg' -ExtraHeaders @{ 'Cache-Control' = 'public, max-age=604800' }
                 return

@@ -21,9 +21,9 @@ function New-Thumb {
         [int]$Width = 120,
         [int]$Quality = 80
     )
-    if (-not (Test-Path $Source)) { return $false }
+    if (-not (Test-Path -LiteralPath $Source)) { return $false }
     $dir = Split-Path $Dest -Parent
-    if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
+    if (-not (Test-Path -LiteralPath $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
 
     $img = $null; $bmp = $null; $g = $null
     try {
@@ -63,12 +63,12 @@ function Update-Thumbs {
         [switch]$Force
     )
     $made = 0; $skip = 0; $fail = 0
-    if (-not (Test-Path $CoverDir)) { return [pscustomobject]@{ made = 0; skip = 0; fail = 0 } }
-    if (-not (Test-Path $ThumbDir)) { New-Item -ItemType Directory -Path $ThumbDir -Force | Out-Null }
+    if (-not (Test-Path -LiteralPath $CoverDir)) { return [pscustomobject]@{ made = 0; skip = 0; fail = 0 } }
+    if (-not (Test-Path -LiteralPath $ThumbDir)) { New-Item -ItemType Directory -Path $ThumbDir -Force | Out-Null }
 
     foreach ($f in @(Get-ChildItem -Path $CoverDir -Filter *.jpg -File)) {
         $dest = Join-Path $ThumbDir $f.Name
-        if (-not $Force -and (Test-Path $dest) -and ((Get-Item $dest).LastWriteTime -ge $f.LastWriteTime)) { $skip++; continue }
+        if (-not $Force -and (Test-Path -LiteralPath $dest) -and ((Get-Item -LiteralPath $dest).LastWriteTime -ge $f.LastWriteTime)) { $skip++; continue }
         if (New-Thumb -Source $f.FullName -Dest $dest -Width $Width -Quality $Quality) { $made++ } else { $fail++ }
     }
     return [pscustomobject]@{ made = $made; skip = $skip; fail = $fail }

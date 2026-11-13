@@ -93,7 +93,7 @@ function Get-CoverMissingList {
         if (-not $r.url) { continue }
         if (Test-Path (Join-Path $CoverDir ($tk + '.missing'))) { continue }
         $f = Join-Path $CoverDir ($tk + '.jpg')
-        if ((Test-Path $f) -and ((Get-Item $f).Length -gt 1024)) { continue }
+        if ((Test-Path -LiteralPath $f) -and ((Get-Item -LiteralPath $f).Length -gt 1024)) { continue }
         [void]$out.Add($r)
         if ($Limit -gt 0 -and $out.Count -ge $Limit) { break }
     }
@@ -112,7 +112,7 @@ function Get-LocalCoverMissingCount {
         $tk = [string]$r.token
         if (-not (Test-SafeTokenName $tk)) { continue }
         $f = Join-Path $CoverDir ($tk + '.jpg')
-        if ((Test-Path $f) -and ((Get-Item $f).Length -gt 1024)) { continue }
+        if ((Test-Path -LiteralPath $f) -and ((Get-Item -LiteralPath $f).Length -gt 1024)) { continue }
         $n++
     }
     return $n
@@ -138,7 +138,7 @@ function Repair-Covers {
         if (-not (Test-SafeTokenName $tk)) { continue }
         if (-not $r.file_name) { continue }
         $dest = Join-Path $CoverDir ($tk + '.jpg')
-        if ((Test-Path $dest) -and ((Get-Item $dest).Length -gt 1024)) { continue }
+        if ((Test-Path -LiteralPath $dest) -and ((Get-Item -LiteralPath $dest).Length -gt 1024)) { continue }
         $file = Resolve-RowFile $r
         if (-not $file -or -not (Test-Path -LiteralPath $file)) { continue }
         $localTried++

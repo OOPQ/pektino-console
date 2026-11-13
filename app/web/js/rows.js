@@ -214,14 +214,19 @@ async function onRowClick(e) {
     return;
   }
 
-  /* 封面 → 灯箱 */
+  /* 播放（画廊里是封面内的浮层按钮，优先级要高于封面灯箱） */
+  const play = e.target.closest('[data-play]');
+  if (play) {
+    // 画廊里的播放：打开预览灯箱并直接播放（表格里仍走系统播放器）
+    if (play.closest('#gallery')) {
+      return emit('open-lightbox', { token: play.dataset.play, autoplay: true });
+    }
+    return doPlay(play.dataset.play);
+  }
+
+  /* 封面 → 灯箱（只预览，不自动播） */
   const cover = e.target.closest('[data-lb]');
   if (cover) return emit('open-lightbox', cover.dataset.lb);
-
-  /* 播放 / 定位 / 复制 */
-  const play = e.target.closest('[data-play]');
-  if (play) return doPlay(play.dataset.play);
-
   const reveal = e.target.closest('[data-reveal]');
   if (reveal) {
     try {

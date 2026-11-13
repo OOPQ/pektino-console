@@ -426,5 +426,8 @@ export function initPanels() {
     }
   });
 
-  onEvent('open-lightbox', tk => openLightbox(tk));
+  onEvent('open-lightbox', payload => {
+    if (payload && typeof payload === 'object') openLightbox(payload.token, payload);
+    else openLightbox(payload);
+  });
 }

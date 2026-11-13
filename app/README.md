@@ -9,6 +9,14 @@
 纯 PowerShell 5.1 + 系统 `curl.exe`，不依赖 Node / Python / 数据库服务。
 唯一的第三方依赖是 `lib\System.Data.SQLite.dll`（附带 `lib\x64\SQLite.Interop.dll`）。
 
+运行环境：
+
+- **必须是 64 位 Windows PowerShell 5.1**（`powershell.exe`）。`console.ps1` 开头会检查
+  `PSEdition` 和 `Is64BitProcess`，用 PowerShell 7 / 32 位进程启动会直接给出提示并退出
+  （System.Data.SQLite 是 .NET Framework 混合模式程序集，且只带了 x64 的 Interop）
+- 程序路径与项目路径**可以含中文和空格**：所有 `Start-Process` 的参数都经过
+  `ConvertTo-QuotedArg` 加引号（否则参数会被空格拆开，下载器起不来）
+
 ## 1. 目录结构
 
 ```

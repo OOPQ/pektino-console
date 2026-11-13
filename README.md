@@ -1,59 +1,114 @@
 # pektino
 
-本地视频台账与下载管理：抓榜单 → 生成直链 → 内置下载器 / 迅雷 → 扫描回填 → 打分收藏待看抽卡。
+本地的视频台账与下载管理工具：抓榜单 → 生成直链 → 内置下载器或迅雷 → 扫盘回填 → 打分 / 收藏 / 待看 / 抽卡。
 
-**IDE 模型**：程序和数据是两个东西。
-程序（`app\`）只读、可随时删除或升级；数据在你的**项目文件夹**里，可搬家、备份、放移动硬盘。
+全程在你自己的电脑上运行，服务只监听 `127.0.0.1`，数据不上传。
 
-## 启动
+- 程序的界面是中文
+- 数据来源是第三方站点 `pektino.com`，需要能访问它
+
+## 系统要求
+
+| 项 | 要求 |
+|---|---|
+| 系统 | Windows 10 / 11（64 位） |
+| PowerShell | **Windows PowerShell 5.1**（系统自带，即 `powershell.exe`） |
+| 运行库 | 不需要 Node.js / Python / 数据库服务 |
+| 网络 | 能访问 `pektino.com`（抓榜单、封面、视频直链） |
+
+> ⚠️ 不要用 PowerShell 7 / `pwsh` 启动：程序依赖的 SQLite 组件是 .NET Framework 版，
+> 在 PowerShell 7 下加载不了。真用错了，启动时会给一句明确提示并退出。
+
+## 第一次使用（三步）
+
+1. 拿到程序
+   ```powershell
+   git clone https://github.com/OOPQ/pektino-console.git
+   ```
+   或者下载 ZIP 解压到任意目录（路径含中文、空格都可以）。
+2. 双击 `start.cmd`
+3. 第一次会让你选一个**项目文件夹**（默认 `文档\pektino-project`，回车即可）
+
+之后每次双击 `start.cmd` 都会打开上次的项目，并自动用浏览器打开
+`http://127.0.0.1:8791/`。端口被占用时会自动往后找（8791+1 … +19），
+实际地址以窗口里打印的为准。
+
+不想用双击，也可以在 Windows PowerShell 里：
+
+```powershell
+.\start.cmd                                   # 等价写法
+powershell -ExecutionPolicy Bypass -File .\app\console.ps1 -Project D:\my-data
+```
+
+## 程序和数据是分开的
 
 ```
-双击 start.cmd
+<程序目录>                    只读，可整包替换/升级，不含任何数据
+  start.cmd
+  app\                        console.ps1 · server\ · lib\ · cli\ · web\
+
+<项目文件夹>                  你的数据，可搬家、可备份
+  project.json                项目标识
+  data\                       data.db · config.json · ledger.csv · logs\ · exports\
+  media\                      下载的视频（mp4）
+  cache\covers\               封面（可删，会自动重建）
+  cache\thumbs\               缩略图（可删，会自动重建）
 ```
 
-- 第一次：让你选/新建一个项目文件夹（像 IDE 的欢迎页）
-- 之后：自动打开上次的项目
-- 想换项目：`start.cmd -Project D:\my-project` 或 `start.cmd -Pick`
+对照 IDE：程序目录 ≈ IDE 安装目录，项目文件夹 ≈ 你的项目，
+`data\` ≈ 项目里的 `.idea\`。升级程序不会动数据，换项目等于换一个数据文件夹。
 
-## 两个目录
+## 位置建议
 
-```
-程序（可替换/升级，不含任何数据）
-  <安装位置>\
-    start.cmd
-    app\              console.ps1 · server\ · lib\ · cli\ · web\ · dev\
+- 路径**含中文、空格**没问题（子进程参数已处理）
+- **不要**把项目文件夹放在 OneDrive / 坚果云 / 网络盘 / NAS 上：
+  SQLite 的 WAL 模式在同步盘和网络文件系统上可能损坏数据库
+- 项目文件夹可以整体搬到别的盘，重新打开时选一次新位置即可
 
-项目（你的数据，可随意搬移/备份）
-  <项目文件夹>\
-    project.json      项目标识
-    data\             data.db · config.json · ledger.csv · logs\ · exports\
-    media\            mp4 都在这里
-    cache\covers\     封面（可删，自动重建）
-    cache\thumbs\     缩略图（可删，自动重建）
-```
+## 网络与代理
 
-对照 IDE：程序目录 ≈ IDEA 安装目录，项目文件夹 ≈ 你的代码项目，
-`data\` ≈ 项目里的 `.idea\`。**IDEA 不会跟着项目走，这个程序也不会。**
+抓取榜单、下载封面、解析直链都要访问 `pektino.com`。
 
-## 三条规则
+需要代理时，在界面右上角 **⚙ 设置 → 代理** 里填，例如 `http://127.0.0.1:7890`；
+留空表示跟随系统代理。设置会存进 `项目\data\config.json`。
 
-| 目录 | 语义 | 能删吗 | 备份 |
-|---|---|---|---|
-| `app\` | 程序 | 可重新获取 | 不需要 |
-| 项目 `data\` | 数据库 + 配置 + 日志 | **不能删** | **必须** |
-| 项目 `media\` | 媒体文件 | 删了就丢内容 | 建议 |
-| 项目 `cache\` | 封面/缩略图 | 随便删 | 不需要 |
+## 常见问题
 
-- **备份/迁移项目 = 拷整个项目文件夹**
-- 项目根目录**不在界面里修改**；换项目 = 启动时选择（最近项目存 `%APPDATA%\pektino\projects.json`）
-- 程序中不存在绝对路径硬编码，项目文件夹搬到哪都能打开
+| 现象 | 处理 |
+|---|---|
+| 双击后窗口一闪就没 | 看 `项目\data\logs\console.log`，里面会记录启动失败的原因 |
+| 提示「未对文件进行数字签名」 | 你直接运行了 `.ps1`，被执行策略拦住了；用 `start.cmd`（内部带 Bypass） |
+| 提示要用 Windows PowerShell | 你用了 PowerShell 7 / `pwsh`，换成 `powershell.exe` 或直接双击 `start.cmd` |
+| 浏览器打开的是别的端口 | 8791 被占用了，程序自动换了端口；看窗口里打印的 `控制台已启动` 地址 |
+| 点「下载」没反应 | 到「设置 → 下载任务」看状态；源地址失效的条目会出现在「下载失败」筛选里 |
+| 列表里封面空白 | 「设置 → 修复缺失封面」；站点本身没图的会记成无封面，不再重试 |
+| 杀毒软件 / SmartScreen 拦截 | 程序是未签名脚本 + SQLite DLL，加信任或用源码方式运行 |
+| 想清空本地文件但保留台账 | 右键「删除本地文件（回收站）」，或「删除文件并从台账移除」 |
 
-## 要求
+## 升级 / 卸载 / 备份
 
-- Windows 10/11 + PowerShell 5.1（系统自带），无需 Node / Python / 数据库服务
+- **升级**：替换整个 `app\` 目录（或 `git pull`），数据与配置都保留
+- **卸载**：删掉程序目录；数据在项目文件夹里，需要单独删
+- **备份**：拷整个项目文件夹。`data\` 必须备份，`media\` 建议备份，`cache\` 可以删
+
+## 分享给别人时注意
+
+- 分享 Git 仓库是干净的：`.gitignore` 已排除 `data\`、`media\`、`cache\`、`out\`、`tools\`
+- **不要直接压缩整个工作目录**：里面可能有几 GB 到几十 GB 的媒体文件、日志和
+  `agent-browser.exe`。对方真正需要的只有 `start.cmd` + `app\`
+- 对方第一次运行也需要 Windows PowerShell 5.1 和能访问 `pektino.com` 的网络
+
+## 数据与隐私
+
+- 所有数据都在本机项目文件夹里，程序不向任何服务器上传数据
+- HTTP 服务只绑定回环地址，没有登录鉴权，也**不要**改成对外监听
+- 抓取与下载的内容来自第三方站点，使用前请自行确认合规性
 
 ## 深入
 
-- 内部实现与运维：`app\README.md`
-- 冒烟测试：`app\dev\test.ps1`
-- 整理媒体目录：`app\dev\organize-workspace.ps1`
+- 实现、接口、性能取舍：[app/README.md](app/README.md)
+- 冒烟测试（默认用临时项目，不碰真实数据）：`app\dev\test.ps1 -Start`
+
+## 许可
+
+[MIT](LICENSE)

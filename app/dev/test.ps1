@@ -35,6 +35,16 @@ function Test-Item($name, $scriptBlock) {
 }
 
 if ($Start) {
+    # 端口必须真的空着：如果已经有控制台在跑，临时服务会退到 Port+1，
+    # 而测试仍然打 $base → 会打到真实项目上（扫描、改配置、重置下载都可能发生）。
+    $busy = $false
+    $probe = New-Object System.Net.Sockets.TcpClient
+    try { $probe.Connect('127.0.0.1', $Port); $busy = $true } catch { } finally { try { $probe.Close() } catch { } }
+    if ($busy) {
+        Write-Host "端口 $Port 已被占用（可能正有控制台在运行）。" -ForegroundColor Red
+        Write-Host "请换一个端口：.\\test.ps1 -Start -Port 8899；或先停止正在运行的服务。" -ForegroundColor Yellow
+        exit 2
+    }
     if (-not $Project) {
         # 临时项目：和真实数据完全隔离。目录名故意带空格，
         # 这样每次跑测试都顺带覆盖「路径含空格」这条最容易坏的链路。

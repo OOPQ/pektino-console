@@ -269,7 +269,7 @@ function Handle-Request {
                     'svg' { 'image/svg+xml' }
                     default { 'application/octet-stream' }
                 }
-                Send-Bytes -Stream $Stream -Bytes ([System.IO.File]::ReadAllBytes($file)) -ContentType $ct -ExtraHeaders @{ 'Cache-Control' = 'no-cache' }
+                Send-Bytes -Stream $Stream -Bytes ([System.IO.File]::ReadAllBytes($file)) -ContentType $ct -ExtraHeaders @{ 'Cache-Control' = 'no-store' }
                 return
             }
         }

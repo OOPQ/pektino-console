@@ -58,6 +58,23 @@ function loadCover(img, box, token) {
   if (img.complete && img.naturalWidth) fitMedia(img, box);
 }
 
+/* ================= 收藏（灯箱 / 抽卡共用） ================= */
+async function togglePreviewFav(token, kind) {
+  const row = state.ROWS.find(x => x.token === token);
+  if (!row) { toast('找不到这条数据，刷新页面再试', 3000); return; }
+  const btn = kind === 'g' ? $('#gFav') : $('#lbFav');
+  const next = row.fav !== '1';
+  const r = await setFav([token], next);
+  if (!r || !r.ok) { toast('收藏失败：' + ((r && r.error) || '未知错误'), 4000); return; }
+  if (btn) {
+    btn.textContent = kind === 'g'
+      ? (next ? '☆ 取消收藏' : '★ 收藏')
+      : (next ? '★ 已收藏' : '☆ 收藏');
+  }
+  render();
+  toast(next ? '已收藏' : '已取消收藏', 1800);
+}
+
 /* ================= 播放器（预览灯箱 / 抽卡共用） ================= */
 let lbList = [];      // 当前筛选结果里的 token 顺序，用于 Ctrl+←/→ 切换
 let lbIdx = -1;
@@ -330,13 +347,7 @@ export function initPanels() {
   };
   $('#lbCopyToken').onclick = () => copyText(state.LB_TOKEN, 'token 已复制');
   $('#lbOpen').onclick = () => { if (state.LB_TOKEN) window.open(siteUrl(state.LB_TOKEN), '_blank'); };
-  $('#lbFav').onclick = async () => {
-    const row = state.ROWS.find(x => x.token === state.LB_TOKEN);
-    if (!row) return;
-    const next = row.fav !== '1';
-    const r = await setFav([row.token], next);
-    if (r.ok) { $('#lbFav').textContent = next ? '★ 已收藏' : '☆ 收藏'; render(); }
-  };
+  $('#lbFav').onclick = () => togglePreviewFav(state.LB_TOKEN, 'lb');
 
   /* 抽卡 */
   $('#btnGacha').onclick = drawCard;
@@ -363,13 +374,7 @@ export function initPanels() {
     return copyText(r && r.url, 'URL 已复制');
   };
   $('#gOpen').onclick = () => { if (state.GACHA_TOKEN) window.open(siteUrl(state.GACHA_TOKEN), '_blank'); };
-  $('#gFav').onclick = async () => {
-    const row = state.ROWS.find(x => x.token === state.GACHA_TOKEN);
-    if (!row) return;
-    const next = row.fav !== '1';
-    const r = await setFav([row.token], next);
-    if (r.ok) { $('#gFav').textContent = next ? '☆ 取消收藏' : '★ 收藏'; render(); }
-  };
+  $('#gFav').onclick = () => togglePreviewFav(state.GACHA_TOKEN, 'g');
 
   /* 星星是动态生成的 → 事件委托 */
   document.addEventListener('click', e => {

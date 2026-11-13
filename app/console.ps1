@@ -40,6 +40,27 @@ if (-not (Test-Path (Join-Path $Root 'lib\ledger.ps1'))) {
 }
 
 $ErrorActionPreference = 'Stop'
+
+# ---------- 运行环境守卫 ----------
+# System.Data.SQLite 是 .NET Framework 的混合模式程序集，PowerShell 7（.NET Core）加载不了；
+# 而且只带了 x64 的 SQLite.Interop.dll，32 位 PowerShell 也跑不起来。
+# 与其等到 Initialize-Store 抛一个看不懂的异常，不如在这里说清楚。
+if ($PSVersionTable.PSEdition -eq 'Core') {
+    Write-Host ''
+    Write-Host '  请用 Windows PowerShell 启动（powershell.exe），不要用 PowerShell 7 / pwsh。' -ForegroundColor Red
+    Write-Host '  双击 start.cmd 即可，或在 Windows PowerShell 里运行 .\app\console.ps1' -ForegroundColor DarkGray
+    Write-Host ''
+    if ($PauseOnError) { Read-Host '按回车关闭' | Out-Null }
+    exit 1
+}
+if (-not [Environment]::Is64BitProcess) {
+    Write-Host ''
+    Write-Host '  请用 64 位 Windows PowerShell 启动：本程序只带了 x64 的 SQLite 组件。' -ForegroundColor Red
+    Write-Host ''
+    if ($PauseOnError) { Read-Host '按回车关闭' | Out-Null }
+    exit 1
+}
+
 $script:StartedAt = Get-Date
 . (Join-Path $Root 'lib\ledger.ps1')
 . (Join-Path $Root 'lib\project.ps1')
@@ -372,7 +393,7 @@ function Handle-Request {
                 return
             }
             '/api/project/open' {
-                try { Start-Process explorer.exe $WS.ProjectRoot; Send-Json -Stream $Stream -Object @{ ok = $true; path = $WS.ProjectRoot } }
+                try { Start-Process -FilePath explorer.exe -ArgumentList (ConvertTo-QuotedArg $WS.ProjectRoot); Send-Json -Stream $Stream -Object @{ ok = $true; path = $WS.ProjectRoot } }
                 catch { Send-Json -Stream $Stream -Object @{ ok = $false; error = $_.Exception.Message } }
                 return
             }
@@ -565,7 +586,7 @@ function Handle-Request {
                 return
             }
             '/api/content/open' {
-                try { Start-Process explorer.exe $WS.Content; Send-Json -Stream $Stream -Object @{ ok = $true; path = $WS.Content } }
+                try { Start-Process -FilePath explorer.exe -ArgumentList (ConvertTo-QuotedArg $WS.Content); Send-Json -Stream $Stream -Object @{ ok = $true; path = $WS.Content } }
                 catch { Send-Json -Stream $Stream -Object @{ ok = $false; error = $_.Exception.Message } }
                 return
             }

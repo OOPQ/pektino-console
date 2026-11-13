@@ -1,6 +1,18 @@
 ﻿#Requires -Version 5.1
 # Business actions: stats, scan, jobs, fav/rate/watch, play, delete, send
 
+function ConvertTo-QuotedArg {
+    <#
+      Start-Process -ArgumentList 会把数组元素按空格直接拼成命令行，不会自动加引号。
+      路径里只要有空格（C:\Users\张三\OneDrive\文档\pektino），参数就会被拆开：
+      下载器起不来、资源管理器打开错位置。所有传路径的地方都要先过这个函数。
+    #>
+    param([string]$Value)
+    if ($null -eq $Value -or $Value -eq '') { return '""' }
+    if ($Value -notmatch '[\s"]') { return $Value }
+    return '"' + ($Value -replace '"', '\"') + '"'
+}
+
 function Get-Stats {
     <#
       /api/state 每次轮询都要算一次。以前用 7 遍 Where-Object 扫全表（O(7n)），
@@ -702,9 +714,12 @@ function Start-Download {
     if ($conc -lt 1 -or $conc -gt 8) { $conc = 3 }
     $proxy = if ($cfg.proxy) { [string]$cfg.proxy } else { '' }
 
-    $argList = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $DlScript,
-        '-QueueFile', $DlQueue, '-Dir', $dir, '-Concurrent', "$conc", '-ProgressFile', $DlProgress, '-CancelFile', $DlCancel)
-    if ($proxy) { $argList += @('-Proxy', $proxy) }
+    # 每个路径都单独加引号：Start-Process 只做空格拼接，路径含空格时不加引号就起不来
+    $argList = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', (ConvertTo-QuotedArg $DlScript),
+        '-QueueFile', (ConvertTo-QuotedArg $DlQueue), '-Dir', (ConvertTo-QuotedArg $dir),
+        '-Concurrent', "$conc", '-ProgressFile', (ConvertTo-QuotedArg $DlProgress),
+        '-CancelFile', (ConvertTo-QuotedArg $DlCancel))
+    if ($proxy) { $argList += @('-Proxy', (ConvertTo-QuotedArg $proxy)) }
 
     Remove-Item $DlProgress -Force -ErrorAction SilentlyContinue
     Remove-Item $DlCancel -Force -ErrorAction SilentlyContinue

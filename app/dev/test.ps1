@@ -36,8 +36,9 @@ function Test-Item($name, $scriptBlock) {
 
 if ($Start) {
     if (-not $Project) {
-        # 临时项目：和真实数据完全隔离
-        $Project = Join-Path ([System.IO.Path]::GetTempPath()) ('pektino-smoke-' + [guid]::NewGuid().ToString('N').Substring(0, 8))
+        # 临时项目：和真实数据完全隔离。目录名故意带空格，
+        # 这样每次跑测试都顺带覆盖「路径含空格」这条最容易坏的链路。
+        $Project = Join-Path ([System.IO.Path]::GetTempPath()) ('pektino smoke ' + [guid]::NewGuid().ToString('N').Substring(0, 8))
         $tempProject = $Project
     }
     Write-Host "启动临时服务 :$Port（项目 $Project）..." -ForegroundColor Cyan
@@ -46,9 +47,9 @@ if ($Start) {
     $savedAppData = $env:APPDATA
     $env:APPDATA = Join-Path $Project '.appdata'
     try {
-        $proc = Start-Process -FilePath 'powershell.exe' `
-            -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', (Join-Path (Split-Path $root -Parent) 'console.ps1'), '-Port', $Port, '-NoBrowser', '-Project', $Project) `
-            -PassThru -WindowStyle Hidden
+        $console = Join-Path (Split-Path $root -Parent) 'console.ps1'
+        $argLine = "-NoProfile -ExecutionPolicy Bypass -File `"$console`" -Port $Port -NoBrowser -Project `"$Project`""
+        $proc = Start-Process -FilePath 'powershell.exe' -ArgumentList $argLine -PassThru -WindowStyle Hidden
     } finally {
         $env:APPDATA = $savedAppData
     }

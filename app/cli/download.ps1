@@ -131,18 +131,26 @@ function Get-RemoteSize([string]$url) {
     return [int64]0
 }
 
+function Quote-Arg {
+    <#  Start-Process -ArgumentList 只按空格拼接，路径含空格时必须自己加引号  #>
+    param([string]$Value)
+    if (-not $Value) { return '""' }
+    if ($Value -notmatch '[\s"]') { return $Value }
+    return '"' + ($Value -replace '"', '\"') + '"'
+}
+
 function Build-Args($item, $outFile) {
     if ($aria) {
         $a = @('-c', '--auto-file-renaming=false', '--allow-overwrite=true', '-x', '8', '-s', '8',
-            '-d', (Split-Path $outFile -Parent), '-o', (Split-Path $outFile -Leaf))
-        if ($proxyArg) { $a += @('--all-proxy', $proxyArg) }
-        $a += $item.url
+            '-d', (Quote-Arg (Split-Path $outFile -Parent)), '-o', (Quote-Arg (Split-Path $outFile -Leaf)))
+        if ($proxyArg) { $a += @('--all-proxy', (Quote-Arg $proxyArg)) }
+        $a += (Quote-Arg $item.url)
         return @{ exe = $aria; args = $a }
     }
     $a = @('-sS', '-L', '-C', '-', '--fail', '--retry', "$Retries", '--retry-delay', '2',
-        '--connect-timeout', '20', '-o', $outFile)
-    if ($proxyArg) { $a += @('-x', $proxyArg) }
-    $a += $item.url
+        '--connect-timeout', '20', '-o', (Quote-Arg $outFile))
+    if ($proxyArg) { $a += @('-x', (Quote-Arg $proxyArg)) }
+    $a += (Quote-Arg $item.url)
     return @{ exe = $curl; args = $a }
 }
 

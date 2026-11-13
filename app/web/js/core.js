@@ -95,7 +95,14 @@ export async function api(path, body) {
     const r = await fetch(path, opt);
     const ms = Math.round(performance.now() - t0);
     if (ms > 1000) report('warn', `慢请求 ${path} ${ms}ms`, { url: path, ms });
-    if (!r.ok) throw new Error('HTTP ' + r.status);
+    if (!r.ok) {
+      // 404 通常意味着「前端已更新、后台还是旧进程」——给一句能照做的提示
+      if (r.status === 404 && path.indexOf('/api/') === 0) {
+        report('warn', `接口不存在 ${path}（控制台可能未重启）`, { url: path });
+        toast('接口不存在：后台可能是旧版本，请运行 start.cmd -Restart', 6000);
+      }
+      throw new Error('HTTP ' + r.status);
+    }
     const data = await r.json();
     if (data && data.ok === false && data.error) report('warn', `接口返回失败 ${path}: ${data.error}`, { url: path, ms });
     return data;

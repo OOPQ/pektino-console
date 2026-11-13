@@ -100,7 +100,8 @@ try {
         foreach ($k in 'total', 'new', 'sent', 'done', 'downloaded', 'missing') {
             if ($null -eq $state.stats.$k) { throw "stats 缺少字段 $k" }
         }
-        "total=$($state.stats.total) rows=$($state.rows.Count)"
+        if ($null -eq $state.api) { throw '缺少 api 版本字段（前端靠它识别旧进程）' }
+        "total=$($state.stats.total) rows=$($state.rows.Count) api=$($state.api)"
     }
     Test-Item 'GET /api/cover（无 token 不应 500）' {
         try {

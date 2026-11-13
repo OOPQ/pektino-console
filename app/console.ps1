@@ -24,7 +24,9 @@ param(
     # 强制显示项目选择器（像 IDE 的欢迎页）
     [switch]$Pick,
     # 无人值守/自动化时跳过首次目录询问
-    [switch]$NoPrompt
+    [switch]$NoPrompt,
+    # 重启：先结束端口上的旧控制台进程，再正常启动（改完代码不用手动关窗口）
+    [switch]$Restart
 )
 
 # $PSScriptRoot 在 param 默认值里可能还是空的（powershell -File 启动时），这里显式兜底
@@ -59,6 +61,22 @@ if (-not [Environment]::Is64BitProcess) {
     Write-Host ''
     if ($PauseOnError) { Read-Host '按回车关闭' | Out-Null }
     exit 1
+}
+
+# ---------- 重启：结束端口上的旧实例 ----------
+# 改完 app 代码后，旧进程不会自动加载新路由；start.cmd -Restart 可以直接换掉它。
+if ($Restart) {
+    try {
+        $old = Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1
+        if ($old) {
+            $op = Get-CimInstance Win32_Process -Filter "ProcessId=$($old.OwningProcess)" -ErrorAction SilentlyContinue
+            if ($op -and $op.CommandLine -and ($op.CommandLine -match 'console\.ps1')) {
+                Write-Host "  结束旧控制台 PID=$($op.ProcessId)…" -ForegroundColor DarkGray
+                & taskkill.exe /PID $op.ProcessId /T /F 2>&1 | Out-Null
+                Start-Sleep -Milliseconds 900
+            }
+        }
+    } catch { }
 }
 
 $script:StartedAt = Get-Date
@@ -272,6 +290,8 @@ function Handle-Request {
 
         $payload = [ordered]@{
             ok       = $true
+            # 接口版本：前端用它判断服务端是不是旧进程（旧版没有这个字段）
+            api      = 3
             rev      = $State.Rev
             rowsRev  = $ledgerRev
             stats    = Get-Stats

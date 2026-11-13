@@ -72,6 +72,7 @@ app\
 | `-Project` | 项目目录；留空则用「最近项目」→ 交互选择 |
 | `-Pick` | 强制交互选择项目 |
 | `-NoPrompt` | 非交互（无人值守），直接用默认/最近项目 |
+| `-Restart` | 先结束端口上正在跑的旧控制台，再启动（改完代码后用） |
 | `-NoBrowser` | 不自动打开浏览器 |
 | `-PauseOnError` | 出错/结束时停住窗口（双击启动时看报错用） |
 
@@ -213,7 +214,8 @@ new ──投递/开始下载──▶ sent / downloading ──磁盘命中─�
 ```
 GET  /                             控制台页面
 GET  /static/*                     静态资源（白名单正则 + 拒绝 ..）
-GET  /api/state[?rowsRev=N]        {rev, rowsRev, stats, log, job, download, project, settings, metrics}
+GET  /api/state[?rowsRev=N]        {api, rev, rowsRev, stats, log, job, download, project, settings, metrics}
+                                   api 是接口版本；前端发现缺失就提示「后台是旧版本」
                                    rows 只在 rowsRev 与当前台账版本不同时下发（大台账的关键优化）
 GET  /api/events                    SSE：event: state + {"rev":N}，连接先发 hello，15s 心跳
 GET  /api/cover?token=&full=1       缩略图（默认）或原图；404 = 没有封面

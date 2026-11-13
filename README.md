@@ -40,8 +40,12 @@
 
 ```powershell
 .\start.cmd                                   # 等价写法
+.\start.cmd -Restart                          # 结束旧实例并重启（改了 app\ 里的代码后用）
 powershell -ExecutionPolicy Bypass -File .\app\console.ps1 -Project D:\my-data
 ```
+
+> 注意：直接双击 `start.cmd` 时，如果已经有一个实例在跑，它只会打开浏览器、**不会重启**。
+> 改了程序代码或发现新按钮报 404，用 `start.cmd -Restart`。
 
 ## 程序和数据是分开的
 
@@ -101,6 +105,7 @@ powershell -ExecutionPolicy Bypass -File .\app\console.ps1 -Project D:\my-data
 | 点「下载」没反应 | 打开「下载队列」看状态；源地址失效的条目会出现在「失败」里 |
 | 想暂停下载 | 「下载队列」→ 暂停；继续时自动从断点续传 |
 | 一直提示「已有一个下载任务在跑」 | 新版已改成精确识别；仍遇到就点「下载队列 → 强制解除」（结束残留进程，`.part` 保留） |
+| 点按钮提示 404 / 「接口不存在」 | 后台还是旧进程（前端文件已更新）。运行 `start.cmd -Restart` 重启，刷新页面即可 |
 | 列表里封面空白 | 「设置 → 修复缺失封面」；站点本身没图的会记成无封面，不再重试 |
 | 杀毒软件 / SmartScreen 拦截 | 程序是未签名脚本 + SQLite DLL，加信任或用源码方式运行 |
 | 想清空本地文件但保留台账 | 右键「删除本地文件（回收站）」，或「删除文件并从台账移除」 |

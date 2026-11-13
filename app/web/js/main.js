@@ -269,6 +269,11 @@ async function load() {
     // 带上已知的行版本：台账没变时服务端只回统计/进度，不回几千行数据。
     // 下载进度那种每 2 秒一次的变化走 SSE，但 rows 不会跟着重传。
     const s = await api(state.HAVE_ROWS ? `/api/state?rowsRev=${state.ROWS_REV}` : '/api/state');
+    // 服务端不带 api 字段 = 还在跑旧进程（新按钮会 404），提示一次
+    if (s.api === undefined && !load._oldServerWarned) {
+      load._oldServerWarned = true;
+      toast('后台是旧版本：新按钮会 404，请运行 start.cmd -Restart', 10000);
+    }
     state.STATS = s.stats || {};
     let rowsChanged = false;
     if (Array.isArray(s.rows)) {

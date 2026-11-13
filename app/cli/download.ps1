@@ -22,6 +22,8 @@ param(
     [string]$PauseFile = '',
     # 追加队列：控制台在运行中写入的新条目（JSON 数组），每轮读一次就删掉
     [string]$AddFile = '',
+    # 按条暂停：JSON 数组，里面的 token 暂停（其余照常跑）
+    [string]$PauseItemsFile = '',
     # 显式不走代理（默认跟随 -Proxy / 系统代理）
     [switch]$NoProxy,
     [int]$Retries = 3
@@ -225,6 +227,16 @@ function Read-AddedItems {
     } catch { return @() }
 }
 
+function Read-PausedItems {
+    <#  按条暂停列表；文件不存在 = 没有按条暂停  #>
+    if (-not $PauseItemsFile -or -not (Test-Path -LiteralPath $PauseItemsFile)) { return @() }
+    try {
+        $raw = Get-Content -LiteralPath $PauseItemsFile -Raw -Encoding UTF8 -ErrorAction Stop
+        if (-not $raw) { return @() }
+        return @(@($raw | ConvertFrom-Json) | ForEach-Object { [string]$_ })
+    } catch { return @() }
+}
+
 function Read-CancelTokens {
     if (-not $CancelFile -or -not (Test-Path $CancelFile)) { return @() }
     try {
@@ -240,10 +252,22 @@ $paused = $false
 try {
     while ($pending.Count -gt 0 -or $jobs.Count -gt 0 -or $paused) {
         $paused = Test-Paused
+        $pausedItems = @(Read-PausedItems)
 
         # ---- 暂停：杀掉正在跑的 curl，保留 .part，记成 paused（继续时 -C - 续传）----
         if ($paused) {
             foreach ($tk in @($jobs.Keys)) {
+                $j = $jobs[$tk]
+                try { & taskkill.exe /PID $j.proc.Id /T /F 2>&1 | Out-Null } catch { }
+                try { $j.proc.Kill() } catch { }
+                $states[$tk].state = 'paused'
+                $jobs.Remove($tk)
+            }
+        }
+
+        # ---- 按条暂停：只停列表里的条目 ----
+        foreach ($tk in @($jobs.Keys)) {
+            if ($pausedItems -contains $tk) {
                 $j = $jobs[$tk]
                 try { & taskkill.exe /PID $j.proc.Id /T /F 2>&1 | Out-Null } catch { }
                 try { $j.proc.Kill() } catch { }
@@ -280,10 +304,10 @@ try {
             }
         }
 
-        # ---- 继续：paused → queued，重新排队（.part 还在，curl 会续传）----
+        # ---- 继续：不在暂停列表里的 paused 项 → queued ----
         if (-not $paused) {
             foreach ($tk in @($states.Keys)) {
-                if ($states[$tk].state -eq 'paused') {
+                if ($states[$tk].state -eq 'paused' -and ($pausedItems -notcontains $tk)) {
                     $states[$tk].state = 'queued'
                     if ($queueMap.ContainsKey($tk)) { $pending.Enqueue($queueMap[$tk]) }
                 }
@@ -414,6 +438,7 @@ try {
         Write-ProgressFile @{
             running   = $true
             paused    = [bool]$paused
+            pausedItems = @($pausedItems)
             phase     = 'download'
             total     = $states.Count
             done      = $doneCount

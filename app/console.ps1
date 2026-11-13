@@ -129,6 +129,7 @@ $DlQueue = Join-Path $WS.DataDir '.queue.json'
 $DlProgress = Join-Path $WS.DataDir 'download.json'
 $DlCancel = Join-Path $WS.DataDir '.dl-cancel.json'
 $DlPause = Join-Path $WS.DataDir '.dl-pause'
+$DlPauseItems = Join-Path $WS.DataDir '.dl-pause-items.json'
 $DlAdd = Join-Path $WS.DataDir '.dl-add.json'
 
 # ---------- 内存态 ----------
@@ -452,7 +453,9 @@ function Handle-Request {
             }
             '/api/download/pause' {
                 $on = [bool]$body.on
-                Send-Json -Stream $Stream -Object (Set-DownloadPause -On $on)
+                $tokens = @()
+                if ($body.tokens) { $tokens = @($body.tokens | Where-Object { $_ } | ForEach-Object { [string]$_ }) }
+                Send-Json -Stream $Stream -Object (Set-DownloadPause -On $on -Tokens $tokens)
                 return
             }
             '/api/download/reset' {

@@ -87,6 +87,10 @@
     <button class="ghost" id="btnCols" title="显示/隐藏列">列 ▾</button>
     <div class="colpop" id="colpop"></div>
   </span>
+  <span class="seg" id="viewSeg" title="显示方式">
+    <button data-view="table" class="on">表格</button>
+    <button data-view="gallery">画廊</button>
+  </span>
   <span class="spacer"></span>
   <label class="chk"><input type="checkbox" id="chkCovers" checked>封面</label>
   <label class="chk"><input type="checkbox" id="chkCompact">紧凑</label>
@@ -154,6 +158,8 @@
   <div id="banner">你是用 <b>file://</b> 直接打开的，连不上后台。请访问
     <a href="http://127.0.0.1:8791/" style="color:#7fb8ff">http://127.0.0.1:8791/</a>（先双击 启动控制台.cmd）
   </div>
+
+  <div class="gallery" id="gallery" hidden></div>
 
   <div class="tablewrap" id="tablewrap">
     <table>
@@ -280,7 +286,7 @@
     <h3>下载队列</h3>
     <div class="sub" id="dlHead" style="margin-bottom:12px">–</div>
     <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;align-items:center">
-      <button id="dlPause" disabled>⏸ 暂停</button>
+      <button id="dlPause" disabled>⏸ 全部暂停</button>
       <button class="ghost" id="dlCancelAll">全部取消</button>
       <button class="ghost" id="dlClearDone" title="只清理队列里的完成记录，不删文件、不改台账">清理已完成</button>
       <span class="sub">并发</span>
@@ -290,10 +296,14 @@
     </div>
     <div class="sub" id="dlActiveInfo">–</div>
     <div class="dq" id="dlActiveList"></div>
+    <h3 style="margin-top:16px" id="dlPausedHead" hidden>已暂停 <span class="sub" id="dlPausedInfo"></span></h3>
+    <div class="dq" id="dlPausedList"></div>
     <h3 style="margin-top:16px">已完成 <span class="sub" id="dlDoneInfo"></span></h3>
     <div class="dq" id="dlDoneList"></div>
     <h3 style="margin-top:16px" id="dlFailHead" hidden>失败 <span class="sub" id="dlFailInfo"></span></h3>
     <div class="dq" id="dlFailList"></div>
+    <h3 style="margin-top:16px" id="dlCancelHead" hidden>已取消 <span class="sub" id="dlCancelInfo"></span></h3>
+    <div class="dq" id="dlCancelList"></div>
   </div>
 </div>
 

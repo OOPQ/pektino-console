@@ -176,8 +176,11 @@ function dlItemHtml(i) {
     : (i.state === 'done' ? 100 : 0);
   const size = expected ? `${dlMb(bytes)} / ${dlMb(expected)} MB` : `${dlMb(bytes)} MB`;
   const right = i.state === 'downloading' ? `${(+(i.speed) || 0).toFixed(2)} MB/s` : (DL_LABEL[i.state] || i.state);
+  const canPause = ['downloading', 'queued'].includes(i.state);
+  const canResume = i.state === 'paused';
   const canCancel = ['downloading', 'queued', 'paused'].includes(i.state);
   const cls = i.state === 'paused' ? 'paused' : i.state === 'done' ? 'done'
+    : i.state === 'cancelled' ? 'cancelled'
     : (i.state === 'failed' || i.state === 'dead') ? 'failed' : '';
   return `<div class="dq-item ${cls}">
     <div class="dq-thumb" ${hasFile ? `data-dq-play="${i.token}" title="播放"` : 'title="本地还没有这个文件"'}>
@@ -193,7 +196,9 @@ function dlItemHtml(i) {
       </div>
       <div class="dq-bar"><i style="width:${pct}%"></i></div>
       <div class="dq-actions">
-        ${canCancel ? `<button class="ghost" data-dq-cancel="${i.token}">取消</button>` : ''}
+        ${canPause ? `<button class="ghost" data-dq-pause="${i.token}">⏸ 暂停</button>` : ''}
+        ${canResume ? `<button class="ghost accent" data-dq-resume="${i.token}">▶ 继续</button>` : ''}
+        ${canCancel ? `<button class="ghost danger" data-dq-cancel="${i.token}">取消</button>` : ''}
         <button class="ghost" data-dq-fav="${i.token}">${fav ? '★ 已收藏' : '☆ 收藏'}</button>
         ${hasFile ? `<button class="ghost" data-dq-reveal="${i.token}">定位</button>` : ''}
       </div>
@@ -219,40 +224,54 @@ function renderDownloadQueue(dl) {
   state.DL_RUNNING = !!dl.running;
 
   const items = Array.isArray(dl.items) ? dl.items : [];
-  const active = items.filter(i => ['downloading', 'queued', 'paused'].includes(i.state));
+  const active = items.filter(i => ['downloading', 'queued'].includes(i.state));
+  const paused = items.filter(i => i.state === 'paused');
   const done = items.filter(i => i.state === 'done');
-  const failed = items.filter(i => ['failed', 'dead', 'cancelled'].includes(i.state));
+  const failed = items.filter(i => ['failed', 'dead'].includes(i.state));
+  const cancelled = items.filter(i => i.state === 'cancelled');
   const downloading = active.filter(i => i.state === 'downloading').length;
   const queued = active.filter(i => i.state === 'queued').length;
-  const pausedN = active.filter(i => i.state === 'paused').length;
+  const pendingN = active.length + paused.length;
 
   const badge = $('#dlBadge');
   if (badge) {
-    badge.textContent = String(active.length);
-    badge.hidden = active.length === 0;
+    badge.textContent = String(pendingN);
+    badge.hidden = pendingN === 0;
   }
   const pauseBtn = $('#dlPause');
   if (pauseBtn) {
     pauseBtn.disabled = !dl.running;
     pauseBtn.dataset.on = dl.paused ? '1' : '';
-    pauseBtn.textContent = dl.paused ? '▶ 继续' : '⏸ 暂停';
+    pauseBtn.textContent = dl.paused ? '▶ 全部继续' : '⏸ 全部暂停';
   }
   const head = $('#dlHead');
   if (!head) return;
   head.textContent = (!dl.running && !items.length)
     ? '没有下载任务'
-    : `${dl.running ? (dl.paused ? '已暂停' : '进行中') : '已结束'} · ${dl.done || 0}/${dl.total || 0} 完成` +
+    : `${dl.running ? (dl.paused ? '已全部暂停' : '进行中') : '已结束'} · ${dl.done || 0}/${dl.total || 0} 完成` +
       (dl.speed ? ` · ${dl.speed} MB/s` : '');
   $('#dlActiveInfo').textContent = active.length
-    ? `下载中 ${downloading} · 排队 ${queued}${pausedN ? ` · 已暂停 ${pausedN}` : ''}`
+    ? `下载中 ${downloading} · 排队 ${queued}`
     : '当前没有排队或下载中的条目';
   dlList($('#dlActiveList'), active, '当前没有排队或下载中的条目');
+
+  const pausedHead = $('#dlPausedHead');
+  if (pausedHead) pausedHead.hidden = paused.length === 0;
+  $('#dlPausedInfo').textContent = paused.length ? `（${paused.length} 条）` : '';
+  dlList($('#dlPausedList'), paused, '没有暂停的条目');
+
   $('#dlDoneInfo').textContent = done.length ? `（${done.length} 条）` : '';
   dlList($('#dlDoneList'), done, '还没有完成的条目');
+
   const failHead = $('#dlFailHead');
   if (failHead) failHead.hidden = failed.length === 0;
   $('#dlFailInfo').textContent = failed.length ? `（${failed.length} 条）` : '';
   dlList($('#dlFailList'), failed, '没有失败条目');
+
+  const cancelHead = $('#dlCancelHead');
+  if (cancelHead) cancelHead.hidden = cancelled.length === 0;
+  $('#dlCancelInfo').textContent = cancelled.length ? `（${cancelled.length} 条）` : '';
+  dlList($('#dlCancelList'), cancelled, '没有取消的条目');
 }
 
 async function toggleDownloadPause() {
@@ -268,6 +287,19 @@ async function toggleDownloadPause() {
 async function onDqAction(e) {
   const play = e.target.closest('[data-dq-play]');
   if (play) return doPlay(play.dataset.dqPlay);
+
+  const pauseBtn = e.target.closest('[data-dq-pause]');
+  if (pauseBtn) {
+    try { await api('/api/download/pause', { on: true, tokens: [pauseBtn.dataset.dqPause] }); toast('已暂停这一条', 2500); }
+    catch (err) { toast('暂停失败', 3000); }
+    return load();
+  }
+  const resumeBtn = e.target.closest('[data-dq-resume]');
+  if (resumeBtn) {
+    try { await api('/api/download/pause', { on: false, tokens: [resumeBtn.dataset.dqResume] }); toast('已继续', 2500); }
+    catch (err) { toast('继续失败', 3000); }
+    return load();
+  }
 
   const fav = e.target.closest('[data-dq-fav]');
   if (fav) {
@@ -331,8 +363,10 @@ function initDownloadQueue() {
     load();
   };
   $('#dlActiveList').addEventListener('click', onDqAction);
+  $('#dlPausedList').addEventListener('click', onDqAction);
   $('#dlDoneList').addEventListener('click', onDqAction);
   $('#dlFailList').addEventListener('click', onDqAction);
+  $('#dlCancelList').addEventListener('click', onDqAction);
   $('#dlConc').onchange = async e => {
     const n = Math.max(1, Math.min(16, parseInt(e.target.value) || 3));
     try {

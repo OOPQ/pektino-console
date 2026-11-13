@@ -108,6 +108,41 @@ function rateCell(r) {
   return starsHtml(r.rating, { token: r.token });
 }
 
+/* ---------- 画廊（卡片）视图 ---------- */
+function renderGallery(rows, active) {
+  const el = $('#gallery');
+  if (!el) return;
+  if (!rows.length) { el.innerHTML = '<div class="empty">没有匹配的条目</div>'; return; }
+  el.innerHTML = rows.map(r => {
+    const fav = r.fav === '1';
+    const hasFile = !!r.file_name;
+    const isActive = active.has(r.token);
+    const dlBtn = hasFile
+      ? `<button class="ghost rowbtn" data-play="${r.token}">播放</button>`
+      : (isActive
+        ? `<button class="ghost rowbtn danger" data-dl-cancel="${r.token}">取消</button>`
+        : `<button class="ghost rowbtn accent" data-dl="${r.token}">下载</button>`);
+    return `<div class="card" data-row="${r.token}">
+      <div class="cover" data-lb="${r.token}" title="点击放大">
+        <img src="/api/cover?token=${encodeURIComponent(r.token)}" loading="lazy" alt=""
+             onerror="this.parentNode.classList.add('nocover');this.remove()">
+        <span class="st">${stTag(r.status)}</span>
+        ${hasFile ? `<span class="playbtn" data-play="${r.token}">▶</span>` : ''}
+      </div>
+      <div class="body">
+        <div class="name mono" title="${r.token}">${r.token}</div>
+        <div class="meta">${r.duration || '—'} · ${r.res || '—'}${(+r.play_count) ? ' · ▶' + r.play_count : ''}</div>
+        <div class="actions">
+          <button class="star ${fav ? 'on' : ''}" data-fav="${r.token}" title="收藏">${fav ? '★' : '☆'}</button>
+          <span class="rt" data-rate="${r.token}">${starsInner(r.rating)}</span>
+          <span class="spacer"></span>
+          ${dlBtn}
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
 /* ---------- 渲染 ---------- */
 export function render() {
   const all = visible();
@@ -158,6 +193,15 @@ export function render() {
     th.classList.toggle('on', isOn);
     th.querySelector('.ar').textContent = isOn ? (state.SORT.dir === 'asc' ? '▲' : '▼') : '▲';
   });
+
+  // 表格 / 画廊两种显示方式
+  const galleryMode = state.VIEW === 'gallery';
+  const tw = $('#tablewrap'), gal = $('#gallery');
+  if (tw) tw.hidden = galleryMode;
+  if (gal) {
+    gal.hidden = !galleryMode;
+    if (galleryMode) renderGallery(rows, active);
+  }
 
   const from = all.length ? start + 1 : 0, to = Math.min(start + per, all.length);
   $('#pgInfo').textContent = `${from}-${to} / 共 ${all.length} 条 · 第 ${state.PAGE}/${pages} 页`;
@@ -239,6 +283,16 @@ export function applyKpiFilter(entry) {
 }
 
 export function initTable() {
+  /* 表格 / 画廊切换 */
+  document.querySelectorAll('#viewSeg button').forEach(b => {
+    b.classList.toggle('on', b.dataset.view === state.VIEW);
+    b.onclick = () => {
+      state.VIEW = b.dataset.view;
+      PREFS.view = state.VIEW; savePrefs();
+      document.querySelectorAll('#viewSeg button').forEach(x => x.classList.toggle('on', x.dataset.view === state.VIEW));
+      render();
+    };
+  });
   /* 排序 */
   document.querySelectorAll('th.sortable').forEach(th => th.addEventListener('click', () => {
     const key = th.dataset.key;

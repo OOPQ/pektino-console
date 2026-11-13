@@ -710,6 +710,7 @@ function Start-Download {
         '-QueueFile', (ConvertTo-QuotedArg $DlQueue), '-Dir', (ConvertTo-QuotedArg $dir),
         '-Concurrent', "$conc", '-ProgressFile', (ConvertTo-QuotedArg $DlProgress),
         '-CancelFile', (ConvertTo-QuotedArg $DlCancel), '-PauseFile', (ConvertTo-QuotedArg $DlPause),
+        '-PauseItemsFile', (ConvertTo-QuotedArg $DlPauseItems),
         '-AddFile', (ConvertTo-QuotedArg $DlAdd))
     if ($proxy) { $argList += @('-Proxy', (ConvertTo-QuotedArg $proxy)) }
 
@@ -718,6 +719,7 @@ function Start-Download {
     Remove-Item $DlAdd -Force -ErrorAction SilentlyContinue
     # 上一轮可能停在「暂停」状态：新任务从运行态开始
     Remove-Item $DlPause -Force -ErrorAction SilentlyContinue
+    Remove-Item $DlPauseItems -Force -ErrorAction SilentlyContinue
     $proc = Start-Process -FilePath 'powershell.exe' -ArgumentList $argList -WindowStyle Hidden -PassThru
     $startStamp = ''
     try { $startStamp = $proc.StartTime.ToString('s') } catch { }
@@ -741,19 +743,41 @@ function Cancel-DownloadItems {
     return @{ ok = $true; count = $list.Count }
 }
 
+function Get-PausedItemList {
+    if (-not (Test-Path $DlPauseItems)) { return @() }
+    try {
+        $raw = Get-Content $DlPauseItems -Raw -Encoding UTF8 | ConvertFrom-Json
+        return @(@($raw) | ForEach-Object { [string]$_ })
+    } catch { return @() }
+}
+
 function Set-DownloadPause {
-    <#  暂停/继续内置下载器：写一个标记文件，下载器下一轮 poll 生效。
+    <#  暂停 / 继续。
+        不传 tokens = 整体暂停（暂停所有条目）；传 tokens = 只暂停/继续这几条。
         暂停会杀掉正在跑的 curl 但保留 .part，继续时用 curl -C - 续传；
         下载器进程本身不退出，所以队列、进度、并发位都还在。  #>
-    param([bool]$On)
+    param([bool]$On, [string[]]$Tokens)
 
     $info = Get-DownloadInfo -Fresh
     if (-not $info.running) { return @{ ok = $false; error = '没有正在进行的下载' } }
 
+    # 按条暂停/继续
+    if ($Tokens -and $Tokens.Count -gt 0) {
+        $list = @(Get-PausedItemList)
+        if ($On) { $list = @(@($list) + @($Tokens) | Select-Object -Unique) }
+        else { $list = @($list | Where-Object { $Tokens -notcontains $_ }) }
+        (ConvertTo-Json -InputObject @($list) -Depth 3) | Set-Content -Path $DlPauseItems -Encoding UTF8 -Force
+        Touch-State
+        Write-Log 'download' "$(if ($On) { '暂停' } else { '继续' }) $(($Tokens -join ', '))"
+        return @{ ok = $true; paused = $On; tokens = @($Tokens) }
+    }
+
+    # 整体暂停/继续
     if ($On) {
         Set-Content -Path $DlPause -Value '1' -Encoding ASCII -Force
     } else {
         Remove-Item $DlPause -Force -ErrorAction SilentlyContinue
+        Remove-Item $DlPauseItems -Force -ErrorAction SilentlyContinue
     }
     if ($State.Download) { $State.Download.Paused = $On }
     Touch-State
@@ -774,6 +798,7 @@ function Stop-Download {
     $State.Download = $null
     Reset-DownloadProbe
     Remove-Item $DlPause -Force -ErrorAction SilentlyContinue
+    Remove-Item $DlPauseItems -Force -ErrorAction SilentlyContinue
     Remove-Item $DlAdd -Force -ErrorAction SilentlyContinue
     [void](Apply-DeadFromProgress -RunStarted $runStarted)
     Touch-State
@@ -792,6 +817,7 @@ function Reset-DownloadState {
     $hadTracked = [bool]$State.Download
     $State.Download = $null
     Remove-Item $DlPause -Force -ErrorAction SilentlyContinue
+    Remove-Item $DlPauseItems -Force -ErrorAction SilentlyContinue
     Remove-Item $DlCancel -Force -ErrorAction SilentlyContinue
     Remove-Item $DlAdd -Force -ErrorAction SilentlyContinue
     Reset-DownloadProbe
@@ -843,6 +869,7 @@ function Step-Download {
     $runStarted = $State.Download.Started
     $State.Download = $null
     Remove-Item $DlPause -Force -ErrorAction SilentlyContinue
+    Remove-Item $DlPauseItems -Force -ErrorAction SilentlyContinue
     [void](Apply-DeadFromProgress -RunStarted $runStarted)
     try { [void](Repair-PartFiles) } catch { }
     try { [void](Invoke-Scan -Silent -KeepStatus) } catch { }
@@ -927,6 +954,7 @@ function Step-DownloadGuard {
     if ((Get-DownloadProcesses).Count -gt 0) { return }
     # 进程已经没了还留着暂停标记 → 清掉，避免下次误判成「暂停中」
     if (Test-Path $DlPause) { Remove-Item $DlPause -Force -ErrorAction SilentlyContinue }
+    if (Test-Path $DlPauseItems) { Remove-Item $DlPauseItems -Force -ErrorAction SilentlyContinue }
 }
 
 function Apply-DeadFromProgress {

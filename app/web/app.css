@@ -284,4 +284,29 @@ details.adv[open] summary:before{content:'▾'}
 .rowbtn.accent:hover{background:#16324e;color:#8cc4ff}
 .dl-dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--acc);margin-left:6px;vertical-align:middle;animation:dotpulse 1.2s infinite}
 @keyframes dotpulse{0%,100%{opacity:1}50%{opacity:.3}}
+.dq-item.cancelled{opacity:.55}
+.dq-item.cancelled .dq-bar i{background:#4a5563}
+
+/* ---------- 表格 / 画廊切换 ---------- */
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:7px;overflow:hidden}
+.seg button{background:transparent;border:0;color:var(--dim);padding:3px 10px;font-size:12px;cursor:pointer}
+.seg button.on{background:#233246;color:var(--text)}
+
+/* ---------- 画廊视图 ---------- */
+.gallery{flex:1 1 auto;min-height:0;overflow:auto;display:grid;grid-template-columns:repeat(auto-fill,minmax(148px,1fr));gap:10px;padding:2px 2px 8px;align-content:start}
+.gallery[hidden]{display:none}
+.card{background:var(--panel2);border:1px solid var(--line);border-radius:8px;overflow:hidden;display:flex;flex-direction:column;transition:border-color .15s,transform .15s}
+.card:hover{border-color:#3a4b5f;transform:translateY(-1px)}
+.card .cover{position:relative;aspect-ratio:3/4;background:#0d1117;cursor:pointer;overflow:hidden}
+.card .cover img{width:100%;height:100%;object-fit:cover;display:block}
+.card .cover.nocover:after{content:'无封面';position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--faint);font-size:11px}
+.card .cover .playbtn{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:26px;color:#fff;background:rgba(0,0,0,.35);opacity:0;transition:opacity .15s}
+.card .cover:hover .playbtn{opacity:1}
+.card .st{position:absolute;left:6px;top:6px}
+.card .body{padding:6px 8px;display:flex;flex-direction:column;gap:4px}
+.card .name{font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.card .meta{color:var(--dim);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.card .actions{display:flex;align-items:center;gap:4px;margin-top:2px}
+.card .actions .rt{font-size:12px}
+.card .actions .star{width:22px;height:22px;font-size:13px}
 

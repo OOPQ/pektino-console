@@ -8,7 +8,7 @@ export const STATUS_LABEL = { new: '待下载', done: '已完成', ignored: '忽
 export const PREFS = Object.assign({
   sortKey: 'rank', sortDir: 'asc', per: 50, covers: true, compact: false, pageCount: 3,
   page: 1, status: 'all', res: 'all', minDur: '', q: '',
-  sound: true,
+  sound: true, view: 'table',
   cols: {
     cover: true, rank: true, duration: true, res: true, views: true, likes: true,
     plays: true, rating: true, token: true, status: true, disk: true, first_seen: true
@@ -34,6 +34,7 @@ export const state = {
   PAGE: PREFS.page,
   PER: PREFS.per,
   SHOW_COVERS: PREFS.covers,
+  VIEW: PREFS.view || 'table',
   LB_TOKEN: null,
   GACHA_TOKEN: null,
   // 由 load() 每次填充；在这里声明，避免「运行时才挂属性」的隐式字段

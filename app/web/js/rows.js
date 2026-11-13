@@ -267,6 +267,9 @@ export function initRows() {
   $('#selClear').onclick = () => { state.SEL.clear(); render(); };
 
   $('#tbody').addEventListener('click', onRowClick);
+  // 画廊视图复用同一套行内交互（播放/收藏/评分/下载/取消/灯箱）
+  const gal = $('#gallery');
+  if (gal) gal.addEventListener('click', onRowClick);
 
   $('#tbody').addEventListener('contextmenu', e => {
     const tr = e.target.closest('tr[data-row]');

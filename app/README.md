@@ -272,6 +272,13 @@ clientErrors[] / clientWarns / uptime`。单请求 ≥800ms 会进 `slow` 列表
   `?rowsRev=N`；服务端回 rows 才替换并重绘，否则只更新统计和进度条，不重建表格 DOM
 - **大图/抽卡**：原图 + 缩略图两级回退，`fitMedia()` 按窗口算尺寸（不放大）
 - **抽卡权重**：没看过 ×3、收藏 ×1.5；候选池 = 当前筛选结果里有文件的条目
+- **下载队列卡片**：每条带封面缩略图、进度条、▶ 播放 / ☆ 收藏 / 定位 / 取消；
+  播放走 `doPlay`，收藏走 `setFav` 并即时更新按钮文案
+- **入队反馈**：`renderDownloadQueue` 比较上一次的 `total`，变大就触发
+  `pulseDlQueue()`（按钮脉冲 + 浮出「+N 已加入队列」）
+- **完成提示音**：`playDing()` 用 Web Audio 现场合成（无音频文件），
+  首次 `pointerdown` 解锁 AudioContext；开关存 `PREFS.sound`
+- **二级菜单**：低频操作收进「更多 ▾」、筛选收进「筛选 ▾」，设置抽屉用 `<details>` 折叠
 
 ## 8. CLI 与 dev
 

@@ -107,8 +107,66 @@ const DL_LABEL = {
   done: '已完成', failed: '失败', dead: '源失效', cancelled: '已取消'
 };
 const dlMb = n => ((+n || 0) / 1048576).toFixed(1);
+const rowOf = tk => state.ROWS.find(r => r.token === tk);
+
+/* ---------- 完成提示音（Web Audio，无外部资源） ---------- */
+let _audioCtx = null;
+function unlockAudio() {
+  try {
+    if (!_audioCtx) _audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (_audioCtx.state === 'suspended') _audioCtx.resume();
+  } catch (e) { }
+}
+document.addEventListener('pointerdown', unlockAudio, { once: true });
+
+function playDing() {
+  if (!PREFS.sound) return;
+  try {
+    unlockAudio();
+    if (!_audioCtx) return;
+    const t0 = _audioCtx.currentTime;
+    [880, 1318].forEach((f, i) => {
+      const o = _audioCtx.createOscillator(), g = _audioCtx.createGain();
+      o.type = 'sine'; o.frequency.value = f;
+      const at = t0 + i * 0.16;
+      g.gain.setValueAtTime(0.0001, at);
+      g.gain.exponentialRampToValueAtTime(0.16, at + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, at + 0.30);
+      o.connect(g).connect(_audioCtx.destination);
+      o.start(at); o.stop(at + 0.32);
+    });
+  } catch (e) { }
+}
+
+/* ---------- 加入队列的反馈：按钮脉冲 + 浮出 +N ---------- */
+let _pulseAt = 0;
+function pulseDlQueue(n) {
+  if (!n || n <= 0) return;
+  const now = Date.now();
+  if (now - _pulseAt < 1200) return;   // 手动触发后，轮询里的自动触发先别重复
+  _pulseAt = now;
+  const btn = $('#btnDlQueue');
+  if (!btn) return;
+  btn.classList.remove('pulse');
+  void btn.offsetWidth;
+  btn.classList.add('pulse');
+  setTimeout(() => btn.classList.remove('pulse'), 800);
+  try {
+    const r = btn.getBoundingClientRect();
+    const el = document.createElement('span');
+    el.className = 'dl-float';
+    el.textContent = `+${n} 已加入队列`;
+    el.style.left = (r.left + 4) + 'px';
+    el.style.top = (r.top - 8) + 'px';
+    document.body.appendChild(el);
+    setTimeout(() => el.remove(), 1200);
+  } catch (e) { }
+}
 
 function dlItemHtml(i) {
+  const row = rowOf(i.token) || {};
+  const fav = row.fav === '1';
+  const hasFile = !!row.file_name;
   const bytes = +i.bytes || 0;
   const expected = +i.expected || 0;
   const pct = expected
@@ -120,13 +178,24 @@ function dlItemHtml(i) {
   const cls = i.state === 'paused' ? 'paused' : i.state === 'done' ? 'done'
     : (i.state === 'failed' || i.state === 'dead') ? 'failed' : '';
   return `<div class="dq-item ${cls}">
-    <div class="dq-top">
-      <span class="tk mono" title="${i.token}">${i.token}</span>
-      <span class="sub">${size}</span>
-      <span class="sub">${right}</span>
-      ${canCancel ? `<button class="ghost rowbtn" data-dlq-cancel="${i.token}">取消</button>` : ''}
+    <div class="dq-thumb" ${hasFile ? `data-dq-play="${i.token}" title="播放"` : 'title="本地还没有这个文件"'}>
+      <img src="/api/cover?token=${encodeURIComponent(i.token)}" loading="lazy" alt=""
+           onerror="this.parentNode.classList.add('nocover');this.remove()">
+      ${hasFile ? '<span class="dq-playbtn">▶</span>' : ''}
     </div>
-    <div class="dq-bar"><i style="width:${pct}%"></i></div>
+    <div class="dq-body">
+      <div class="dq-top">
+        <span class="tk mono" title="${i.token}">${i.token}</span>
+        <span class="sub">${size}</span>
+        <span class="sub">${right}</span>
+      </div>
+      <div class="dq-bar"><i style="width:${pct}%"></i></div>
+      <div class="dq-actions">
+        ${canCancel ? `<button class="ghost" data-dq-cancel="${i.token}">取消</button>` : ''}
+        <button class="ghost" data-dq-fav="${i.token}">${fav ? '★ 已收藏' : '☆ 收藏'}</button>
+        ${hasFile ? `<button class="ghost" data-dq-reveal="${i.token}">定位</button>` : ''}
+      </div>
+    </div>
   </div>`;
 }
 
@@ -137,6 +206,16 @@ function dlList(el, items, emptyText) {
 
 function renderDownloadQueue(dl) {
   dl = dl || {};
+  // 反馈：新条目入队时脉冲 + 浮出 “+N”；整批完成时提示音
+  const prevRunning = state.DL_RUNNING;
+  const prevDone = state.DL_DONE || 0;
+  const total = +dl.total || 0;
+  if (typeof state.DL_TOTAL === 'number' && total > state.DL_TOTAL) pulseDlQueue(total - state.DL_TOTAL);
+  if (prevRunning === true && !dl.running && (+dl.done || 0) > prevDone && !dl.failed) playDing();
+  state.DL_TOTAL = total;
+  state.DL_DONE = +dl.done || 0;
+  state.DL_RUNNING = !!dl.running;
+
   const items = Array.isArray(dl.items) ? dl.items : [];
   const active = items.filter(i => ['downloading', 'queued', 'paused'].includes(i.state));
   const done = items.filter(i => i.state === 'done');
@@ -184,15 +263,41 @@ async function toggleDownloadPause() {
   load();
 }
 
-async function onDlQueueCancel(e) {
-  const btn = e.target.closest('[data-dlq-cancel]');
-  if (!btn) return;
-  const tk = btn.dataset.dlqCancel;
-  try {
-    const r = await api('/api/download/cancel', { tokens: [tk] });
-    toast(r.ok ? `已取消 ${tk}` : (r.error || '取消失败'), 3000);
-  } catch (err) { toast('请求失败', 3000); }
-  load();
+async function onDqAction(e) {
+  const play = e.target.closest('[data-dq-play]');
+  if (play) return doPlay(play.dataset.dqPlay);
+
+  const fav = e.target.closest('[data-dq-fav]');
+  if (fav) {
+    const tk = fav.dataset.dqFav;
+    const row = rowOf(tk);
+    const next = !(row && row.fav === '1');
+    const r = await setFav([tk], next);
+    if (r.ok) {
+      toast(next ? '已收藏' : '已取消收藏', 2000);
+      renderDownloadQueue(state.DOWNLOAD || {});
+    }
+    return;
+  }
+
+  const reveal = e.target.closest('[data-dq-reveal]');
+  if (reveal) {
+    try {
+      const r = await api('/api/reveal', { token: reveal.dataset.dqReveal });
+      if (!r.ok) toast(r.error || '定位失败', 3000);
+    } catch (err) { toast('定位失败', 3000); }
+    return;
+  }
+
+  const cancel = e.target.closest('[data-dq-cancel]');
+  if (cancel) {
+    const tk = cancel.dataset.dqCancel;
+    try {
+      const r = await api('/api/download/cancel', { tokens: [tk] });
+      toast(r.ok ? `已取消 ${tk}` : (r.error || '取消失败'), 3000);
+    } catch (err) { toast('请求失败', 3000); }
+    load();
+  }
 }
 
 function updateConcSelect() {
@@ -224,8 +329,9 @@ function initDownloadQueue() {
     } catch (e) { toast('请求失败：' + e.message, 4000); }
     load();
   };
-  $('#dlActiveList').addEventListener('click', onDlQueueCancel);
-  $('#dlFailList').addEventListener('click', onDlQueueCancel);
+  $('#dlActiveList').addEventListener('click', onDqAction);
+  $('#dlDoneList').addEventListener('click', onDqAction);
+  $('#dlFailList').addEventListener('click', onDqAction);
   $('#dlConc').onchange = async e => {
     const n = Math.max(1, Math.min(16, parseInt(e.target.value) || 3));
     try {
@@ -422,8 +528,10 @@ async function downloadNew() {
     const r = await api('/api/download', { status: 'new' });
     if (!r.ok) return toast('失败：' + r.error, 5000);
     if (r.appended !== undefined) {
+      if (r.appended > 0) pulseDlQueue(r.appended);
       toast(r.appended > 0 ? `已追加 ${r.appended} 条到当前下载队列` : (r.note || '这些条目已经在队列里'), 3500);
     } else {
+      pulseDlQueue(r.count);
       toast(`已开始下载 ${r.count} 条（并发 ${r.concurrent}）`, 3500);
     }
     load();
@@ -483,12 +591,9 @@ async function repairCovers() {
 
 function initToolbar() {
   $('#btnScrape').onclick = doScrape;
-  $('#btnImport').onclick = doImport;
   $('#btnCancelJob').onclick = doCancelJob;
-  $('#btnSendNew').onclick = sendAllNew;
   $('#btnDownload').onclick = downloadNew;
   $('#btnSaveNet').onclick = saveNet;
-  $('#btnPreview').onclick = previewLinks;
   $('#btnOpenContent').onclick = openProjectFolder;
   $('#btnScan').onclick = scanDir;
   // 「打开数据目录」与「打开项目文件夹」是同一个动作，别绑两份
@@ -505,6 +610,37 @@ function initToolbar() {
   $('#btnRepairParts').onclick = repairParts;
   $('#dlList').addEventListener('click', onCancelOne);
   $('#btnRefresh').onclick = () => load();
+
+  // 「更多 ▾」二级菜单：把低频操作收起来
+  const more = $('#moreMenu');
+  const closeMore = () => more && more.classList.remove('on');
+  if ($('#btnMore')) {
+    $('#btnMore').onclick = e => { e.stopPropagation(); more.classList.toggle('on'); };
+  }
+  if (more) {
+    more.addEventListener('click', e => {
+      const b = e.target.closest('[data-more]');
+      if (!b) return;
+      const act = b.dataset.more;
+      closeMore();
+      if (act === 'import') return doImport();
+      if (act === 'send') return sendAllNew();
+      if (act === 'preview') return previewLinks();
+      if (act === 'scan') return scanDir();
+      if (act === 'refreshCovers') return repairCovers();
+      if (act === 'export') { window.location.href = '/api/export'; return; }
+    });
+  }
+
+  // 「筛选 ▾」浮层
+  const pop = $('#filterPop');
+  if ($('#btnFilter')) {
+    $('#btnFilter').onclick = e => { e.stopPropagation(); pop.classList.toggle('on'); };
+  }
+  document.addEventListener('click', e => {
+    if (!e.target.closest('#moreMenu') && e.target.id !== 'btnMore') closeMore();
+    if (pop && !e.target.closest('#filterPop') && e.target.id !== 'btnFilter') pop.classList.remove('on');
+  });
 }
 
 /* ================= 批量操作 ================= */
@@ -591,6 +727,11 @@ function initControls() {
   $('#fRes').value = state.FILTER.res;
   $('#fMinDur').value = state.FILTER.minDur;
   $('#pgSize').value = String(state.PER);
+  const snd = $('#chkSound');
+  if (snd) {
+    snd.checked = PREFS.sound !== false;
+    snd.addEventListener('change', e => { PREFS.sound = e.target.checked; savePrefs(); });
+  }
 }
 
 initTable();

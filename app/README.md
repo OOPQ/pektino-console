@@ -26,7 +26,7 @@ app\
     transport.ps1      HTTP 传输：Send-Bytes / Send-Json / Read-Request / Push-Sse
     actions.ps1        业务：统计、扫描、抓取/导入 Job、收藏/评分/观看、播放、删除、下载器、源地址刷新
     media.ps1          浏览器内播放的独立媒体服务（Range 流式、单次 8MB、只服务 media\ 下的 mp4）
-    covers.ps1         封面补齐（含主循环里的自动补封面）
+    covers.ps1         封面补齐：本地视频取帧（Shell 缩略图）+ 站点抓取，含主循环里的自动补封面
   lib\
     project.ps1        项目（数据单元）解析、初始化、媒体识别
     ledger.ps1         台账业务语义：合并去重、状态机、配置读写、内容目录扫描

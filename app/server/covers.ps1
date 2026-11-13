@@ -2,6 +2,73 @@
 
 try { Add-Type -AssemblyName System.Net.Http -ErrorAction Stop } catch { }
 
+# 从本地视频取一帧当封面：走 Windows Shell 的缩略图提供程序（和资源管理器一致），
+# 不依赖 ffmpeg，也不需要联网。
+try {
+    if (-not ('ShellThumb' -as [type])) {
+        Add-Type -ReferencedAssemblies System.Drawing -TypeDefinition @'
+using System;
+using System.Drawing;
+using System.Drawing.Imaging;
+using System.Runtime.InteropServices;
+
+public static class ShellThumb {
+    [StructLayout(LayoutKind.Sequential)]
+    public struct SIZE { public int cx; public int cy; public SIZE(int x, int y) { cx = x; cy = y; } }
+
+    [Flags]
+    public enum SIIGBF {
+        RESIZETOFIT = 0x00, BIGGERSIZEOK = 0x01, MEMORYONLY = 0x02, ICONONLY = 0x04,
+        THUMBNAILONLY = 0x08, INCACHEONLY = 0x10, CROPTOSQUARE = 0x20,
+        WIDETHUMBNAILS = 0x40, ICONBACKGROUND = 0x80, SCALEUP = 0x100
+    }
+
+    [ComImport, Guid("bcc18b79-ba16-442f-80c4-8a59c30c463b"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    interface IShellItemImageFactory {
+        [PreserveSig] int GetImage(SIZE size, SIIGBF flags, out IntPtr phbm);
+    }
+
+    [DllImport("shell32.dll", CharSet = CharSet.Unicode, PreserveSig = false)]
+    static extern void SHCreateItemFromParsingName(string path, IntPtr pbc, ref Guid riid, [MarshalAs(UnmanagedType.Interface)] out object shellItem);
+
+    [DllImport("gdi32.dll")] static extern bool DeleteObject(IntPtr hObject);
+
+    public static bool Save(string path, string outPath, int width, int height) {
+        object item;
+        Guid iid = new Guid("bcc18b79-ba16-442f-80c4-8a59c30c463b");
+        SHCreateItemFromParsingName(path, IntPtr.Zero, ref iid, out item);
+        var factory = (IShellItemImageFactory)item;
+        IntPtr hbm;
+        int hr = factory.GetImage(new SIZE(width, height), SIIGBF.THUMBNAILONLY | SIIGBF.BIGGERSIZEOK | SIIGBF.RESIZETOFIT, out hbm);
+        if (hr != 0 || hbm == IntPtr.Zero) return false;
+        try {
+            using (var bmp = Image.FromHbitmap(hbm)) { bmp.Save(outPath, ImageFormat.Jpeg); }
+        } finally { DeleteObject(hbm); }
+        return true;
+    }
+}
+'@
+    }
+} catch { }
+
+function New-LocalCover {
+    <#  本地有视频、但没有封面 → 用视频帧生成 cache\covers\<token>.jpg
+        返回是否成功；失败不抛异常（比如文件被占用）  #>
+    param([string]$Video, [string]$Dest)
+    try {
+        if (-not ('ShellThumb' -as [type])) { return $false }
+        if (-not (Test-Path -LiteralPath $Video)) { return $false }
+        $dir = Split-Path -Parent $Dest
+        if ($dir -and -not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
+        if ([ShellThumb]::Save($Video, $Dest, 400, 600)) {
+            if ((Get-Item -LiteralPath $Dest).Length -gt 1024) { return $true }
+            Remove-Item -LiteralPath $Dest -Force -ErrorAction SilentlyContinue
+        }
+    } catch { }
+    return $false
+}
+
+
 function Get-CoverMissingList {
     <#  返回缺封面 / 封面损坏的 token 列表（跳过已标记 .missing 的）  #>
     param([int]$Limit = 0)
@@ -26,6 +93,20 @@ function Get-CoverMissingCount {
     return (Get-CoverMissingList).Count
 }
 
+function Get-LocalCoverMissingCount {
+    <#  本地已有视频、但 cache\covers 里没有可用封面的条目数（自动补封面的触发条件之一）  #>
+    $n = 0
+    foreach ($r in @($State.Ledger)) {
+        if (-not $r.file_name) { continue }
+        $tk = [string]$r.token
+        if (-not $tk -or $tk -notmatch '^[A-Za-z0-9_\-]+$') { continue }
+        $f = Join-Path $CoverDir ($tk + '.jpg')
+        if ((Test-Path $f) -and ((Get-Item $f).Length -gt 1024)) { continue }
+        $n++
+    }
+    return $n
+}
+
 function Repair-Covers {
     <#
       补齐缺失/损坏的封面：重新取详情页的 JSON-LD thumbnailUrl，再下载图片。
@@ -35,12 +116,33 @@ function Repair-Covers {
     #>
     param([int]$Limit = 40)
 
-    $candidates = Get-CoverMissingList -Limit $Limit
-    if (-not $candidates.Count) {
-        return [pscustomobject]@{ ok = $true; fixed = 0; failed = 0; missing = 0; scanned = 0 }
+    if (-not (Test-Path $CoverDir)) { New-Item -ItemType Directory -Path $CoverDir -Force | Out-Null }
+
+    # 先处理「本地有视频、没有封面」：直接抽视频帧，不联网、也不消耗抓取配额
+    $localFixed = 0
+    $localTried = 0
+    foreach ($r in @($State.Ledger)) {
+        if ($localTried -ge 60) { break }
+        $tk = [string]$r.token
+        if (-not $tk -or $tk -notmatch '^[A-Za-z0-9_\-]+$') { continue }
+        if (-not $r.file_name) { continue }
+        $dest = Join-Path $CoverDir ($tk + '.jpg')
+        if ((Test-Path $dest) -and ((Get-Item $dest).Length -gt 1024)) { continue }
+        $file = Resolve-RowFile $r
+        if (-not $file -or -not (Test-Path -LiteralPath $file)) { continue }
+        $localTried++
+        if (New-LocalCover -Video $file -Dest $dest) { $localFixed++ }
     }
 
-    if (-not (Test-Path $CoverDir)) { New-Item -ItemType Directory -Path $CoverDir -Force | Out-Null }
+    $candidates = Get-CoverMissingList -Limit $Limit
+    if (-not $candidates.Count) {
+        if ($localFixed -gt 0) {
+            try { [void](Update-Thumbs -CoverDir $CoverDir -ThumbDir $ThumbDir) } catch { }
+            Touch-State
+            Write-Log 'cover' "封面修复：用视频帧补 $localFixed 张（本地文件）"
+        }
+        return [pscustomobject]@{ ok = $true; fixed = $localFixed; local = $localFixed; failed = 0; missing = 0; scanned = $localTried }
+    }
 
     $handler = New-Object System.Net.Http.HttpClientHandler
     $handler.MaxConnectionsPerServer = 8
@@ -109,13 +211,14 @@ function Repair-Covers {
         $client.Dispose()
     }
 
-    if ($fixed -gt 0) {
+    $fixedAll = $localFixed + $fixed
+    if ($fixedAll -gt 0) {
         try { [void](Update-Thumbs -CoverDir $CoverDir -ThumbDir $ThumbDir) } catch { }
     }
     Touch-State
     $left = (Get-CoverMissingList).Count
-    Write-Log 'cover' "封面修复：补 $fixed 张，失败 $failed，确认无封面 $dead，仍缺 $left"
-    return [pscustomobject]@{ ok = $true; fixed = $fixed; failed = $failed; missing = $left; scanned = $candidates.Count }
+    Write-Log 'cover' "封面修复：补 $fixedAll 张（其中视频帧 $localFixed），失败 $failed，确认无封面 $dead，仍缺 $left"
+    return [pscustomobject]@{ ok = $true; fixed = $fixedAll; local = $localFixed; failed = $failed; missing = $left; scanned = ($localTried + $candidates.Count) }
 }
 
 function Step-Covers {

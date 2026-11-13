@@ -152,7 +152,7 @@ function Invoke-Scan {
         $coverMissing = [int]$prev.coverMissing
         $coverMissingAt = $prev.coverMissingAt
     } else {
-        $coverMissing = (Get-CoverMissingList).Count
+        $coverMissing = (Get-CoverMissingList).Count + (Get-LocalCoverMissingCount)
         $coverMissingAt = (Get-Date).ToString('s')
     }
     $State.Scan = [pscustomobject]@{

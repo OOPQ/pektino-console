@@ -850,6 +850,7 @@ function Stop-Download {
     if ($killed -eq 0 -and $orphans -eq 0) {
         return @{ ok = $false; error = '没有正在进行的下载' }
     }
+    Clean-StaleProgress
     Write-Log 'download' "下载已取消（进程 $($killed + $orphans) 个）"
     @{ ok = $true; killed = $killed + $orphans; reverted = 0 }
 }
@@ -866,9 +867,29 @@ function Reset-DownloadState {
     Remove-Item $DlCancel -Force -ErrorAction SilentlyContinue
     Remove-Item $DlAdd -Force -ErrorAction SilentlyContinue
     Reset-DownloadProbe
+    Clean-StaleProgress
     Touch-State
     Write-Log 'download' "强制解除下载占用（跟踪=$hadTracked，进程 $killed 个）"
     return @{ ok = $true; killed = $killed; reverted = 0; tracked = $hadTracked }
+}
+
+function Clean-StaleProgress {
+    <#  进程已经不在了但进度文件还写着 running/queued（取消、崩溃留下的）：
+        收尾成「只剩已完成记录」，避免队列抽屉里挂着一大堆假排队条目。  #>
+    if (-not (Test-Path $DlProgress)) { return }
+    try {
+        $p = Get-Content $DlProgress -Raw -Encoding UTF8 | ConvertFrom-Json
+        $done = @($p.items | Where-Object { $_.state -eq 'done' })
+        $others = @($p.items | Where-Object { $_.state -ne 'done' })
+        if (-not $p.running -and $others.Count -eq 0) { return }
+        $obj = [ordered]@{
+            running = $false; paused = $false; phase = 'done'
+            total = $done.Count; done = $done.Count; failed = 0
+            bytes = 0; speed = 0; items = $done; updatedAt = (Get-Date).ToString('s')
+        }
+        (ConvertTo-Json -InputObject $obj -Depth 5) | Set-Content -Path $DlProgress -Encoding UTF8 -Force
+        Touch-State
+    } catch { }
 }
 
 function Clear-DownloadDone {

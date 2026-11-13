@@ -696,6 +696,8 @@ try {
 try {
     $killedBoot = Stop-AllDownloadProcesses
     if ($killedBoot -gt 0) { Write-FileLog "boot cleanup: 清掉 $killedBoot 个残留下载进程" }
+    # 进程都清掉了：进度文件里还挂着的 queued/downloading 都是假的，收尾成只剩已完成
+    Clean-StaleProgress
 } catch { }
 
 

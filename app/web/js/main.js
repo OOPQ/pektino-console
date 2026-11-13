@@ -448,6 +448,15 @@ async function load() {
     $('#diag').textContent = `自检：前端 OK · API OK · 渲染 ${state.ROWS.length} 行 · 磁盘命中 ${S.downloaded}`;
 
     state.DOWNLOAD = s.download || null;
+    // 下载队列里的活跃条目变了（开始/取消/完成）也要重绘表格：
+    // 行内按钮要在「下载 / 取消」之间切换，状态列要显示/隐藏下载中的蓝点
+    const dlItems = (s.download && s.download.items) || [];
+    const activeSig = dlItems
+      .filter(i => ['downloading', 'queued', 'paused'].includes(i.state))
+      .map(i => i.token).sort().join(',');
+    const dlChanged = activeSig !== state.DL_ACTIVE_SIG;
+    state.DL_ACTIVE_SIG = activeSig;
+
     state.SETTINGS = s.settings || null;
     updateConcSelect();
     // 首次 load 之前 DOM 还没回填过设置，这里补一次，否则点「保存」会把配置清空
@@ -457,8 +466,8 @@ async function load() {
       if (cc && document.activeElement !== cc) cc.value = String(state.SETTINGS.concurrent || 3);
     }
     renderJob(s.job || {}, s.download);
-    // 行没变就不重绘整张表：避免每次进度推送都重建 DOM、重新加载封面
-    if (rowsChanged) render();
+    // 行或下载活跃集变了就重绘：避免进度推送时无意义重建 DOM，又保证按钮/蓝点即时更新
+    if (rowsChanged || dlChanged) render();
     markActiveKpi();
     if ((s.job && s.job.running) || (s.download && s.download.running)) { clearTimeout(load._t); load._t = setTimeout(load, 1200); }
   } catch (e) {

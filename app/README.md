@@ -175,6 +175,8 @@ new ──开始下载（队列里显示进度）──▶ done（磁盘命中�
 
 - 已经有下载器在跑时，新条目**追加**进同一个队列（`data\.dl-add.json`，下载器每轮
   读一次就删），不另起进程；返回 `{appended:N}`
+- 启动下载时服务端先写一份初始进度（`items=queued`），前端立刻能看到排队条目；
+  已完成的记录会从旧进度文件继承到新一轮，只有 `POST /api/download/clear-done` 会清除
 - 抓取/入库（`Start-Job`）与下载（独立进程）互不阻塞；抓取/入库自身仍是单任务槽位
 - 优先 `aria2c.exe`（`-x8 -s8`），否则 `curl.exe -C -` 续传
 - 先写 `<token>.mp4.part`，大小等于远端 `Content-Length` 才改名成 `.mp4`

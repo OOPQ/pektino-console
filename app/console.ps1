@@ -691,6 +691,13 @@ try {
     Write-FileLog "boot scan failed: $($_.Exception.Message)"
 }
 
+# 服务重启后 State 是空的：清掉上一轮可能残留的下载器/curl，
+# 这样 Start-Download 可以走「只查跟踪状态」的快速路径，不必每次枚举进程
+try {
+    $killedBoot = Stop-AllDownloadProcesses
+    if ($killedBoot -gt 0) { Write-FileLog "boot cleanup: 清掉 $killedBoot 个残留下载进程" }
+} catch { }
+
 
 # 端口被别的程序占用：往后找一个空闲端口
 $bindPort = $Port

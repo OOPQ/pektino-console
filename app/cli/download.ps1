@@ -204,6 +204,15 @@ $jobs = @{}          # token -> @{ proc; part; final; log; expected; lastBytes; 
 $pending = New-Object System.Collections.Queue
 foreach ($it in $queue) { $pending.Enqueue($it) }
 
+# 已完成的记录跨轮次保留：只由控制台的「清理已完成」删除，下载器自己不丢
+$history = @()
+try {
+    if (Test-Path -LiteralPath $ProgressFile) {
+        $oldProgress = Get-Content -LiteralPath $ProgressFile -Raw -Encoding UTF8 | ConvertFrom-Json
+        $history = @($oldProgress.items | Where-Object { $_.state -eq 'done' } | Select-Object -Last 200)
+    }
+} catch { }
+
 function Test-Paused {
     <#  暂停标记由控制台写：文件存在且内容为 1 就暂停。
         进程不退出，继续时不用重起，进度和队列都还在。  #>
@@ -440,19 +449,19 @@ try {
             paused    = [bool]$paused
             pausedItems = @($pausedItems)
             phase     = 'download'
-            total     = $states.Count
-            done      = $doneCount
+            total     = ($states.Count + $history.Count)
+            done      = ($doneCount + $history.Count)
             failed    = $failCount
             queued    = $queuedCount
             pausedCount = $pausedCount
             bytes     = $bytes
             speed     = [math]::Round($speed, 2)
             active    = @($active)
-            items     = @($states.Keys | ForEach-Object {
+            items     = @(@($history) + @($states.Keys | ForEach-Object {
                     $sp = 0
                     if ($jobs.ContainsKey($_)) { $sp = $jobs[$_].speed }
                     [pscustomobject]@{ token = $_; state = $states[$_].state; bytes = $states[$_].bytes; expected = $states[$_].expected; speed = $sp; error = $states[$_].error }
-                })
+                }))
             startedAt = $startAt
             updatedAt = (Get-Date).ToString('s')
         }
@@ -464,9 +473,9 @@ try {
         elseif ($states[$tk].state -eq 'failed') { $failCount++; $errs += @{ token = $tk; error = $states[$tk].error } }
     }
     Write-ProgressFile @{
-        running = $false; paused = $false; phase = 'done'; total = $states.Count; done = $doneCount; failed = $failCount;
+        running = $false; paused = $false; phase = 'done'; total = ($states.Count + $history.Count); done = ($doneCount + $history.Count); failed = $failCount;
         bytes = $bytes; speed = 0; errors = @($errs | Select-Object -Last 20); startedAt = $startAt;
-        items = @($states.Keys | ForEach-Object { [pscustomobject]@{ token = $_; state = $states[$_].state; bytes = $states[$_].bytes; error = $states[$_].error } });
+        items = @(@($history) + @($states.Keys | ForEach-Object { [pscustomobject]@{ token = $_; state = $states[$_].state; bytes = $states[$_].bytes; error = $states[$_].error } }));
         finishedAt = (Get-Date).ToString('s')
     }
     exit 0

@@ -537,15 +537,16 @@ function Get-DownloadProcesses {
     $scriptPath = [string]$DlScript
     $contentDir = [string]$Config.contentDir
     try {
-        foreach ($p in @(Get-CimInstance Win32_Process -Filter "Name='powershell.exe'" -ErrorAction SilentlyContinue)) {
-            if ($p.ProcessId -eq $PID) { continue }
+        # 一次全量枚举再本地过滤：这台机器上 Get-CimInstance -Filter 单次约 300ms，
+        # 三条过滤 900ms；全量枚举只要 150ms（415 个进程），反而快 6 倍。
+        foreach ($p in @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue)) {
             if (-not $p.CommandLine) { continue }
-            if (-not $scriptPath) { continue }
-            if ($p.CommandLine.IndexOf($scriptPath, [System.StringComparison]::OrdinalIgnoreCase) -ge 0) { $out += $p }
-        }
-        foreach ($n in @('curl.exe', 'aria2c.exe')) {
-            foreach ($p in @(Get-CimInstance Win32_Process -Filter "Name='$n'" -ErrorAction SilentlyContinue)) {
-                if (-not $p.CommandLine) { continue }
+            $name = [string]$p.Name
+            if ($name -eq 'powershell.exe') {
+                if ($p.ProcessId -eq $PID) { continue }
+                if (-not $scriptPath) { continue }
+                if ($p.CommandLine.IndexOf($scriptPath, [System.StringComparison]::OrdinalIgnoreCase) -ge 0) { $out += $p }
+            } elseif ($name -eq 'curl.exe' -or $name -eq 'aria2c.exe') {
                 if ($p.CommandLine -notmatch '\.mp4\.part') { continue }
                 if ($contentDir -and $p.CommandLine.IndexOf($contentDir, [System.StringComparison]::OrdinalIgnoreCase) -lt 0) { continue }
                 $out += $p
@@ -560,10 +561,10 @@ $script:DlProbeAlive = $false
 
 function Test-DownloadProcessCached {
     <#
-      /api/state 每次都要回答「下载器还活着吗」，而进程探测是这条路径上最贵的一步。
-      下载器是分钟级进程，5 秒缓存足够；需要精确结果时用 -Force。
+      /api/state 每次都要回答「下载器还活着吗」，而进程探测是这条路径上最贵的一步
+      （全量 CIM 枚举约 1s）。下载器是分钟级进程，15 秒缓存足够；需要精确结果时用 -Force。
     #>
-    param([switch]$Force, [int]$MaxAgeSeconds = 5)
+    param([switch]$Force, [int]$MaxAgeSeconds = 15)
 
     if (-not $Force -and ((Get-Date) - $script:DlProbeAt).TotalSeconds -lt $MaxAgeSeconds) {
         return $script:DlProbeAlive
@@ -626,9 +627,8 @@ function Get-DownloadInfo {
         } catch { }
     }
     $alive = Test-TrackedDownloader
-    if (-not $alive) {
-        # 服务重启后 State 丢了，但 curl 可能还在跑（孤儿）。探测走 5 秒缓存，
-        # 避免 /api/state 每次轮询都付一次进程枚举的代价
+    if (-not $alive -and -not $State.Download) {
+        # 只有没有跟踪状态时，才需要探测孤儿进程（服务重启的情况）；探测走缓存
         $alive = Test-DownloadProcessCached -Force:$Fresh
     }
     $info.running = $alive
@@ -644,9 +644,9 @@ function Start-Download {
     #>
     param($Tokens, [string]$Status = 'new', [int]$Limit = 0, [switch]$Force)
 
-    # 抓取/入库是独立进程，不再阻塞下载（反过来 Start-Scrape 也只挡同类任务）
-    # 先清掉可能残留的孤儿下载进程，否则会一直挡住新任务
-    if (-not ($State.Download -and $State.Download.Pid)) { [void](Stop-AllDownloadProcesses) }
+    # 快速路径：跟踪中的下载器直接判活，不再枚举进程（CIM 在这台机器上要 ~1s）。
+    # 只有「服务重启后 State 丢失」时才需要探测孤儿进程，那一步放在启动时做一次。
+    $running = Test-TrackedDownloader
 
     # 必须和启动时同一份配置（数据目录下的 config.json），否则下载会落到旧路径
     $cfg = Read-Config -Root $Root -DataDir $WS.DataDir -DefaultContentDir $WS.Content
@@ -678,24 +678,46 @@ function Start-Download {
 
     if ($Limit -gt 0) { $targets = @($targets | Select-Object -First $Limit) }
     if (-not $targets.Count) {
-        if ($skippedDead -gt 0 -and -not $Force) { return @{ ok = $false; error = "$skippedDead 条源地址不可达（站点下架或 CDN 边缘缺失）。内置下载器下不动，但迅雷可能有自己的缓存/CDN —— 右键「复制 thunder://」丢给它试试" } }
+        if ($skippedDead -gt 0 -and -not $Force) { return @{ ok = $false; error = "$skippedDead 条源地址不可达（站点下架或 CDN 边缘缺失）；可以右键「复制 URL」用外部工具再试" } }
         return @{ ok = $false; error = '没有可下载的条目' }
     }
 
     $queue = @($targets | ForEach-Object { [pscustomobject]@{ token = $_.token; url = $_.url } })
 
     # 已有下载器在跑 → 把新条目追加进它的队列（下载器每轮 poll 追加文件），不另起进程
-    $dlInfo = Get-DownloadInfo -Fresh
-    if ($dlInfo.running) {
+    if ($running) {
+        $pj = $null
+        if (Test-Path $DlProgress) {
+            try { $pj = Get-Content $DlProgress -Raw -Encoding UTF8 | ConvertFrom-Json } catch { }
+        }
         $inRun = @{}
-        if ($dlInfo.items) { foreach ($i in $dlInfo.items) { if ($i.token) { $inRun[[string]$i.token] = $true } } }
+        if ($pj -and $pj.items) { foreach ($i in @($pj.items)) { if ($i.token) { $inRun[[string]$i.token] = $true } } }
         $add = @($queue | Where-Object { -not $inRun.ContainsKey([string]$_.token) })
         if (-not $add.Count) {
             return @{ ok = $true; appended = 0; count = 0; note = '这些条目已经在当前下载队列里' }
         }
         (ConvertTo-Json -InputObject $add -Depth 4) | Set-Content -Path $DlAdd -Encoding UTF8 -Force
+
+        # 立刻把追加项并入进度文件，队列抽屉马上能看到（下载器下一轮 poll 会再合并一次）
+        if ($pj) {
+            try {
+                $items = @($pj.items)
+                $merged = @($items) + @($add | ForEach-Object {
+                        [pscustomobject]@{ token = $_.token; state = 'queued'; bytes = 0; expected = 0; speed = 0; error = '' }
+                    })
+                $obj = [ordered]@{
+                    running = $true; paused = [bool]$pj.paused; phase = 'download'
+                    total = $merged.Count; done = [int]$pj.done; failed = [int]$pj.failed
+                    queued = ([int]$pj.queued + $add.Count); pausedCount = [int]$pj.pausedCount
+                    bytes = [int64]$pj.bytes; speed = $pj.speed; active = @($pj.active)
+                    items = $merged; startedAt = $pj.startedAt
+                }
+                (ConvertTo-Json -InputObject $obj -Depth 5) | Set-Content -Path $DlProgress -Encoding UTF8 -Force
+            } catch { }
+        }
+
         Touch-State
-        Write-Log 'download' "追加 $($add.Count) 条到当前下载队列（共 $($dlInfo.total) 条）"
+        Write-Log 'download' "追加 $($add.Count) 条到当前下载队列"
         return @{ ok = $true; appended = $add.Count; count = $add.Count }
     }
 
@@ -714,16 +736,39 @@ function Start-Download {
         '-AddFile', (ConvertTo-QuotedArg $DlAdd))
     if ($proxy) { $argList += @('-Proxy', (ConvertTo-QuotedArg $proxy)) }
 
-    Remove-Item $DlProgress -Force -ErrorAction SilentlyContinue
     Remove-Item $DlCancel -Force -ErrorAction SilentlyContinue
     Remove-Item $DlAdd -Force -ErrorAction SilentlyContinue
     # 上一轮可能停在「暂停」状态：新任务从运行态开始
     Remove-Item $DlPause -Force -ErrorAction SilentlyContinue
     Remove-Item $DlPauseItems -Force -ErrorAction SilentlyContinue
+
+    # 先把「已排队」写进进度文件：前端不用等下载器第一轮 poll 才看到任务。
+    # 同时保留上一轮已完成的记录（完成项只由用户点「清理已完成」清除，不自动丢）。
+    $history = @()
+    if (Test-Path $DlProgress) {
+        try {
+            $old = Get-Content $DlProgress -Raw -Encoding UTF8 | ConvertFrom-Json
+            $history = @($old.items | Where-Object { $_.state -eq 'done' } | Select-Object -Last 200)
+        } catch { }
+    }
+    $now = (Get-Date).ToString('s')
+    $initItems = @(@($history) + @($queue | ForEach-Object {
+                [pscustomobject]@{ token = $_.token; state = 'queued'; bytes = 0; expected = 0; speed = 0; error = '' }
+            }))
+    $init = [ordered]@{
+        running = $true; paused = $false; phase = 'download'
+        total = $initItems.Count; done = @($history).Count; failed = 0
+        queued = $queue.Count; pausedCount = 0; bytes = 0; speed = 0
+        active = @(); items = $initItems; startedAt = $now
+    }
+    (ConvertTo-Json -InputObject $init -Depth 5) | Set-Content -Path $DlProgress -Encoding UTF8 -Force
+
     $proc = Start-Process -FilePath 'powershell.exe' -ArgumentList $argList -WindowStyle Hidden -PassThru
     $startStamp = ''
     try { $startStamp = $proc.StartTime.ToString('s') } catch { }
-    $State.Download = @{ Pid = $proc.Id; ProcStart = $startStamp; Started = (Get-Date).ToString('s'); Count = $queue.Count; Dir = $dir }
+    $State.Download = @{ Pid = $proc.Id; ProcStart = $startStamp; Started = $now; Count = $queue.Count; Dir = $dir }
+    # 下一次 /api/state 立刻重新探测进程，而不是用 5 秒前的缓存（否则会显示「已结束」）
+    Reset-DownloadProbe
     Touch-State
 
     $proxyText = if ($proxy) { "，代理 $proxy" } else { '，代理跟随系统' }

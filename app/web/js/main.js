@@ -195,11 +195,20 @@ async function onDlQueueCancel(e) {
   load();
 }
 
+function updateConcSelect() {
+  const sel = $('#dlConc');
+  if (!sel) return;
+  const n = (state.SETTINGS && state.SETTINGS.concurrent) || 3;
+  if (document.activeElement !== sel) sel.value = String(n);
+}
+
 function initDownloadQueue() {
   const openDrawer = () => {
+    updateConcSelect();
     renderDownloadQueue(state.DOWNLOAD || {});
     $('#dlDrawer').classList.add('on');
   };
+  $('#dlConc').innerHTML = Array.from({ length: 16 }, (_, i) => `<option value="${i + 1}">${i + 1}</option>`).join('');
   $('#btnDlQueue').onclick = openDrawer;
   // 进度条本身也可以点开队列（✕ 按钮除外）
   $('#prog').addEventListener('click', e => { if (!e.target.closest('button')) openDrawer(); });
@@ -209,6 +218,17 @@ function initDownloadQueue() {
   $('#dlCancelAll').onclick = cancelAllDownloads;
   $('#dlActiveList').addEventListener('click', onDlQueueCancel);
   $('#dlFailList').addEventListener('click', onDlQueueCancel);
+  $('#dlConc').onchange = async e => {
+    const n = Math.max(1, Math.min(16, parseInt(e.target.value) || 3));
+    try {
+      const r = await api('/api/config', { concurrent: n });
+      if (!r.ok) { toast(r.error || '保存失败', 4000); return; }
+      state.SETTINGS = Object.assign({}, state.SETTINGS, { concurrent: n });
+      const cc = $('#concInput');
+      if (cc) cc.value = String(n);
+      toast(`并发已设为 ${n}（下次开始下载生效）`, 3000);
+    } catch (err) { toast('保存失败：' + err.message, 4000); }
+  };
 }
 
 function paintProject(ws) {
@@ -275,6 +295,7 @@ async function load() {
 
     state.DOWNLOAD = s.download || null;
     state.SETTINGS = s.settings || null;
+    updateConcSelect();
     // 首次 load 之前 DOM 还没回填过设置，这里补一次，否则点「保存」会把配置清空
     if (state.SETTINGS) {
       const px = document.querySelector('#proxyInput'), cc = document.querySelector('#concInput');

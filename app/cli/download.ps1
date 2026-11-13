@@ -26,6 +26,8 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+if ($Concurrent -lt 1) { $Concurrent = 1 }
+if ($Concurrent -gt 16) { $Concurrent = 16 }
 $startAt = (Get-Date).ToString('s')
 $PollMs = 600
 

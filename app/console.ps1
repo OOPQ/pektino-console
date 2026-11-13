@@ -580,8 +580,8 @@ function Handle-Request {
                 }
                 if ($body.concurrent -ne $null) {
                     $cc = 0
-                    if (-not [int]::TryParse([string]$body.concurrent, [ref]$cc) -or $cc -lt 1 -or $cc -gt 8) {
-                        Send-Json -Stream $Stream -Object @{ ok = $false; error = '并发数必须是 1-8 的整数' }
+                    if (-not [int]::TryParse([string]$body.concurrent, [ref]$cc) -or $cc -lt 1 -or $cc -gt 16) {
+                        Send-Json -Stream $Stream -Object @{ ok = $false; error = '并发数必须是 1-16 的整数' }
                         return
                     }
                     $Config | Add-Member -NotePropertyName concurrent -NotePropertyValue $cc -Force

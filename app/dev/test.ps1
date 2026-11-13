@@ -185,6 +185,13 @@ try {
         if ($r.ok -ne $false) { throw '应当返回 ok=false' }
         "ok=false error=$($r.error)"
     }
+    Test-Item 'POST /api/config 并发 16 可接受' {
+        $r = Invoke-RestMethod "$base/api/config" -Method Post -ContentType 'application/json' `
+            -Body (@{ concurrent = 16 } | ConvertTo-Json) -TimeoutSec 10
+        if (-not $r.ok) { throw "16 应被接受: $($r.error)" }
+        if ([int]$r.concurrent -ne 16) { throw "读回不一致: $($r.concurrent)" }
+        "concurrent=$($r.concurrent)"
+    }
     Test-Item 'POST /api/scrape 非法榜单 → ok=false（不启动任务）' {
         $r = Invoke-RestMethod "$base/api/scrape" -Method Post -ContentType 'application/json' `
             -Body (@{ rank = 'bogus' } | ConvertTo-Json) -TimeoutSec 10

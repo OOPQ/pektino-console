@@ -171,7 +171,7 @@ new ──投递/开始下载──▶ sent / downloading ──磁盘命中─�
 
 - 优先 `aria2c.exe`（`-x8 -s8`），否则 `curl.exe -C -` 续传
 - 先写 `<token>.mp4.part`，大小等于远端 `Content-Length` 才改名成 `.mp4`
-- 并发 1–8（配置里存，默认 3）；代理留空时跟随注册表里的系统代理
+- 并发 1–16（配置里存，默认 3）；代理留空时跟随注册表里的系统代理
 - 取消：控制台写取消文件，下载器下一轮 poll 时 kill 对应进程，`.part` 保留可续传
 - 暂停/继续：控制台写 `data\.dl-pause`（内容 `1`），下载器下一轮 poll 生效：
   暂停时不再发起新条目、杀掉正在跑的 curl 并把状态记成 `paused`（`.part` 保留），
@@ -234,7 +234,7 @@ POST /api/delete    {tokens,purge,permanent}                         删文件�
 POST /api/scan                                                       重新扫描内容目录
 POST /api/refresh-url {tokens}                                       重抓详情页刷新直链（≤20 条/次）
 POST /api/check-url {token}                                          看源地址 HTTP 状态
-POST /api/config    {proxy,concurrent}                               代理 / 并发（1–8）
+POST /api/config    {proxy,concurrent}                               代理 / 并发（1–16）
 POST /api/project/open                                               打开项目文件夹
 POST /api/project/import                                             识别 media\ 里未入账的 mp4
 POST /api/content/open                                               打开媒体目录

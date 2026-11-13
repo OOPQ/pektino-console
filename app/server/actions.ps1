@@ -712,7 +712,7 @@ function Start-Download {
     (ConvertTo-Json -InputObject $queue -Depth 4) | Set-Content -Path $DlQueue -Encoding UTF8 -Force
 
     $conc = if ($cfg.concurrent) { [int]$cfg.concurrent } else { 3 }
-    if ($conc -lt 1 -or $conc -gt 8) { $conc = 3 }
+    if ($conc -lt 1 -or $conc -gt 16) { $conc = 3 }
     $proxy = if ($cfg.proxy) { [string]$cfg.proxy } else { '' }
 
     # 每个路径都单独加引号：Start-Process 只做空格拼接，路径含空格时不加引号就起不来

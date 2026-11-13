@@ -1,4 +1,4 @@
-﻿#Requires -Version 5.1
+﻿quires -Version 5.1
 <#
 .SYNOPSIS
   控制台冒烟测试：验证服务可用、静态资源可访问、核心接口返回结构正确。
@@ -42,8 +42,7 @@ if ($Start) {
     try { $probe.Connect('127.0.0.1', $Port); $busy = $true } catch { } finally { try { $probe.Close() } catch { } }
     if ($busy) {
         Write-Host "端口 $Port 已被占用（可能正有控制台在运行）。" -ForegroundColor Red
-        Write-Host "请换一个端口：.\\test.ps1 -Start -Port 8899；或先停止正在运行的服务。" -ForegroundColor Yellow
-        exit 2
+        Write-Host "请换一个端口：.\test.ps1 -Start -Port 8899；或先停止正在运行的服务。" -ForegroundColor Yellow        exit 2
     }
     if (-not $Project) {
         # 临时项目：和真实数据完全隔离。目录名故意带空格，

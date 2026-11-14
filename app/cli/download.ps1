@@ -429,6 +429,9 @@ try {
                     $j.retries++
                     $errText = ''
                     if (Test-Path $j.log) { $errText = (Get-Content $j.log -Tail 2 -ErrorAction SilentlyContinue) -join ' ' }
+                    if ($errText -match '(?i)\b5\d\d\b|5XX') {
+                        $errText = '源站 CDN 返回 5XX（站点侧故障，可稍后重试或换线路）：' + $errText
+                    }
 
                     # curl 在 GET 上拿到 403/404/410 —— 源文件确实没了，别重试
                     if ($errText -match 'error:\s*(403|404|410)') {

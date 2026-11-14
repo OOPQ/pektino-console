@@ -58,6 +58,64 @@ export function toggleCardSel(tk) {
   render();
   renderSel();
 }
+/* ================= 画廊滑动多选 ================= */
+let GALLERY_DRAG = null, SUPPRESS_GALLERY_CLICK = false;
+function paintCardSelected(tk) {
+  const c = [...document.querySelectorAll('#gallery .card')].find(x => x.dataset.row === tk);
+  if (!c) return;
+  const on = state.SEL.has(tk);
+  c.classList.toggle('sel', on);
+  const b = c.querySelector('.selcard');
+  if (b) b.classList.toggle('on', on);
+}
+function setCardSelected(tk, on) {
+  if (!tk) return;
+  if (on) state.SEL.add(tk); else state.SEL.delete(tk);
+  paintCardSelected(tk);
+  renderSel();
+}
+function initGalleryDrag() {
+  const gal = $('#gallery');
+  if (!gal) return;
+  gal.addEventListener('pointerdown', e => {
+    if (!state.MULTI) return;
+    const card = e.target.closest('#gallery .card');
+    if (!card) return;
+    if (e.target.closest('[data-sel], button[data-fav], button[data-play], button[data-dl], button[data-dl-cancel], .rt')) return;
+    e.preventDefault();
+    GALLERY_DRAG = {
+      pointerId: e.pointerId, startX: e.clientX, startY: e.clientY,
+      add: !state.SEL.has(card.dataset.row), moved: false, startToken: card.dataset.row
+    };
+    try { gal.setPointerCapture(e.pointerId); } catch { }
+  });
+  gal.addEventListener('pointermove', e => {
+    const d = GALLERY_DRAG;
+    if (!d || e.pointerId !== d.pointerId) return;
+    const dx = Math.abs(e.clientX - d.startX), dy = Math.abs(e.clientY - d.startY);
+    if (!d.moved && dx < 6 && dy < 6) return;
+    if (!d.moved && dy > dx * 1.4) { GALLERY_DRAG = null; return; } // 纵向手势让页面滚动
+    d.moved = true;
+    const el = document.elementFromPoint(e.clientX, e.clientY);
+    const card = el && el.closest ? el.closest('#gallery .card') : null;
+    if (card) setCardSelected(card.dataset.row, d.add);
+  });
+  const finish = e => {
+    const d = GALLERY_DRAG;
+    if (!d || (e.pointerId !== undefined && e.pointerId !== d.pointerId)) return;
+    GALLERY_DRAG = null;
+    try { gal.releasePointerCapture(d.pointerId); } catch { }
+    if (!d.moved) {
+      if (state.SEL.has(d.startToken)) state.SEL.delete(d.startToken); else state.SEL.add(d.startToken);
+      paintCardSelected(d.startToken);
+      renderSel();
+    }
+    SUPPRESS_GALLERY_CLICK = true;
+    setTimeout(() => { SUPPRESS_GALLERY_CLICK = false; }, 350);
+  };
+  gal.addEventListener('pointerup', finish);
+  gal.addEventListener('pointercancel', finish);
+}
 /* ================= 播放 / 删除 ================= */
 export async function doPlay(tk) {
   const row = state.ROWS.find(r => r.token === tk);
@@ -233,6 +291,8 @@ export async function onRowClick(e) {
   }
   if (e.target.closest('input[type=checkbox]')) return;
 
+  /* 画廊多选：滑动勾选后抑制这一次 click；单击仍走原逻辑 */
+  if (SUPPRESS_GALLERY_CLICK && e.target.closest('#gallery .card')) { SUPPRESS_GALLERY_CLICK = false; return; }
   /* 画廊多选：点卡片切换勾选；卡片内按钮仍走各自功能 */
   const selBtn = e.target.closest('[data-sel]');
   if (selBtn) { toggleCardSel(selBtn.dataset.sel); return; }
@@ -308,6 +368,7 @@ export function initRows() {
     render();
   });
   $('#btnMulti').onclick = toggleMulti;
+  if ($('#selPurge')) $('#selPurge').onclick = () => { if (state.SEL.size) delFiles([...state.SEL], true); };
   $('#selClear').onclick = () => { state.SEL.clear(); render(); };
   if ($('#selAll')) $('#selAll').onclick = () => {
     const per = state.PER > 0 ? state.PER : 999999;
@@ -319,6 +380,7 @@ export function initRows() {
   // 画廊视图复用同一套行内交互（播放/收藏/评分/下载/取消/灯箱）
   const gal = $('#gallery');
   if (gal) gal.addEventListener('click', onRowClick);
+  initGalleryDrag();
 
   const onContextMenu = e => {
     // 表格行和画廊卡片都用 data-row 标记，一套右键菜单通吃

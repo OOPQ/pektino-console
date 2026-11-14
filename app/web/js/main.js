@@ -853,9 +853,10 @@ async function saveNet() {
   const proxy = $('#proxyInput').value.trim();
   const concurrent = parseInt($('#concInput').value) || 3;
   const ffmpegPath = ($('#ffmpegInput')?.value || '').trim();
+  const qiseCookie = ($('#qiseCookieInput')?.value || '').trim();
   try {
-    const r = await api('/api/config', { proxy, concurrent, ffmpegPath });
-    toast(r.ok ? `已保存：代理 ${proxy || '跟随系统'}，并发 ${concurrent}，FFmpeg ${ffmpegPath || '自动'}` : '失败：' + r.error, 3500);
+    const r = await api('/api/config', { proxy, concurrent, ffmpegPath, qiseCookie });
+    toast(r.ok ? `已保存：代理 ${proxy || '跟随系统'}，并发 ${concurrent}，qise Cookie ${qiseCookie ? '已填' : '未填'}` : '失败：' + r.error, 3500);
   } catch (e) { toast('请求失败'); }
 }
 
@@ -1174,6 +1175,7 @@ function initControls() {
     $('#proxyInput').value = state.SETTINGS.proxy || '';
     $('#concInput').value = String(state.SETTINGS.concurrent || 3);
     if ($('#ffmpegInput')) $('#ffmpegInput').value = state.SETTINGS.ffmpegPath || '';
+  if ($('#qiseCookieInput')) $('#qiseCookieInput').value = state.SETTINGS.qiseCookie || '';
   }
   document.body.classList.toggle('compact', !!PREFS.compact);
   $('#chkCompact').checked = !!PREFS.compact;

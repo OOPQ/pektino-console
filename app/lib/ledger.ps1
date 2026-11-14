@@ -189,7 +189,7 @@ function Save-Config {
     if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
     # 只持久化真正需要记的项；contentDir 由项目结构决定，绝不能写绝对路径进配置
     $out = [ordered]@{}
-    foreach ($k in @('proxy', 'concurrent', 'ffmpegPath')) {
+    foreach ($k in @('proxy', 'concurrent', 'ffmpegPath', 'qiseCookie')) {
         if ($null -ne $Config.$k) { $out[$k] = $Config.$k }
     }
     ($out | ConvertTo-Json -Depth 4) | Set-Content -Path $p -Encoding UTF8

@@ -305,7 +305,7 @@ function Handle-Request {
             job      = (Get-JobInfo)
             download = (Get-DownloadInfo)
             project  = (Get-ProjectSummary -Paths $WS)
-            settings = [pscustomobject]@{ proxy = [string]$Config.proxy; concurrent = $(if ($Config.concurrent) { [int]$Config.concurrent } else { 3 }); ffmpegPath = [string]$Config.ffmpegPath }
+            settings = [pscustomobject]@{ proxy = [string]$Config.proxy; concurrent = $(if ($Config.concurrent) { [int]$Config.concurrent } else { 3 }); ffmpegPath = [string]$Config.ffmpegPath; qiseCookie = [string]$Config.qiseCookie }
             sources  = @(Get-Sources | ForEach-Object {
                     [pscustomobject]@{
                         key = $_.key; name = $_.name; capabilities = @($_.capabilities)
@@ -685,6 +685,9 @@ function Handle-Request {
                         return
                     }
                     $Config | Add-Member -NotePropertyName concurrent -NotePropertyValue $cc -Force
+                }
+                if ($body.qiseCookie -ne $null) {
+                    $Config | Add-Member -NotePropertyName qiseCookie -NotePropertyValue ([string]$body.qiseCookie).Trim() -Force
                 }
                 if ($body.ffmpegPath -ne $null) {
                     $fp = ([string]$body.ffmpegPath).Trim()

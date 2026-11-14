@@ -29,6 +29,7 @@ function Get-QiseHttpClient {
     $c = New-Object System.Net.Http.HttpClient($handler)
     $c.Timeout = [TimeSpan]::FromSeconds($TimeoutSec)
     $c.DefaultRequestHeaders.UserAgent.ParseAdd($(if ($Context -and $Context.ua) { $Context.ua } else { 'Mozilla/5.0' }))
+    if ($Context -and $Context.qiseCookie) { $c.DefaultRequestHeaders.Add('Cookie', [string]$Context.qiseCookie) }
     return $c
 }
 
@@ -191,10 +192,12 @@ function Get-QiseCoverUrl {
 function Resolve-QiseDownload {
     param($Context, $Row)
     # 不在主循环里联网探测：VIP 提示片交给下载器 preflight 识别
+    $h = @{ Referer = "$script:QiseBase/" }
+    if ($Context -and $Context.qiseCookie) { $h['Cookie'] = [string]$Context.qiseCookie }
     return @{
         url     = [string]$Row.url
         mode    = 'hls'
-        headers = @{ Referer = "$script:QiseBase/" }
+        headers = $h
     }
 }
 function Invoke-QiseScrape {

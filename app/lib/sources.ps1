@@ -149,6 +149,7 @@ function New-SourceContext {
     param($Config, [string]$Root)
     return [pscustomobject]@{
         proxy  = $(if ($Config) { [string]$Config.proxy } else { '' })
+        qiseCookie = $(if ($Config) { [string]$Config.qiseCookie } else { '' })
         root   = $Root
         config = $Config
         ua     = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/157.0.0.0 Safari/537.36'

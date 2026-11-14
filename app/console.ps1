@@ -529,7 +529,7 @@ function Handle-Request {
                     Send-Json -Stream $Stream -Object @{ ok = $false; error = "源 $($srcInfo.name) 没有榜单: $rank" }
                     return
                 }
-                $hd = $true
+                $hd = $false   # 高清需登录/VIP，暂不开放
                 if ($body.ContainsKey('hd')) { $hd = [bool]$body['hd'] }
                 $limit = 0
                 if ($body.limit) { try { $limit = [int]$body.limit } catch { $limit = 0 } }

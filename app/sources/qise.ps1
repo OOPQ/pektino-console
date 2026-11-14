@@ -211,7 +211,7 @@ function Resolve-QiseDownload {
 
 function Invoke-QiseScrape {
     param($Context, $Options)
-    $hd = if ($null -ne $Options.hd) { [bool]$Options.hd } else { $true }
+    $hd = if ($null -ne $Options.hd) { [bool]$Options.hd } else { $false }
     # 直接从 URL 抓：详情页抓单条，列表页抓该页
     if ($Options.url) {
         $u = [string]$Options.url
@@ -220,18 +220,23 @@ function Invoke-QiseScrape {
         try {
             $m = [regex]::Match($u, '/video/(?:viewhd|view|embed)/([0-9a-f]+)')
             if ($m.Success) {
+                $startedUrl = Get-Date
+                Write-SourceProgress -Path ([string]$Options.progressFile) -Phase 'details' -Done 0 -Total 1 -Started $startedUrl
                 $d = Get-QiseDetail -Context $Context -Id $m.Groups[1].Value -Hd $hd
                 if (-not $d -or $d.error) { throw "详情解析失败: $($d.error)" }
                 $d.page_url = "$script:QiseBase/video/$(if ($hd) { 'viewhd' } else { 'view' })/$($m.Groups[1].Value)"
                 $d.extra = "hd=$(if ($hd) { 1 } else { 0 })"
                 $d | Add-Member -NotePropertyName page -NotePropertyValue 1 -Force
                 $d | Add-Member -NotePropertyName rank -NotePropertyValue 1 -Force
+                Write-SourceProgress -Path ([string]$Options.progressFile) -Phase 'done' -Done 1 -Total 1 -Started $startedUrl
                 return @($d)
             }
             $html = Get-QiseHtml -Client $client -Url $u
             $items = @(ConvertFrom-QiseList -Html $html -Page 1)
             if ($Options.limit -and [int]$Options.limit -gt 0) { $items = @($items | Select-Object -First ([int]$Options.limit)) }
             $total = $items.Count; $done = 0
+            $startedUrl = Get-Date
+            Write-SourceProgress -Path ([string]$Options.progressFile) -Phase 'details' -Done 0 -Total $total -Started $startedUrl
             foreach ($it in $items) {
                 $it.page_url = "$script:QiseBase/video/$(if ($hd) { 'viewhd' } else { 'view' })/$($it.source_id)"
                 $viewHtml = Get-QiseHtml -Client $client -Url $it.page_url
@@ -240,7 +245,7 @@ function Invoke-QiseScrape {
                 if ($d) { foreach ($f in @('title', 'url', 'cover_url', 'download_headers')) { if ($d.$f) { $it.$f = $d.$f } } }
                 $it.extra = "hd=$(if ($hd) { 1 } else { 0 })"
                 $done++
-                Write-SourceProgress -Path ([string]$Options.progressFile) -Phase 'details' -Done $done -Total $total -Started (Get-Date)
+                Write-SourceProgress -Path ([string]$Options.progressFile) -Phase 'details' -Done $done -Total $total -Started $startedUrl
             }
             return @($items | Where-Object { $_.url })
         } finally { try { $client.Dispose() } catch { } }

@@ -143,10 +143,13 @@ function Invoke-PektinoScrape {
     if ($Options.url) {
         $m = [regex]::Match([string]$Options.url, '/movie/([A-Za-z0-9_\-]+)')
         if (-not $m.Success) { throw 'pektino 自定义 URL 目前只支持 /movie/<token> 详情页' }
+        $startedUrl = Get-Date
+        Write-SourceProgress -Path ([string]$Options.progressFile) -Phase 'details' -Done 0 -Total 1 -Started $startedUrl
         $d = Get-PektinoDetail -Context $Context -Id $m.Groups[1].Value
         if (-not $d -or $d.error) { throw '详情解析失败' }
         $d | Add-Member -NotePropertyName page -NotePropertyValue 1 -Force
         $d | Add-Member -NotePropertyName rank -NotePropertyValue 1 -Force
+        Write-SourceProgress -Path ([string]$Options.progressFile) -Phase 'done' -Done 1 -Total 1 -Started $startedUrl
         return @($d)
     }
 

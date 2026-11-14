@@ -60,6 +60,8 @@ function Invoke-WebScrape {
     param($Context, $Options)
     $url = [string]$Options.url
     if (-not $url) { throw 'web 源需要填一个视频页面/直链 URL' }
+    $startedUrl = Get-Date
+    Write-SourceProgress -Path ([string]$Options.progressFile) -Phase 'details' -Done 0 -Total 1 -Started $startedUrl
     $ctxHost = ''
     try { $ctxHost = ([uri]$url).GetLeftPart([System.UriPartial]::Authority) } catch { }
 
@@ -67,6 +69,7 @@ function Invoke-WebScrape {
     if ($url -match '\.(m3u8|mp4)(\?|$|#)') {
         $name = ''
         try { $name = [System.IO.Path]::GetFileName(([uri]$url).AbsolutePath) } catch { }
+        Write-SourceProgress -Path ([string]$Options.progressFile) -Phase 'done' -Done 1 -Total 1 -Started $startedUrl
         return @([pscustomobject]@{
                 source_id = (Get-WebId $url); title = $(if ($name) { $name } else { $url })
                 duration = ''; seconds = 0; res = ''; views = ''; likes = ''; uploaded = ''
@@ -107,6 +110,7 @@ function Invoke-WebScrape {
     if ($media.StartsWith('//')) { $media = 'https:' + $media }
     elseif ($media.StartsWith('/')) { $media = $ctxHost + $media }
 
+    Write-SourceProgress -Path ([string]$Options.progressFile) -Phase 'done' -Done 1 -Total 1 -Started $startedUrl
     return @([pscustomobject]@{
             source_id = (Get-WebId $url); title = $(if ($title) { $title } else { $url })
             duration = ''; seconds = 0; res = ''; views = ''; likes = ''; uploaded = ''

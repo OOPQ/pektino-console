@@ -17,7 +17,7 @@ param(
     [string]$ThumbDir = '',
     [string]$KnownFile = '',
     [string]$Url = '',
-    [bool]$Hd = $true,
+    [bool]$Hd = $false,
     [string]$Proxy = '',
     [int]$PageSize = 50,
     [switch]$Json
@@ -52,6 +52,7 @@ if ($KnownFile -and (Test-Path -LiteralPath $KnownFile)) {
     $options.knownTokens = @($known)
 }
 
+Write-SourceProgress -Path $ProgressFile -Phase 'starting' -Done 0 -Total 0 -Started $started
 $ctx = New-SourceContext -Config ([pscustomobject]@{ proxy = $Proxy }) -Root $Root
 $rows = @(Invoke-SourceScrape -Key $Source -Context $ctx -Options $options)
 

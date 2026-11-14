@@ -241,7 +241,7 @@ function Start-Scrape {
         [bool]$Incremental = $true,
         [int]$FreshDays = 3,
         [string]$Url = '',
-        [bool]$Hd = $true
+        [bool]$Hd = $false
     )
 
     if ($State.Job) { return @{ ok = $false; error = '已有抓取任务在跑，等它结束' } }
@@ -278,6 +278,7 @@ function Start-Scrape {
     if ($Url -and -not $Hd) { $Url = $Url.TrimEnd('#') + '#hd0' }
     $ps = $ScrapeScript; $out = $TmpCsv; $prog = $ProgressFile; $cov = $CoverDir
     $thm = $ThumbDir; $kn = $KnownFile
+    try { Write-SourceProgress -Path $ProgressFile -Phase 'starting' -Done 0 -Total 0 -Started (Get-Date) } catch { }
     $proxy = if ($Config -and $Config.proxy) { [string]$Config.proxy } else { '' }
     $job = Start-Job -ScriptBlock {
         param($ps, $source, $rank, $pages, $limit, $out, $prog, $cov, $thm, $kn, $threads, $proxy, $url, $hd)

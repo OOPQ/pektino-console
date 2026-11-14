@@ -418,3 +418,15 @@ button.danger:hover:not(:disabled){background:#3a1d1d;border-color:#7a2b2b;color
 .card .dlbtn.danger{color:var(--bad);border-color:#5c2d2d}
 .card .dlbtn.ghost{background:transparent}
 
+
+/* ===== 多选模式 ===== */
+body:not(.multi) #tablewrap th:first-child,
+body:not(.multi) #tablewrap td:first-child { display: none; }
+body.multi #tbody tr.sel > td { background: rgba(88,166,255,.10); }
+.card { position: relative; }
+.card .selcard { display: none; position: absolute; right: 8px; top: 8px; z-index: 3; width: 24px; height: 24px; border-radius: 50%; border: 1px solid rgba(255,255,255,.7); background: rgba(0,0,0,.45); color: #fff; font-size: 14px; line-height: 22px; text-align: center; cursor: pointer; }
+body.multi .card .selcard { display: block; }
+body.multi .card .selcard.on { background: var(--accent, #2f81f7); border-color: var(--accent, #2f81f7); }
+body.multi .card.sel { outline: 2px solid var(--accent, #2f81f7); outline-offset: -2px; }
+body.multi .card .playbtn { display: none; }
+body.multi .card .foot .dlbtn { display: none; }

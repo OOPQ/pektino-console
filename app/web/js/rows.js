@@ -41,6 +41,23 @@ function handleSelect(cb, shift) {
   renderSel();
 }
 
+/* ================= 多选模式 ================= */
+export function toggleMulti() {
+  state.MULTI = !state.MULTI;
+  document.body.classList.toggle('multi', state.MULTI);
+  const b = $('#btnMulti');
+  if (b) { b.classList.toggle('on', state.MULTI); b.textContent = state.MULTI ? '多选完成' : '多选'; }
+  if (!state.MULTI) state.SEL.clear();
+  render();
+  renderSel();
+}
+
+export function toggleCardSel(tk) {
+  if (!tk) return;
+  if (state.SEL.has(tk)) state.SEL.delete(tk); else state.SEL.add(tk);
+  render();
+  renderSel();
+}
 /* ================= 播放 / 删除 ================= */
 export async function doPlay(tk) {
   const row = state.ROWS.find(r => r.token === tk);
@@ -216,6 +233,14 @@ export async function onRowClick(e) {
   }
   if (e.target.closest('input[type=checkbox]')) return;
 
+  /* 画廊多选：点卡片切换勾选；卡片内按钮仍走各自功能 */
+  const selBtn = e.target.closest('[data-sel]');
+  if (selBtn) { toggleCardSel(selBtn.dataset.sel); return; }
+  if (state.MULTI && e.target.closest('#gallery .card')) {
+    const interactive = e.target.closest('button[data-fav], [data-play], [data-dl], [data-dl-cancel], .rt');
+    if (!interactive) { toggleCardSel(e.target.closest('#gallery .card').dataset.row); return; }
+  }
+
   /* 收藏 */
   const favBtn = e.target.closest('[data-fav]');
   if (favBtn) {
@@ -282,7 +307,13 @@ export function initRows() {
       .forEach(r => e.target.checked ? state.SEL.add(r.token) : state.SEL.delete(r.token));
     render();
   });
+  $('#btnMulti').onclick = toggleMulti;
   $('#selClear').onclick = () => { state.SEL.clear(); render(); };
+  if ($('#selAll')) $('#selAll').onclick = () => {
+    const per = state.PER > 0 ? state.PER : 999999;
+    visible().slice((state.PAGE - 1) * per, state.PAGE * per).forEach(r => state.SEL.add(r.token));
+    render();
+  };
 
   $('#tbody').addEventListener('click', onRowClick);
   // 画廊视图复用同一套行内交互（播放/收藏/评分/下载/取消/灯箱）

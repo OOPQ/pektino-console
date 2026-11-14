@@ -122,12 +122,14 @@ export function cardHtml(r, active) {
   const fav = r.fav === '1';
   const hasFile = !!r.file_name;
   const isActive = active && active.has(r.token);
+  const selected = state.SEL.has(r.token);
   const dlBtn = hasFile
     ? ''
     : (isActive
       ? `<button class="dlbtn danger" data-dl-cancel="${r.token}">取消</button>`
       : `<button class="dlbtn" data-dl="${r.token}">下载</button>`);
-  return `<div class="card" data-row="${r.token}">
+  return `<div class="card ${selected ? 'sel' : ''}" data-row="${r.token}">
+    <button class="selcard ${selected ? 'on' : ''}" data-sel="${r.token}" title="选择">✓</button>
     <div class="cover" data-lb="${r.token}" title="点击放大">
       <img src="/api/cover?token=${encodeURIComponent(r.token)}&full=1" loading="lazy" alt=""
            onerror="if(!this.dataset.f){this.dataset.f=1;this.src=this.src.replace('&full=1','');}else{this.parentNode.classList.add('nocover');this.remove();}">
@@ -171,7 +173,7 @@ export function render() {
     tb.innerHTML = '<tr><td colspan="15" class="empty">没有匹配的条目 —— 换个筛选条件，或点「抓取并入库」</td></tr>';
   } else {
     tb.innerHTML = rows.map((r, i) => `
-      <tr data-row="${r.token}">
+      <tr data-row="${r.token}" class="${state.SEL.has(r.token) ? 'sel' : ''}">
         <td><input type="checkbox" data-tk="${r.token}" data-idx="${start + i}" ${state.SEL.has(r.token) ? 'checked' : ''}></td>
         <td><button class="star ${r.fav === '1' ? 'on' : ''}" data-fav="${r.token}" title="收藏/取消">${r.fav === '1' ? '★' : '☆'}</button></td>
         <td class="col-cover">${coverCell(r)}</td>

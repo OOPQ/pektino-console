@@ -135,6 +135,7 @@ $DlCancel = Join-Path $WS.DataDir '.dl-cancel.json'
 $DlPause = Join-Path $WS.DataDir '.dl-pause'
 $DlPauseItems = Join-Path $WS.DataDir '.dl-pause-items.json'
 $DlAdd = Join-Path $WS.DataDir '.dl-add.json'
+$DeletedPath = Join-Path $WS.DataDir 'deleted.json'
 
 # ---------- 内存态 ----------
 # 配置只管代理/并发；内容目录固定在项目里（$WS.Content），不再可配置
@@ -142,6 +143,7 @@ $Config = Read-Config -Root $Root -DataDir $WS.DataDir -DefaultContentDir $WS.Co
 $Config | Add-Member -NotePropertyName contentDir -NotePropertyValue $WS.Content -Force
 $State = @{
     Ledger = @(Read-Ledger -Path $LedgerPath)
+    Deleted = @{}
     Log    = New-Object System.Collections.ArrayList
     Busy   = $false
     Files  = @{ Files = @{}; Partial = @(); Dir = $Config.contentDir; Exists = $false }
@@ -159,6 +161,14 @@ $State = @{
         clientWarns  = 0
     }
 }
+# 手动删除记录：永久移除台账的 token 不再被后续抓取自动加回
+try {
+    if (Test-Path -LiteralPath $DeletedPath) {
+        foreach ($x in @(Get-Content -LiteralPath $DeletedPath -Raw -Encoding UTF8 | ConvertFrom-Json)) {
+            if ($x -and $x.token) { $State.Deleted[([string]$x.token).ToLowerInvariant()] = $x }
+        }
+    }
+} catch { Write-Host "  （删除记录加载跳过：$($_.Exception.Message)）" -ForegroundColor DarkYellow }
 # 老数据里时长解析失败（seconds=0）的，用 duration 回算（必须放在 $State 初始化之后）
 try { $fixedSec = Repair-Durations -LedgerPath $LedgerPath; if ($fixedSec -gt 0) { Write-Host "  修正时长 $fixedSec 条" -ForegroundColor DarkGray } } catch { Write-Host "  （时长修正跳过：$($_.Exception.Message)）" -ForegroundColor DarkYellow }
 # 旧状态（sent 已投递 / downloading 下载中）合并回 new / done
@@ -279,6 +289,12 @@ function Handle-Request {
             }
         }
         Send-Bytes -Stream $Stream -Bytes ([byte[]]@()) -ContentType 'text/plain' -Status '404 Not Found'
+        return
+    }
+
+    if ($method -eq 'GET' -and $path -eq '/api/deleted') {
+        $items = @($State.Deleted.Values | Sort-Object deletedAt -Descending)
+        Send-Json -Stream $Stream -Object @{ ok = $true; count = $items.Count; items = $items }
         return
     }
 

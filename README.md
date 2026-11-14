@@ -143,6 +143,8 @@ powershell -ExecutionPolicy Bypass -File .\app\console.ps1 -Project D:\my-data
 
 ## 回收站
 
+手动「删除并移除台账」的条目会记录在 `data\deleted.json`，以后抓取时会自动跳过，避免被重新加回。需要恢复自动抓取时可清空这个文件。
+
 原来的「忽略」改成了回收站：
 
 - 表格行 / 画廊卡片右键 →「🗑 移入回收站」

@@ -356,6 +356,15 @@ function Update-Job {
             $mergeOk = $false
             try {
                 $scraped = @(Import-Csv $TmpCsv -Encoding UTF8)
+                if ($kind -eq 'scrape' -and (Get-Command Test-DeletedToken -ErrorAction SilentlyContinue)) {
+                    $before = $scraped.Count
+                    $scraped = @($scraped | Where-Object { -not (Test-DeletedToken ([string]$_.token)) })
+                    $skippedDeleted = $before - $scraped.Count
+                    if ($skippedDeleted -gt 0) {
+                        Write-Log 'scrape' "跳过 $skippedDeleted 条此前手动删除的条目"
+                        try { Write-FileLog "scrape skipped previously deleted: $skippedDeleted" } catch { }
+                    }
+                }
                 $merged = Merge-Ledger -Existing $State.Ledger -Scraped $scraped
                 $State.Ledger = @($merged.Rows)
                 Save-Ledger -Rows $State.Ledger -Path $LedgerPath
@@ -533,6 +542,10 @@ function Invoke-DeleteFiles {
     # 只处理"确实删掉了 / 本来就没文件"的条目；删除失败（文件被占用等）保持原状
     $okTokens = @($doneTokens + $missingTokens)
     if ($Purge) {
+        $recorded = 0
+        if ($okTokens.Count -gt 0) {
+            try { $recorded = Add-DeletedTokens -Rows @($rows | Where-Object { $okTokens -contains $_.token }) } catch { }
+        }
         $rm = 0
         if ($okTokens.Count -gt 0) {
             $rm = Remove-StoreItems -Tokens $okTokens
@@ -540,7 +553,7 @@ function Invoke-DeleteFiles {
             # 删库不走 Save-Ledger，得手动记一次行数据版本，否则前端不会重新拉 rows
             if ($rm -gt 0) { Touch-Ledger }
         }
-        Write-Log 'delete' "删除文件 $deleted 个，从台账移除 $rm 条"
+        Write-Log 'delete' "删除文件 $deleted 个，从台账移除 $rm 条（记录已删除 $recorded 条）"
     } else {
         $changed = 0
         foreach ($r in $rows) {
@@ -1446,4 +1459,34 @@ function Import-LocalFolder {
     Touch-State
     Write-Log 'import' "本地导入：移动 $moved 个 mp4，新增 $($imp.added) 条，封面生成 $($cover.fixed)"
     return @{ ok = $true; moved = $moved; skipped = $skipped; failed = $failed; added = $imp.added; covers = $(if ($cover) { $cover.fixed } else { 0 }); dir = $dest }
+}
+
+function Test-DeletedToken {
+    param([string]$Token)
+    if (-not $Token) { return $false }
+    return $State.Deleted -and $State.Deleted.ContainsKey($Token.ToLowerInvariant())
+}
+
+function Add-DeletedTokens {
+    <# 记录“手动从台账移除”的 token，后续抓取不再自动加回 #>
+    param([object[]]$Rows)
+    if (-not $State.Deleted) { $State.Deleted = @{} }
+    $now = (Get-Date).ToString('yyyy-MM-dd HH:mm:ss')
+    $n = 0
+    foreach ($r in @($Rows)) {
+        $tk = [string]$r.token
+        if (-not $tk) { continue }
+        $State.Deleted[$tk.ToLowerInvariant()] = [pscustomobject]@{
+            token = $tk; source = [string]$r.source; title = [string]$r.title; deletedAt = $now
+        }
+        $n++
+    }
+    if ($n -gt 0 -and $DeletedPath) {
+        try {
+            $tmp = "$DeletedPath.tmp"
+            @($State.Deleted.Values | Sort-Object deletedAt) | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $tmp -Encoding UTF8
+            Move-Item -LiteralPath $tmp -Destination $DeletedPath -Force
+        } catch { }
+    }
+    return $n
 }

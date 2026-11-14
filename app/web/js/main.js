@@ -1,7 +1,7 @@
 /* main.js — 数据加载、工具条、批量操作、初始化 */
 import { $, state, PREFS, savePrefs, api, toast, onEvent, confirmDialog } from './core.js';
 import { render, markActiveKpi, initTable, visible } from './table.js';
-import { initRows, delFiles } from './rows.js';
+import { initRows } from './rows.js';
 import { initPanels, connectSse, openLightbox } from './panels.js';
 import { initCollections, openCollectionPicker } from './collections.js';
 import { setFav, setWatched, setStatus, setRating, reload, copyText } from './actions.js';
@@ -1197,7 +1197,7 @@ function initBulk() {
   $('#selRecycle').onclick = async () => {
     if (!state.SEL.size) return;
     const count = state.SEL.size;
-    if (!(await confirmDialog(`把选中的 ${count} 条移入回收站？`, { title: '移入回收站' }))) return;
+    if (!(await confirmDialog(`将选中的 ${count} 条移入回收站？之后可以恢复，或在回收站里彻底删除。`, { title: '删除', okText: '移入回收站' }))) return;
     const r = await setStatus([...state.SEL], 'recycled');
     if (!r || !r.ok) return toast((r && r.error) || '操作失败', 3500);
     state.SEL.clear();
@@ -1238,8 +1238,6 @@ function initBulk() {
     render();
     toast(`已给 ${r.count} 条打 ${v} 星`);
   });
-
-  $('#selDelete').onclick = () => { if (state.SEL.size) delFiles(sel(), false); };
 
   $('#selDownload').onclick = async () => {
     if (!state.SEL.size) return;
@@ -1300,7 +1298,7 @@ initBin();
 initCollections();
 
 onEvent('reload', load);
-onEvent('delete', d => delFiles(d.tokens, d.purge));
+
 onEvent('clear-query', () => {
   $('#q').value = '';
   state.FILTER.q = '';

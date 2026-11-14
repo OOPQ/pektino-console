@@ -1,6 +1,6 @@
 /* rows.js — 行选择、行内操作、右键菜单、播放、删除、批量操作 */
 import {
-  $, state, STATUS_LABEL, api, toast, starsHtml, emit, onEvent, confirmDialog
+  $, state, STATUS_LABEL, api, toast, starsHtml, emit, onEvent
 } from './core.js';
 import { visible, render, renderSel } from './table.js';
 import {
@@ -132,26 +132,6 @@ export async function doPlay(tk) {
   }
 }
 
-export async function delFiles(tokens, purge) {
-  // purge 时即使没有本地文件也要发请求（把记录从台账移除）；只有"删文件"才要求有文件
-  const rows = purge ? state.ROWS.filter(r => tokens.includes(r.token)) : state.ROWS.filter(r => tokens.includes(r.token) && r.file_name);
-  if (!rows.length) return toast(purge ? '选中条目不在列表里' : '选中的条目本地没有文件');
-  const size = rows.reduce((sum, r) => sum + (+r.file_size || 0), 0);
-  const extra = purge ? '，并从台账中移除这些条目' : '（进回收站，可从回收站还原）';
-  if (!(await confirmDialog(`删除 ${rows.length} 个本地文件，共 ${(size / 1048576).toFixed(1)} MB${extra}？`, { title: purge ? '删除并移除台账' : '删除文件', danger: true, okText: '删除' }))) return;
-  try {
-    const r = await api('/api/delete', { tokens, purge });
-    if (!r.ok) return toast('失败：' + r.error, 5000);
-    toast(`已删除 ${r.deleted} 个文件，释放 ${(r.freed / 1048576).toFixed(1)} MB` +
-      (purge ? '，台账已移除' : '') +
-      (r.failed && r.failed.length ? `（${r.failed.length} 个失败）` : ''), 4500);
-    if (purge) state.SEL.clear();
-    reload();
-  } catch (e) {
-    toast('请求失败：' + e.message, 5000);
-  }
-}
-
 /* ================= 右键菜单 ================= */
 function escapeHtml(s) {
   return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -176,10 +156,7 @@ function ctxItemsFor(row) {
     { sep: true },
     { act: 'done', label: '标记完成' },
     { act: 'new', label: '重置为待下载' },
-    { act: 'recycle', label: '🗑 移入回收站' },
-    { sep: true },
-    { act: 'delete', label: '🗑 删除本地文件（回收站）', off: !hasFile },
-    { act: 'purge', label: '🗑 删除文件并从台账移除' },
+    { act: 'recycle', label: '🗑 删除（移入回收站）' },
     { sep: true },
     { act: 'refresh', label: '🔄 刷新源地址（下架/换源后重试用）' },
     { act: 'check', label: '🔍 检查源地址（看 HTTP 状态）' },
@@ -262,8 +239,6 @@ async function onCtxAction(act) {
       if (r.ok) { render(); toast(next ? '已标记已看' : '已标记未看'); }
       return;
     }
-    case 'delete': return delFiles([tk], false);
-    case 'purge': return delFiles([tk], true);
     case 'done':
     case 'new':
     case 'recycle': {
@@ -368,7 +343,6 @@ export function initRows() {
     render();
   });
   $('#btnMulti').onclick = toggleMulti;
-  if ($('#selPurge')) $('#selPurge').onclick = () => { if (state.SEL.size) delFiles([...state.SEL], true); };
   $('#selClear').onclick = () => { state.SEL.clear(); render(); };
   if ($('#selAll')) $('#selAll').onclick = () => {
     const per = state.PER > 0 ? state.PER : 999999;

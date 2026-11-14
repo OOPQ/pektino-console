@@ -14,7 +14,7 @@
 $script:LedgerColumns = @(
     'token', 'status', 'fav', 'rank', 'page', 'duration', 'seconds', 'res', 'views', 'likes',
     'uploaded', 'url', 'page_url', 'first_seen', 'last_seen', 'sent_at', 'note',
-    'file_name', 'file_size', 'file_date', 'play_count', 'last_play', 'rating'
+    'file_name', 'file_path', 'file_size', 'file_date', 'play_count', 'last_play', 'rating'
 )
 
 # 存储层（SQLite）。ledger.ps1 只保留业务语义：合并、状态、配置、扫盘。
@@ -128,7 +128,7 @@ function Merge-Ledger {
                 download_headers = [string]$s.download_headers
                 extra = [string]$s.extra
                 first_seen = $Stamp; last_seen = $Stamp; sent_at = ''; note = ''
-                file_name = ''; file_size = ''; file_date = ''
+                file_name = ''; file_path = ''; file_size = ''; file_date = ''
                 # 这三列后面会被评分/观看/播放直接赋值，缺了会抛"属性不存在"
                 play_count = ''; last_play = ''; rating = ''
             }

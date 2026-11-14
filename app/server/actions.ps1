@@ -158,6 +158,9 @@ function Invoke-Scan {
     foreach ($r in @($State.Ledger)) {
         $key = ([string]$r.token).ToLower()
         if ($key -and $idx.Files.ContainsKey($key)) {
+            foreach ($prop in @('file_name', 'file_path', 'file_size', 'file_date')) {
+                if (-not $r.PSObject.Properties[$prop]) { $r | Add-Member -NotePropertyName $prop -NotePropertyValue '''' -Force }
+            }
             $f = $idx.Files[$key]
             $r.file_name = $f.name
             $r.file_path = $f.file

@@ -238,9 +238,13 @@ function Start-Curl($item, $part, $log) {
         # qise：下载时统一改走 /video/view 标清，避免拿到 viewhd 高清/付费地址
         if ($item.source -eq 'qise' -and $item.source_id) {
             $sdUrl = Get-QiseSdM3u8 $item
-            if (-not $sdUrl) { throw 'qise 标清地址获取失败（可能需要登录 Cookie 或页面结构变化）' }
-            $item.url = $sdUrl
-            try { Add-Content -LiteralPath $log -Value "qise SD: $sdUrl" -Encoding UTF8 } catch { }
+            if (-not $sdUrl) {
+                if (-not $item.sd) { throw 'qise 标清地址获取失败（这条台账仍是高清地址，需要先重新抓取或配置 Cookie）' }
+                try { Add-Content -LiteralPath $log -Value 'qise SD 页请求失败，回退台账里的标清地址' -Encoding UTF8 } catch { }
+            } else {
+                $item.url = $sdUrl
+                try { Add-Content -LiteralPath $log -Value "qise SD: $sdUrl" -Encoding UTF8 } catch { }
+            }
         }
         $headers = @()
         if ($item.headers) {

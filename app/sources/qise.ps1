@@ -215,6 +215,7 @@ function Resolve-QiseDownload {
     # 不在主循环里联网探测：VIP 提示片交给下载器 preflight 识别
     $h = @{ Referer = "$script:QiseBase/" }
     if ($Context -and $Context.qiseCookie) { $h['Cookie'] = [string]$Context.qiseCookie }
+    $isSd = ([string]$Row.page_url -match '/(video|vod)/view/') -or ([string]$Row.extra -match 'hd=0')
     return @{
         url       = [string]$Row.url
         mode      = 'hls'
@@ -222,7 +223,7 @@ function Resolve-QiseDownload {
         source    = 'qise'
         source_id = [string]$Row.source_id
         section   = (Get-QiseSection $Row)
-        sd        = $true
+        sd        = $isSd
     }
 }
 function Invoke-QiseScrape {

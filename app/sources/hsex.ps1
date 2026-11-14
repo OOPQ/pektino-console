@@ -17,6 +17,7 @@ function Get-HsexHttpClient {
     Add-Type -AssemblyName System.Net.Http -ErrorAction SilentlyContinue
     $handler = New-Object System.Net.Http.HttpClientHandler
     $handler.MaxConnectionsPerServer = 8
+    $handler.UseProxy = $false
     $handler.AutomaticDecompression = [System.Net.DecompressionMethods]::GZip -bor [System.Net.DecompressionMethods]::Deflate
     if ($Context -and $Context.proxy) {
         $handler.Proxy = New-Object System.Net.WebProxy([string]$Context.proxy)

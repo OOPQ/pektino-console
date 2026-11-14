@@ -280,7 +280,7 @@ function Start-Scrape {
         if ($limit -gt 0) { $p['Limit'] = $limit }
         if ($proxy) { $p['Proxy'] = $proxy }
         if ($kn -and (Test-Path -LiteralPath $kn)) { $p['KnownFile'] = $kn }
-        & $ps @p *> $null
+        & $ps @p *>&1 | Out-File -LiteralPath ($out + ".log") -Encoding UTF8 -Append
     } -ArgumentList $ps, $src.key, $Rank, $Pages, $Limit, $out, $prog, $cov, $thm, $kn, $Threads, $proxy
 
     $State.Job = [pscustomobject]@{
@@ -360,11 +360,13 @@ function Update-Job {
             if ($mergeOk) { Remove-Item $TmpCsv -Force -ErrorAction SilentlyContinue }
         } else {
             Write-Log 'error' "$kind 结束但没有产出 CSV"
+            try { Write-FileLog "$kind finished without CSV" } catch { }
         }
     } else {
         $detail = ''
         try { $detail = (@($j.ChildJobs[0].Error) | Select-Object -First 1).ToString() } catch { }
         Write-Log 'error' "$kind 任务失败（$($j.State)）：$detail"
+        try { Write-FileLog "$kind job failed ($($j.State)): $detail" } catch { }
     }
 
     Remove-Job $j -Force -ErrorAction SilentlyContinue
@@ -839,16 +841,30 @@ function Start-Download {
     }
 
     $ctx = New-SourceContext -Config $Config -Root $Root
-    $queue = @($targets | ForEach-Object {
-            $dl = Resolve-SourceDownload -Key (Get-ItemSource $_) -Context $ctx -Row $_
-            [pscustomobject]@{
-                token   = $_.token
-                url     = $(if ($dl.url) { [string]$dl.url } else { [string]$_.url })
+    $queue = New-Object System.Collections.ArrayList
+    $vipCount = 0
+    foreach ($t in $targets) {
+        $dl = Resolve-SourceDownload -Key (Get-ItemSource $t) -Context $ctx -Row $t
+        if ($dl.mode -eq 'vip') {
+            $t.note = 'vip:required'
+            $vipCount++
+            continue
+        }
+        [void]$queue.Add([pscustomobject]@{
+                token   = $t.token
+                url     = $(if ($dl.url) { [string]$dl.url } else { [string]$t.url })
                 mode    = $(if ($dl.mode) { [string]$dl.mode } else { 'http' })
                 headers = $dl.headers
-                subdir  = (Get-ItemSource $_)
-            }
-        })
+                subdir  = (Get-ItemSource $t)
+            })
+    }
+    if ($vipCount -gt 0) {
+        Save-Ledger -Rows @($State.Ledger) -NoSnapshot
+        Touch-State
+        if ($queue.Count -eq 0) {
+            return @{ ok = $false; error = "$vipCount 条视频需要登录/VIP（源站只返回了提示片），登录后再试，或复制直链用外部工具" }
+        }
+    }
 
     # 已有下载器在跑 → 把新条目追加进它的队列（下载器每轮 poll 追加文件），不另起进程
     if ($running) {

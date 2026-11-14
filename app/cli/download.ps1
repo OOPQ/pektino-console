@@ -174,6 +174,9 @@ function Build-Args($item, $outFile) {
 }
 
 function Start-Curl($item, $part, $log) {
+    if ($item.mode -and $item.mode -notin @('http', 'hls')) {
+        throw "该源返回的不是可下载视频（mode=$($item.mode)）：通常需要登录/VIP，或源站只给了预告片"
+    }
     if ($item.mode -eq 'hls') {
         if (-not $Ffmpeg -or -not (Test-Path -LiteralPath $Ffmpeg -PathType Leaf)) {
             throw 'HLS 下载需要 ffmpeg：请在「设置 → FFmpeg 路径」填写 ffmpeg.exe，或加入 PATH'

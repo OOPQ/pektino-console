@@ -37,6 +37,22 @@
     ]
   },
   {
+    "key": "qise",
+    "name": "Qise / 91视频",
+    "file": "qise.ps1",
+    "enabled": true,
+    "order": 30,
+    "capabilities": ["scrape", "detail", "cover", "download"],
+    "siteUrl": "https://rfdjzz.qise100.com/video/viewhd/{id}",
+    "pageSize": 24,
+    "supportsPages": true,
+    "incremental": true,
+    "ranks": [
+      { "key": "latest", "label": "最新" },
+      { "key": "hd", "label": "高清" }
+    ]
+  },
+  {
     "key": "local",
     "name": "本地",
     "file": "",

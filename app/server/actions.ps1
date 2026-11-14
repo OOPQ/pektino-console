@@ -246,7 +246,8 @@ function Start-Scrape {
         [bool]$Incremental = $true,
         [int]$FreshDays = 3,
         [string]$Url = '',
-        [bool]$Hd = $false
+        [bool]$Hd = $false,
+        [bool]$SkipDeleted = $true
     )
 
     if ($State.Job) { return @{ ok = $false; error = '已有抓取任务在跑，等它结束' } }
@@ -304,6 +305,7 @@ function Start-Scrape {
         rank    = $Rank
         pages   = $Pages
         threads = $Threads
+        skipDeleted = $SkipDeleted
     }
     $ic = if ($Incremental) { "增量（跳过 $skipped 条 $FreshDays 天内已抓取的）" } else { '全量' }
     Write-Log 'scrape' "开始抓取 [$($src.name)] $Rank p$($Pages -join ',')：$ic，并发 $Threads，封面+缩略图，SQLite"
@@ -356,7 +358,7 @@ function Update-Job {
             $mergeOk = $false
             try {
                 $scraped = @(Import-Csv $TmpCsv -Encoding UTF8)
-                if ($kind -eq 'scrape' -and (Get-Command Test-DeletedToken -ErrorAction SilentlyContinue)) {
+                if ($kind -eq 'scrape' -and $State.Job.skipDeleted -ne $false -and (Get-Command Test-DeletedToken -ErrorAction SilentlyContinue)) {
                     $before = $scraped.Count
                     $scraped = @($scraped | Where-Object { -not (Test-DeletedToken ([string]$_.token)) })
                     $skippedDeleted = $before - $scraped.Count

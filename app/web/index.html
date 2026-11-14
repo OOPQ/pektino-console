@@ -164,6 +164,7 @@
     </div>
     <div class="sub" id="scrapeHint" style="margin-bottom:10px"></div>
     <label class="chk" style="margin-bottom:14px"><input type="checkbox" id="chkInc" checked>增量（跳过最近 3 天抓过的）</label>
+    <label class="chk" style="margin-bottom:14px"><input type="checkbox" id="chkSkipDeleted" checked>跳过此前手动删除的条目</label>
     </div>
     <div id="localFields" hidden>
       <div class="field">
@@ -188,6 +189,7 @@
       <input type="text" id="urlInput" placeholder="视频页，或 .m3u8 / .mp4 直链；自动识别来源">
     </div>
     <div class="sub" style="margin-bottom:14px">支持 qise / hsex / pektino 视频页与直链；填一条抓一条，不影响榜单设置。</div>
+    <label class="chk" style="margin-bottom:14px"><input type="checkbox" id="urlSkipDeleted" checked>跳过此前手动删除的条目</label>
     <div class="modal-actions">
       <button class="primary" id="btnUrlGo">开始抓取</button>
       <button class="ghost" id="btnUrlCancel">取消</button>

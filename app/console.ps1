@@ -547,6 +547,8 @@ function Handle-Request {
                 }
                 $hd = $false   # 高清需登录/VIP，暂不开放
                 if ($body.ContainsKey('hd')) { $hd = [bool]$body['hd'] }
+                $skipDeleted = $true
+                if ($body.ContainsKey('skipDeleted')) { $skipDeleted = [bool]$body['skipDeleted'] }
                 $limit = 0
                 if ($body.limit) { try { $limit = [int]$body.limit } catch { $limit = 0 } }
                 if ($limit -lt 1) { $limit = 50 }
@@ -563,7 +565,7 @@ function Handle-Request {
                 if ($srcInfo.incremental -eq $false) { $inc = $false }
                 $fresh = 3
                 if ($body.freshDays) { try { $fresh = [Math]::Max(0, [Math]::Min(30, [int]$body.freshDays)) } catch { $fresh = 3 } }
-                Send-Json -Stream $Stream -Object (Start-Scrape -Source $srcKey -Rank $rank -Pages $pages -Limit $limit -Threads $threads -Incremental $inc -FreshDays $fresh -Url $url -Hd $hd)
+                Send-Json -Stream $Stream -Object (Start-Scrape -Source $srcKey -Rank $rank -Pages $pages -Limit $limit -Threads $threads -Incremental $inc -FreshDays $fresh -Url $url -Hd $hd -SkipDeleted $skipDeleted)
                 return
             }
             '/api/job/cancel' {

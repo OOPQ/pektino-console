@@ -728,7 +728,7 @@ async function doScrape() {
     state.ADDED = null; state.SHOW_ADDED = false; paintAddedChip(); render();
     const source = $('#scrapeSource').value || 'pektino';
     const hd = false;   // 高清需要登录/VIP，暂不开放
-    const payload = { source, rank, limit, hd, incremental: $('#chkInc').checked };
+    const payload = { source, rank, limit, hd, skipDeleted: $('#chkSkipDeleted') ? $('#chkSkipDeleted').checked : true, incremental: $('#chkInc').checked };
     const r = await api('/api/scrape', payload);
     if (!r.ok) {
       if (prog) prog.classList.remove('on');
@@ -804,7 +804,7 @@ async function doUrlScrape() {
   try {
     state.SCRAPE_BASE = new Set(state.ROWS.map(r => r.token));
     state.ADDED = null; state.SHOW_ADDED = false; paintAddedChip(); render();
-    const r = await api('/api/scrape', { source, url, hd: false, incremental: false });
+    const r = await api('/api/scrape', { source, url, hd: false, skipDeleted: $('#urlSkipDeleted') ? $('#urlSkipDeleted').checked : true, incremental: false });
     if (!r.ok) {
       if (prog) prog.classList.remove('on');
       return toast('失败：' + r.error, 5000);

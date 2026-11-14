@@ -738,6 +738,51 @@ async function doScrape() {
   } catch (e) { if (prog) prog.classList.remove('on'); toast('请求失败：' + e.message, 5000); }
 }
 
+function setFetchMode(mode) {
+  document.querySelectorAll('#fetchMode button').forEach(b => b.classList.toggle('on', b.dataset.mode === mode));
+  const online = $('#onlineFields'), local = $('#localFields');
+  if (online) online.hidden = mode !== 'online';
+  if (local) local.hidden = mode !== 'local';
+  const go = $('#btnScrapeGo');
+  if (go) go.textContent = mode === 'local' ? '开始导入' : '开始获取';
+}
+
+async function doLocalImport() {
+  const path = ($('#localPath')?.value || '').trim();
+  if (!path) return toast('先填写本地视频文件夹', 3000);
+  const go = $('#btnScrapeGo');
+  const prog = $('#prog');
+  if (go) go.disabled = true;
+  if (prog) {
+    prog.classList.add('on');
+    $('#progLabel').textContent = '本地导入中';
+    $('#progBar').style.width = '35%';
+    $('#progStat').textContent = '移动文件 / 生成封面 · 请稍候';
+  }
+  try {
+    const r = await api('/api/import/local', { path });
+    if (!r.ok) {
+      if (prog) prog.classList.remove('on');
+      return toast('导入失败：' + r.error, 6000);
+    }
+    if (prog) prog.classList.remove('on');
+    closeScrapeModal();
+    toast(`已移动 ${r.moved} 个视频，新增 ${r.added} 条，生成封面 ${r.covers} 张`, 6000);
+    load();
+  } catch (e) {
+    if (prog) prog.classList.remove('on');
+    toast('导入请求失败：' + e.message, 6000);
+  } finally {
+    if (go) go.disabled = false;
+  }
+}
+
+function doFetch() {
+  const mode = document.querySelector('#fetchMode button.on')?.dataset.mode || 'online';
+  if (mode === 'local') return doLocalImport();
+  closeScrapeModal();
+  doScrape();
+}
 async function doUrlScrape() {
   const url = ($('#urlInput')?.value || '').trim();
   if (!url) return toast('先粘贴一个视频链接', 3000);
@@ -982,7 +1027,8 @@ function initToolbar() {
   $('#btnUrlCancel').onclick = closeUrlModal;
   $('#urlModal').onclick = e => { if (e.target.id === 'urlModal') closeUrlModal(); };
   if ($('#urlInput')) $('#urlInput').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); doUrlScrape(); } });
-  $('#btnScrapeGo').onclick = () => { closeScrapeModal(); doScrape(); };
+  $('#btnScrapeGo').onclick = doFetch;
+  document.querySelectorAll('#fetchMode button').forEach(b => { b.onclick = () => setFetchMode(b.dataset.mode); });
   $('#btnScrapeCancel').onclick = closeScrapeModal;
   $('#scrapeModal').onclick = e => { if (e.target.id === 'scrapeModal') closeScrapeModal(); };
   if ($('#scrapeSource')) $('#scrapeSource').addEventListener('change', paintScrapeOptions);

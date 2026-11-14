@@ -613,6 +613,11 @@ function Handle-Request {
                 Send-Json -Stream $Stream -Object (Invoke-DeleteFiles -Tokens $tokens -Purge:([bool]$body.purge) -Permanent:([bool]$body.permanent))
                 return
             }
+            '/api/import/local' {
+                $src = if ($body.path) { ([string]$body.path).Trim() } else { '' }
+                Send-Json -Stream $Stream -Object (Import-LocalFolder -SourcePath $src)
+                return
+            }
             '/api/import' {
                 $tokens = @()
                 if ($body.tokens) { $tokens = @($body.tokens | ForEach-Object { [string]$_ }) }

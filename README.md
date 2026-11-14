@@ -9,7 +9,8 @@
 - 程序的界面是中文
 - 数据来源通过**源适配器**接入：当前内置 `pektino`（HTTP）和 `hsex`（HLS 解析），新增源只需在 `app/sources/` 加一个文件，见 [多源与适配器](app/docs/SOURCES.md)
 - 下载方式支持 HTTP 直链和 **HLS（m3u8）**；HLS 走 ffmpeg，在「设置 → FFmpeg 路径」里填 `ffmpeg.exe` 即可
-- 新下载的文件按来源分目录：`media\<source>\<token>.mp4`；老文件保持平铺，两种布局共存
+- 新下载的文件按来源分目录：`media\<source>\<token>.mp4`；旧项目启动时自动把根目录视频迁移到 `media\pektino\`
+- 工具条 **「获取数据」** 支持在线榜单和本地视频文件夹导入；本地导入会移动到 `media\local`，自动补时长/分辨率/封面
 - 内置下载器支持并发（1–16）、断点续传、暂停 / 继续（可整体、也可单条）
 - 台账支持 **表格 / 画廊** 两种视图，封面直接用高清原图
 - **合集**：独立的合集管理，支持新建/重命名/删除、右键或批量加入，可按合集筛选
@@ -102,7 +103,7 @@ powershell -ExecutionPolicy Bypass -File .\app\console.ps1 -Project D:\my-data
 
 ## 网络与代理
 
-抓取榜单、下载封面、解析直链都要访问所启用的源（目前 `pektino.com`、`hsex.icu`，后者通常需要代理）。
+抓取榜单、下载封面、解析直链都要访问所启用的源（`pektino.com`、`hsex.icu`、`qise100.com`；hsex 通常需要代理，qise 默认跟随系统代理）。
 
 需要代理时，在界面右上角 **⚙ 设置 → 代理** 里填，例如 `http://127.0.0.1:7890`；
 留空表示跟随系统代理。设置会存进 `项目\data\config.json`。

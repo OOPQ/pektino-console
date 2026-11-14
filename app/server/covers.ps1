@@ -125,7 +125,7 @@ function Repair-Covers {
       - 拿不到封面地址或图片 404 时写 <token>.missing 标记，避免反复重试
       - 修完顺带补缩略图
     #>
-    param([int]$Limit = 40, [switch]$LocalOnly)
+    param([int]$Limit = 40, [switch]$LocalOnly, [int]$LocalMax = 3)
 
     if (-not (Test-Path $CoverDir)) { New-Item -ItemType Directory -Path $CoverDir -Force | Out-Null }
 
@@ -133,7 +133,7 @@ function Repair-Covers {
     $localFixed = 0
     $localTried = 0
     # 主循环里的自动任务必须短：最多抽 3 张、最多占 3 秒，避免 60 个视频帧把服务卡住
-    $localCap = [Math]::Max(1, [Math]::Min($Limit, 3))
+    $localCap = [Math]::Max(1, [Math]::Min($Limit, $LocalMax))
     $localSw = [Diagnostics.Stopwatch]::StartNew()
     foreach ($r in @($State.Ledger)) {
         if ($localTried -ge $localCap -or $localSw.Elapsed.TotalSeconds -gt 3) { break }

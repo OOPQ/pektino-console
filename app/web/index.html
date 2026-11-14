@@ -104,7 +104,7 @@
 
 <!-- ===== 操作条 ===== -->
 <div class="bar actions">
-  <button class="primary" id="btnScrape" title="抓取榜单并写入台账（可设置榜单/页数/条数）">抓取榜单</button>
+  <button class="primary" id="btnScrape" title="获取数据：在线榜单或导入本地视频">获取数据</button>
   <button class="ghost" id="btnUrlScrape" title="粘贴单条视频页面或直链，独立抓取">链接抓取</button>
   <button class="ghost" id="btnMulti" title="多选：表格勾选行，画廊点卡片">多选</button>
   <span class="divider"></span>
@@ -143,7 +143,12 @@
 <!-- ===== 抓取设置弹窗 ===== -->
 <div class="modal" id="scrapeModal">
   <div class="modal-box">
-    <h3>抓取榜单</h3>
+    <h3>获取数据</h3>
+    <div class="seg" id="fetchMode" style="margin-bottom:12px">
+      <button type="button" data-mode="online" class="on">在线榜单</button>
+      <button type="button" data-mode="local">本地视频</button>
+    </div>
+    <div id="onlineFields">
     <div class="field">
       <label>来源</label>
       <select id="scrapeSource"></select>
@@ -159,8 +164,16 @@
     </div>
     <div class="sub" id="scrapeHint" style="margin-bottom:10px"></div>
     <label class="chk" style="margin-bottom:14px"><input type="checkbox" id="chkInc" checked>增量（跳过最近 3 天抓过的）</label>
+    </div>
+    <div id="localFields" hidden>
+      <div class="field">
+        <label>本地视频文件夹（会移动到 media\local，并自动生成封面/时长/分辨率）</label>
+        <input type="text" id="localPath" placeholder="D:\project\testVideo" value="D:\project\testVideo">
+      </div>
+      <div class="sub" style="margin-bottom:12px">只移动 mp4；同名同大小文件会跳过，不覆盖目标。</div>
+    </div>
     <div class="modal-actions">
-      <button class="primary" id="btnScrapeGo">开始抓取</button>
+      <button class="primary" id="btnScrapeGo">开始获取</button>
       <button class="ghost" id="btnScrapeCancel">取消</button>
     </div>
   </div>

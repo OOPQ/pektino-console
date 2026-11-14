@@ -1408,3 +1408,42 @@ function Get-UrlStatusCode {
         return [int]([string]$code).Trim()
     } catch { return 0 }
 }
+
+function Import-LocalFolder {
+    <#  把外部文件夹里的 mp4 剪切到 media\local，并入库/生成封面  #>
+    param([string]$SourcePath)
+    if (-not $SourcePath) { return @{ ok = $false; error = '请填写本地视频文件夹' } }
+    try { $src = [System.IO.Path]::GetFullPath($SourcePath) } catch { return @{ ok = $false; error = "路径不合法: $SourcePath" } }
+    if (-not (Test-Path -LiteralPath $src -PathType Container)) { return @{ ok = $false; error = "文件夹不存在: $src" } }
+    $content = [System.IO.Path]::GetFullPath($Config.contentDir).TrimEnd('\')
+    if ($src.TrimEnd('\') -eq $content -or $src.StartsWith($content + '\', [System.StringComparison]::OrdinalIgnoreCase)) {
+        return @{ ok = $false; error = '源文件夹在媒体目录内，不能导入自身' }
+    }
+    $dest = Join-Path $content 'local'
+    if (-not (Test-Path -LiteralPath $dest)) { New-Item -ItemType Directory -Path $dest -Force | Out-Null }
+    $files = @(Get-ChildItem -LiteralPath $src -Filter '*.mp4' -File -Recurse -Depth 4 -ErrorAction SilentlyContinue)
+    if (-not $files.Count) { return @{ ok = $false; error = "该文件夹里没有 mp4: $src" } }
+    $moved = 0; $skipped = 0; $failed = 0
+    foreach ($f in $files) {
+        $target = Join-Path $dest $f.Name
+        try {
+            if (Test-Path -LiteralPath $target) {
+                $old = Get-Item -LiteralPath $target
+                if ($old.Length -eq $f.Length) {
+                    Remove-Item -LiteralPath $f.FullName -Force
+                    $moved++
+                } else { $skipped++ }
+                continue
+            }
+            Move-Item -LiteralPath $f.FullName -Destination $target -Force
+            $moved++
+        } catch { $failed++ }
+    }
+    $imp = Import-ProjectFiles -Paths $WS -Rows $State.Ledger -SavePath $LedgerPath
+    $State.Ledger = @($imp.rows)
+    $cover = $null
+    try { $cover = Repair-Covers -Limit 40 -LocalOnly -LocalMax 40 } catch { }
+    Touch-State
+    Write-Log 'import' "本地导入：移动 $moved 个 mp4，新增 $($imp.added) 条，封面生成 $($cover.fixed)"
+    return @{ ok = $true; moved = $moved; skipped = $skipped; failed = $failed; added = $imp.added; covers = $(if ($cover) { $cover.fixed } else { 0 }); dir = $dest }
+}

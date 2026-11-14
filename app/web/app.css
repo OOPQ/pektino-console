@@ -352,6 +352,17 @@ button.danger:hover:not(:disabled){background:#3a1d1d;border-color:#7a2b2b;color
 .col-row .cnt{color:var(--dim);font-size:11px;flex:0 0 auto}
 .col-row button{padding:2px 8px;font-size:12px;flex:0 0 auto}
 .colpick-box{width:min(420px,92vw);background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;max-height:80vh;overflow:auto}
+/* 下载确认 */
+.dlc-box{width:min(440px,92vw);background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px}
+.dlc-box h3{margin:0 0 6px}
+.dlc-box #dlcLimit{background:var(--bg);border:1px solid var(--line);color:var(--text);border-radius:6px;padding:5px 8px}
+/* 筛选视图 */
+#viewsMenu{min-width:200px}
+#viewsMenu .view-row{display:flex;align-items:center;gap:2px}
+#viewsMenu .view-row [data-view-apply]{flex:1;text-align:left;background:none;border:0;color:var(--text);padding:6px 10px;border-radius:5px;font-size:12px;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#viewsMenu .view-row [data-view-apply]:hover{background:#243040}
+#viewsMenu .view-del{background:none;border:0;color:var(--dim);padding:2px 6px;cursor:pointer;font-size:13px;flex:0 0 auto}
+#viewsMenu .view-del:hover{color:var(--bad)}
 /* 合集卡片墙 */
 .colb-box{width:min(1440px,98vw);height:88vh;background:var(--panel);border:1px solid var(--line);border-radius:12px;display:flex;flex-direction:column;padding:10px}
 .colb-head{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px}

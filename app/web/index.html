@@ -83,6 +83,10 @@
   </span>
   <button class="ghost" id="btnReset">重置</button>
   <span style="position:relative">
+    <button class="ghost" id="btnViews" title="保存 / 应用筛选视图">视图 ▾</button>
+    <div class="menu" id="viewsMenu"></div>
+  </span>
+  <span style="position:relative">
     <button class="ghost" id="btnCols" title="显示/隐藏列">列 ▾</button>
     <div class="colpop" id="colpop"></div>
   </span>
@@ -367,7 +371,24 @@
   </div>
 </div>
 
-<!-- ===== 合集选择（批量 / 右键） ===== -->
+<!-- ===== 下载确认 ===== -->
+<div class="lightbox" id="dlConfirm">
+  <div class="dlc-box">
+    <h3>开始下载</h3>
+    <div class="sub" id="dlcInfo" style="line-height:1.9">–</div>
+    <div style="display:flex;align-items:center;gap:8px;margin-top:12px">
+      <span class="sub">本次下载</span>
+      <input type="number" id="dlcLimit" min="1" step="1" style="width:90px">
+      <span class="sub">条（留空 = 全部）</span>
+    </div>
+    <div class="sub" id="dlcHint" style="margin-top:8px;color:var(--dim)">–</div>
+    <div class="actions" style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:14px">
+      <button id="dlcStart">开始下载</button>
+      <button class="ghost" id="dlcCancel">取消</button>
+    </div>
+  </div>
+</div>
+
 <div class="lightbox" id="colPick">
   <div class="colpick-box">
     <h3>加入合集 <span class="sub" id="colPickCount"></span></h3>

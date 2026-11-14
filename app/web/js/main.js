@@ -483,6 +483,64 @@ function paintAddedChip() {  const chip = $('#addedChip');
   if (cnt) cnt.textContent = String(n);
 }
 
+function escHtml(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+function paintViewsMenu() {
+  const m = $('#viewsMenu');
+  if (!m) return;
+  const views = PREFS.views || [];
+  m.innerHTML = (views.length
+    ? views.map((v, i) => `<div class="view-row"><button data-view-apply="${i}">${escHtml(v.name)}</button><button class="view-del" data-view-del="${i}" title="删除视图">×</button></div>`).join('')
+    : '<div class="sub" style="padding:6px 10px">还没有保存的视图</div>')
+    + '<div class="menu-sep"></div><button id="viewSave">💾 保存当前筛选…</button>';
+}
+
+function applyView(v) {
+  const f = v.filter || {};
+  state.FILTER.status = f.status || 'all';
+  state.FILTER.flag = f.flag || 'none';
+  state.FILTER.res = f.res || 'all';
+  state.FILTER.minDur = f.minDur || '';
+  state.FILTER.q = f.q || '';
+  if (v.sortKey) state.SORT = { key: v.sortKey, dir: v.sortDir === 'desc' ? 'desc' : 'asc' };
+  Object.assign(PREFS, {
+    status: state.FILTER.status, flag: state.FILTER.flag, res: state.FILTER.res,
+    minDur: state.FILTER.minDur, q: state.FILTER.q,
+    sortKey: state.SORT.key, sortDir: state.SORT.dir
+  });
+  state.PAGE = 1;
+  PREFS.page = 1;
+  savePrefs();
+  if ($('#fStatus')) $('#fStatus').value = state.FILTER.status;
+  if ($('#fFlag')) $('#fFlag').value = state.FILTER.flag;
+  if ($('#fRes')) $('#fRes').value = state.FILTER.res;
+  if ($('#fMinDur')) $('#fMinDur').value = state.FILTER.minDur || '';
+  if ($('#q')) $('#q').value = state.FILTER.q || '';
+  render();
+  toast(`已应用视图「${v.name}」`, 2000);
+}
+
+function saveCurrentView() {
+  const name = (prompt('视图名称（例如：今日新增 / 未看高分）') || '').trim();
+  if (!name) return;
+  const v = {
+    name,
+    filter: {
+      status: state.FILTER.status, flag: state.FILTER.flag, res: state.FILTER.res,
+      minDur: state.FILTER.minDur, q: state.FILTER.q
+    },
+    sortKey: state.SORT.key, sortDir: state.SORT.dir
+  };
+  const views = PREFS.views || (PREFS.views = []);
+  const idx = views.findIndex(x => x.name === name);
+  if (idx >= 0) views[idx] = v; else views.push(v);
+  savePrefs();
+  paintViewsMenu();
+  toast(`已保存视图「${name}」`, 2000);
+}
+
 function paintResume() {
   const bar = $('#resumeBar');
   if (!bar) return;
@@ -696,17 +754,54 @@ async function scanDir() {
   load();
 }
 
-async function downloadNew() {
+let dlPreview = null;
+
+function fmtBytes(v) {
+  v = +v || 0;
+  if (v >= 1073741824) return (v / 1073741824).toFixed(1) + ' GB';
+  if (v >= 1048576) return Math.round(v / 1048576) + ' MB';
+  if (v >= 1024) return Math.round(v / 1024) + ' KB';
+  return Math.round(v) + ' B';
+}
+
+async function openDownloadConfirm() {
   const n = state.STATS.new || 0;
   if (!n) return toast('没有可下载的条目');
-  const running = !!(state.DOWNLOAD && state.DOWNLOAD.running);
-  const msg = running
-    ? `当前有下载任务在跑，把这 ${n} 条追加到它的队列？\n\n队列会按并发数继续下载。`
-    : `用内置下载器下载 ${n} 条？\n保存到：${state.STATS.contentDir || ''}\n\n支持断点续传，可在进度条上取消。`;
-  if (!confirm(msg)) return;
   try {
-    const r = await api('/api/download', { status: 'new' });
-    if (!r.ok) return toast('失败：' + r.error, 5000);
+    dlPreview = await api('/api/download/preview');
+  } catch (e) { return toast('获取下载信息失败：' + e.message, 4000); }
+  if (!dlPreview || !dlPreview.ok) return toast((dlPreview && dlPreview.error) || '获取失败', 4000);
+  const p = dlPreview;
+  const estAll = (p.avgBytes || 0) * (p.count || 0);
+  $('#dlcInfo').innerHTML = `待下载 <b>${p.count}</b> 条 · 已完成平均 <b>${fmtBytes(p.avgBytes)}</b>/条<br>`
+    + `全部预计 <b>${fmtBytes(estAll)}</b> · 磁盘剩余 <b>${fmtBytes(p.freeBytes)}</b><br>`
+    + `<span class="sub">保存到 ${p.dir || ''}</span>`;
+  $('#dlcLimit').max = String(p.count);
+  $('#dlcLimit').value = String(Math.min(p.count, 20));
+  updateDlcHint();
+  $('#dlConfirm').classList.add('on');
+}
+
+function updateDlcHint() {
+  const p = dlPreview;
+  if (!p) return;
+  let n = parseInt($('#dlcLimit').value) || 0;
+  if (n <= 0 || n > p.count) n = p.count;
+  const est = (p.avgBytes || 0) * n;
+  const enough = (p.freeBytes || 0) > est + 500 * 1024 * 1024;
+  $('#dlcHint').innerHTML = `本次 ${n} 条，预计 ${fmtBytes(est)}`
+    + (enough ? '' : ' —— <span style="color:var(--bad)">空间可能不足</span>');
+}
+
+function closeDownloadConfirm() {
+  $('#dlConfirm').classList.remove('on');
+  dlPreview = null;
+}
+
+async function startDownloadRequest(limit) {
+  try {
+    const r = await api('/api/download', { status: 'new', limit });
+    if (!r || !r.ok) return toast('失败：' + ((r && r.error) || '未知错误'), 5000);
     if (r.appended !== undefined) {
       if (r.appended > 0) pulseDlQueue(r.appended);
       toast(r.appended > 0 ? `已追加 ${r.appended} 条到当前下载队列` : (r.note || '这些条目已经在队列里'), 3500);
@@ -715,7 +810,7 @@ async function downloadNew() {
       toast(`已开始下载 ${r.count} 条（并发 ${r.concurrent}）`, 3500);
     }
     load();
-  } catch (e) { toast('请求失败：' + e.message); }
+  } catch (e) { toast('请求失败：' + e.message, 4000); }
 }
 
 async function saveNet() {
@@ -820,7 +915,54 @@ function initToolbar() {
     };
   }
   $('#btnCancelJob').onclick = doCancelJob;
-  $('#btnDownload').onclick = downloadNew;
+  $('#btnDownload').onclick = openDownloadConfirm;
+  $('#dlcCancel').onclick = closeDownloadConfirm;
+  $('#dlConfirm').onclick = e => { if (e.target.id === 'dlConfirm') closeDownloadConfirm(); };
+  $('#dlcLimit').oninput = updateDlcHint;
+  $('#dlcStart').onclick = () => {
+    const p = dlPreview;
+    if (!p) return;
+    let lim = parseInt($('#dlcLimit').value) || 0;
+    if (lim > p.count) lim = p.count;
+    closeDownloadConfirm();
+    startDownloadRequest(lim);
+  };
+
+  // 保存 / 应用筛选视图
+  if ($('#btnViews')) {
+    $('#btnViews').onclick = e => {
+      e.stopPropagation();
+      paintViewsMenu();
+      $('#viewsMenu').classList.toggle('on');
+    };
+  }
+  if ($('#viewsMenu')) {
+    $('#viewsMenu').addEventListener('click', e => {
+      const ap = e.target.closest('[data-view-apply]');
+      if (ap) {
+        const v = (PREFS.views || [])[+ap.dataset.viewApply];
+        $('#viewsMenu').classList.remove('on');
+        if (v) applyView(v);
+        return;
+      }
+      const del = e.target.closest('[data-view-del]');
+      if (del) {
+        e.stopPropagation();
+        (PREFS.views || []).splice(+del.dataset.viewDel, 1);
+        savePrefs();
+        paintViewsMenu();
+        return;
+      }
+      if (e.target.closest('#viewSave')) {
+        $('#viewsMenu').classList.remove('on');
+        saveCurrentView();
+      }
+    });
+  }
+  document.addEventListener('click', e => {
+    const m = $('#viewsMenu');
+    if (m && !e.target.closest('#viewsMenu') && e.target.id !== 'btnViews') m.classList.remove('on');
+  });
   $('#btnSaveNet').onclick = saveNet;
   $('#btnOpenContent').onclick = openProjectFolder;
   $('#btnScan').onclick = scanDir;

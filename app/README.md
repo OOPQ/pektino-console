@@ -252,6 +252,7 @@ POST /api/download/repair                                            整理 .par
 POST /api/mark      {tokens,status}                                  改状态（new/done/recycled/failed）
 GET  /api/collections                                                合集列表（含条目数）
 GET  /api/collections/items?id=N                                     合集内 token
+GET  /api/download/preview                                           下载前预估（条数/平均体积/磁盘剩余）
 POST /api/collections {action,id,name,tokens}                        合集 create/rename/delete/add/remove
 POST /api/fav       {tokens,on}                                      收藏
 POST /api/watched   {tokens,on}                                      已看/未看

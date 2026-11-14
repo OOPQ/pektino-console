@@ -550,6 +550,7 @@ export function initPanels() {
       else if ($('#dlDrawer').classList.contains('on')) $('#dlDrawer').classList.remove('on');
       else if ($('#binDrawer').classList.contains('on')) $('#binDrawer').classList.remove('on');
       else if ($('#colBrowser').classList.contains('on')) $('#colBrowser').classList.remove('on');
+      else if ($('#dlConfirm').classList.contains('on')) $('#dlConfirm').classList.remove('on');
       else if ($('#colPick').classList.contains('on')) $('#colPick').classList.remove('on');
       else if ($('#drawer').classList.contains('on')) $('#drawer').classList.remove('on');
       else if ($('#ctxmenu').classList.contains('on')) emit('close-ctx');

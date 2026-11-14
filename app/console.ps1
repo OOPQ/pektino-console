@@ -361,6 +361,11 @@ function Handle-Request {
         return
     }
 
+    if ($method -eq 'GET' -and $path -eq '/api/download/preview') {
+        Send-Json -Stream $Stream -Object (Get-DownloadPreview)
+        return
+    }
+
     if ($method -eq 'GET' -and $path -eq '/api/export') {
         $tmp = Join-Path (Split-Path $LedgerPath -Parent) '.export.csv'
         Write-CsvSnapshot -Rows @($State.Ledger) -Path $tmp -Force

@@ -709,6 +709,37 @@ function Get-DownloadInfo {
     [pscustomobject]$info
 }
 
+function Get-DownloadPreview {
+    <#  下载前的预估：待下载条数、已完成文件的平均体积、磁盘剩余空间  #>
+    $cfg = Read-Config -Root $Root -DataDir $WS.DataDir -DefaultContentDir $WS.Content
+    $dir = if ($cfg.contentDir) { [string]$cfg.contentDir } else { $WS.Content }
+    if (-not [System.IO.Path]::IsPathRooted($dir)) {
+        $dir = [System.IO.Path]::GetFullPath((Join-Path $WS.ProjectRoot $dir))
+    }
+    $pending = @($State.Ledger | Where-Object { $_.url -and -not $_.file_name -and $_.status -eq 'new' })
+    $done = @($State.Ledger | Where-Object { $_.file_size })
+    $avg = [int64]0
+    if ($done.Count -gt 0) {
+        $sum = [int64]0
+        foreach ($r in $done) { try { $sum += [int64]$r.file_size } catch { } }
+        $avg = [int64]($sum / $done.Count)
+    }
+    $free = [int64]0
+    try {
+        $root = [System.IO.Path]::GetPathRoot($dir)
+        $free = (New-Object System.IO.DriveInfo($root)).AvailableFreeSpace
+    } catch { }
+    return [pscustomobject]@{
+        ok            = $true
+        count         = $pending.Count
+        avgBytes      = $avg
+        estimateBytes = ($avg * $pending.Count)
+        freeBytes     = $free
+        dir           = $dir
+        running       = [bool](Get-DownloadInfo).running
+    }
+}
+
 function Start-Download {
     <#
       把选中/待下载条目交给内置下载器（独立进程，支持续传与并发）。
@@ -732,6 +763,15 @@ function Start-Download {
         $dir = [System.IO.Path]::GetFullPath((Join-Path $WS.ProjectRoot $dir))
     }
     if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
+
+    # 磁盘空间守卫：少于 500MB 直接拒绝，避免下到一半盘满
+    try {
+        $root = [System.IO.Path]::GetPathRoot($dir)
+        $free = (New-Object System.IO.DriveInfo($root)).AvailableFreeSpace
+        if ($free -lt 500MB) {
+            return @{ ok = $false; error = "磁盘剩余空间不足（$([math]::Round($free / 1GB, 2)) GB），请先清理" }
+        }
+    } catch { }
 
     $targets = @()
     if ($Tokens) {

@@ -349,16 +349,27 @@
       <button class="ghost" id="colClose">关闭</button>
     </div>
     <div class="col-list" id="colList"></div>
-    <div id="colItemsView" hidden>
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap">
-        <button class="ghost" id="colBack">← 返回</button>
-        <b id="colItemsName"></b>
-        <span class="sub" id="colItemsCount"></span>
-        <span class="spacer"></span>
-        <button class="ghost" id="colViewFilter" title="回到列表只显示这个合集">在列表中查看</button>
-      </div>
-      <div class="bin-list" id="colItemsList"></div>
+  </div>
+</div>
+
+<!-- ===== 合集浏览（卡片墙） ===== -->
+<div class="lightbox" id="colBrowser">
+  <div class="colb-box">
+    <div class="colb-head">
+      <h3>合集</h3>
+      <div class="colb-tabs" id="colbTabs"></div>
+      <span class="spacer"></span>
+      <input id="colbSearch" placeholder="过滤 token / 时长" style="width:180px">
+      <select id="colbStatus" style="padding:3px 6px">
+        <option value="all">全部状态</option>
+        <option value="new">待下载</option>
+        <option value="done">已完成</option>
+        <option value="failed">下载失败</option>
+      </select>
+      <button class="ghost" id="colbApply" title="关闭并在台账里只看这个合集">在台账中查看</button>
+      <button class="ghost" id="colbClose">关闭</button>
     </div>
+    <div class="colb-body" id="colbBody"></div>
   </div>
 </div>
 

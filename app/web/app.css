@@ -352,6 +352,19 @@ button.danger:hover:not(:disabled){background:#3a1d1d;border-color:#7a2b2b;color
 .col-row .cnt{color:var(--dim);font-size:11px;flex:0 0 auto}
 .col-row button{padding:2px 8px;font-size:12px;flex:0 0 auto}
 .colpick-box{width:min(420px,92vw);background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;max-height:80vh;overflow:auto}
+/* 合集卡片墙 */
+.colb-box{width:min(1200px,96vw);height:86vh;background:var(--panel);border:1px solid var(--line);border-radius:12px;display:flex;flex-direction:column;padding:12px}
+.colb-head{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px}
+.colb-head h3{margin:0;font-size:14px}
+.colb-tabs{display:flex;gap:6px;overflow-x:auto;max-width:55%;padding-bottom:2px}
+.colb-tab{background:transparent;border:1px solid var(--line);border-radius:999px;padding:3px 10px;font-size:12px;color:var(--dim);white-space:nowrap;cursor:pointer}
+.colb-tab.on{background:#1f4f86;border-color:#2b6cb0;color:#eaf4ff}
+.colb-body{flex:1 1 auto;overflow:auto;min-height:0}
+.colb-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;padding:2px}
+.colb-card{position:relative}
+.colb-remove{position:absolute;right:6px;top:6px;z-index:5;width:22px;height:22px;border-radius:50%;border:1px solid var(--line);background:rgba(8,12,18,.8);color:#c9d6e3;font-size:13px;line-height:1;padding:0;cursor:pointer;opacity:0;transition:.15s}
+.colb-card:hover .colb-remove{opacity:1}
+.colb-remove:hover{background:#3a1d1d;color:#ff8b84;border-color:#7a2b2b}
 .ctx-sub{position:fixed;display:none;min-width:150px;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:4px;z-index:80;box-shadow:0 8px 24px rgba(0,0,0,.45);max-height:50vh;overflow:auto}
 .ctx-sub.on{display:block}
 .ctx-sub button{display:block;width:100%;text-align:left;background:transparent;border:0;padding:6px 10px;border-radius:5px;font-size:12px;color:var(--text);cursor:pointer}

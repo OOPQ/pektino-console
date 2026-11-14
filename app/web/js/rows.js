@@ -201,7 +201,7 @@ async function onCtxAction(act) {
 }
 
 /* ================= 行内交互 ================= */
-async function onRowClick(e) {
+export async function onRowClick(e) {
   /* 评分星 */
   const star = e.target.closest('.rt i');
   if (star) {
@@ -230,8 +230,8 @@ async function onRowClick(e) {
   /* 播放（画廊里是封面内的浮层按钮，优先级要高于封面灯箱） */
   const play = e.target.closest('[data-play]');
   if (play) {
-    // 画廊里的播放：打开预览灯箱并直接播放（表格里仍走系统播放器）
-    if (play.closest('#gallery')) {
+    // 画廊/合集浏览器里的播放：打开预览并直接播放（表格里仍走系统播放器）
+    if (play.closest('#gallery, #colbBody')) {
       return emit('open-lightbox', { token: play.dataset.play, autoplay: true });
     }
     return doPlay(play.dataset.play);

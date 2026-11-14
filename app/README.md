@@ -294,6 +294,8 @@ clientErrors[] / clientWarns / uptime`。单请求 ≥800ms 会进 `slow` 列表
 - **画廊视图**：查询条右侧「表格 / 画廊」切换，卡片墙复用同一套行内交互
   （`data-lb` / `data-play` / `data-fav` / `data-rate` / `data-dl`），选择存 `PREFS.view`；
   宽屏一行 10 张、窄屏自动减列
+- **合集**：`collections.js`；抽屉负责新建/重命名/删除，点名字打开 `#colBrowser` 卡片墙
+  （复用 `table.js` 的 `cardHtml`，支持搜索/状态过滤、卡片播放、悬停移出、在台账中筛选）
 - **播放器**：灯箱和抽卡共用 `PLAYERS`（img/video/overlay/pip 四件套），
   空格播放/暂停、长按空格 2× 倍速（260ms 后生效，松开恢复）、**←/→ 快退/快进 5 秒**、
   **↑/↓ 音量 ±5%**、F 全屏、M 静音；画中画按钮走 `video.requestPictureInPicture()`，

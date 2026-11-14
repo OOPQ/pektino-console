@@ -116,37 +116,39 @@ function rateCell(r) {
 }
 
 /* ---------- 画廊（卡片）视图 ---------- */
+export function cardHtml(r, active) {
+  const fav = r.fav === '1';
+  const hasFile = !!r.file_name;
+  const isActive = active && active.has(r.token);
+  const dlBtn = hasFile
+    ? ''
+    : (isActive
+      ? `<button class="dlbtn danger" data-dl-cancel="${r.token}">取消</button>`
+      : `<button class="dlbtn" data-dl="${r.token}">下载</button>`);
+  return `<div class="card" data-row="${r.token}">
+    <div class="cover" data-lb="${r.token}" title="点击放大">
+      <img src="/api/cover?token=${encodeURIComponent(r.token)}&full=1" loading="lazy" alt=""
+           onerror="if(!this.dataset.f){this.dataset.f=1;this.src=this.src.replace('&full=1','');}else{this.parentNode.classList.add('nocover');this.remove();}">
+      <span class="st">${stTag(r.status)}</span>
+      ${hasFile ? `<span class="playbtn" data-play="${r.token}">▶</span>` : ''}
+    </div>
+    <div class="body">
+      <div class="name mono" title="${r.token}">${r.token}</div>
+      <div class="meta">${r.duration || '—'} · ${r.res || '—'}${(+r.play_count) ? ' · ▶' + r.play_count : ''}</div>
+      <div class="stars">
+        <button class="star ${fav ? 'on' : ''}" data-fav="${r.token}" title="收藏">${fav ? '★' : '☆'}</button>
+        <span class="rt" data-rate="${r.token}">${starsInner(r.rating)}</span>
+      </div>
+      ${dlBtn ? `<div class="foot">${dlBtn}</div>` : ''}
+    </div>
+  </div>`;
+}
+
 function renderGallery(rows, active) {
   const el = $('#gallery');
   if (!el) return;
   if (!rows.length) { el.innerHTML = '<div class="empty">没有匹配的条目</div>'; return; }
-  el.innerHTML = rows.map(r => {
-    const fav = r.fav === '1';
-    const hasFile = !!r.file_name;
-    const isActive = active.has(r.token);
-    const dlBtn = hasFile
-      ? ''
-      : (isActive
-        ? `<button class="dlbtn danger" data-dl-cancel="${r.token}">取消</button>`
-        : `<button class="dlbtn" data-dl="${r.token}">下载</button>`);
-    return `<div class="card" data-row="${r.token}">
-      <div class="cover" data-lb="${r.token}" title="点击放大">
-        <img src="/api/cover?token=${encodeURIComponent(r.token)}&full=1" loading="lazy" alt=""
-             onerror="if(!this.dataset.f){this.dataset.f=1;this.src=this.src.replace('&full=1','');}else{this.parentNode.classList.add('nocover');this.remove();}">
-        <span class="st">${stTag(r.status)}</span>
-        ${hasFile ? `<span class="playbtn" data-play="${r.token}">▶</span>` : ''}
-      </div>
-      <div class="body">
-        <div class="name mono" title="${r.token}">${r.token}</div>
-        <div class="meta">${r.duration || '—'} · ${r.res || '—'}${(+r.play_count) ? ' · ▶' + r.play_count : ''}</div>
-        <div class="stars">
-          <button class="star ${fav ? 'on' : ''}" data-fav="${r.token}" title="收藏">${fav ? '★' : '☆'}</button>
-          <span class="rt" data-rate="${r.token}">${starsInner(r.rating)}</span>
-        </div>
-        ${dlBtn ? `<div class="foot">${dlBtn}</div>` : ''}
-      </div>
-    </div>`;
-  }).join('');
+  el.innerHTML = rows.map(r => cardHtml(r, active)).join('');
 }
 
 /* ---------- 渲染 ---------- */

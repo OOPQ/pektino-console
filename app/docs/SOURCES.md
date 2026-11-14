@@ -44,7 +44,7 @@ app/cli/import.ps1            通用本地入库（按 token 找源 → 详情�
 | key | 抓取 | 详情 | 封面 | 下载 |
 |---|---|---|---|---|
 | `pektino` | 榜单 | JSON-LD | JSON-LD | HTTP（Referer） |
-| `hsex` | 首页 / `index-N.htm` | `<source>` 的 m3u8 | thumb 图 | **HLS**（下载器当前会明确拒绝，等 ffmpeg 支持） |
+| `hsex` | 首页 / `index-N.htm` | `<source>` 的 m3u8 | thumb 图 | HLS（ffmpeg，需配置路径） |
 
 ## 适配器契约
 
@@ -113,6 +113,6 @@ url, page_url, cover_url, download_kind, download_headers, extra
 
 ## 当前限制（后续可扩展）
 
-- `hsex` 的 HLS 下载需要 ffmpeg，当前下载器只做解析并明确报错，不会把 m3u8 当 mp4 保存
+- `hsex` 的 HLS 下载需要 ffmpeg：在「设置 → FFmpeg 路径」填写，或加入 PATH，或配置 `ffmpegPath`
 - `cli/import.ps1` 是串行核对，来源很多时可以考虑按源分批并发
 - `daily.ps1` / `thunder.ps1` 仍是 pektino 时代的 CLI 兼容入口，未接入多源

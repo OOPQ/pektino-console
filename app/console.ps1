@@ -305,7 +305,7 @@ function Handle-Request {
             job      = (Get-JobInfo)
             download = (Get-DownloadInfo)
             project  = (Get-ProjectSummary -Paths $WS)
-            settings = [pscustomobject]@{ proxy = [string]$Config.proxy; concurrent = $(if ($Config.concurrent) { [int]$Config.concurrent } else { 3 }) }
+            settings = [pscustomobject]@{ proxy = [string]$Config.proxy; concurrent = $(if ($Config.concurrent) { [int]$Config.concurrent } else { 3 }); ffmpegPath = [string]$Config.ffmpegPath }
             sources  = @(Get-Sources | ForEach-Object { [pscustomobject]@{ key = $_.key; name = $_.name; capabilities = @($_.capabilities) } })
             # 浏览器内播放用的媒体服务地址（前端拼成 <base>/<token>.mp4?k=<key>）
             media    = $(if ($State.Media) { [pscustomobject]@{ base = [string]$State.Media.Base; key = [string]$State.Media.Key } } else { $null })
@@ -661,6 +661,14 @@ function Handle-Request {
                         return
                     }
                     $Config | Add-Member -NotePropertyName concurrent -NotePropertyValue $cc -Force
+                }
+                if ($body.ffmpegPath -ne $null) {
+                    $fp = ([string]$body.ffmpegPath).Trim()
+                    if ($fp -and -not (Test-Path -LiteralPath $fp -PathType Leaf)) {
+                        Send-Json -Stream $Stream -Object @{ ok = $false; error = "FFmpeg 路径不存在：$fp" }
+                        return
+                    }
+                    $Config | Add-Member -NotePropertyName ffmpegPath -NotePropertyValue $fp -Force
                 }
                 Save-Config -Config $Config -Root $Root -DataDir $WS.DataDir
                 Write-Log 'config' "代理=$([string]$Config.proxy) 并发=$($Config.concurrent)"

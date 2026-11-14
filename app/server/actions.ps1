@@ -757,6 +757,24 @@ function Get-DownloadPreview {
     }
 }
 
+function Get-FfmpegPath {
+    <#  优先配置里的路径，其次 PATH/常见安装位置；找不到返回 ''  #>
+    $cands = @()
+    if ($Config -and $Config.ffmpegPath) { $cands += [string]$Config.ffmpegPath }
+    if ($env:FFMPEG) { $cands += [string]$env:FFMPEG }
+    $cmd = Get-Command ffmpeg.exe -ErrorAction SilentlyContinue
+    if ($cmd) { $cands += $cmd.Source }
+    $cands += @(
+        (Join-Path $env:LOCALAPPDATA 'Microsoft\WinGet\Links\ffmpeg.exe'),
+        (Join-Path $env:ProgramFiles 'ffmpeg\bin\ffmpeg.exe'),
+        'C:\ffmpeg\bin\ffmpeg.exe'
+    )
+    foreach ($c in $cands) {
+        if ($c -and (Test-Path -LiteralPath $c -PathType Leaf)) { return (Resolve-Path -LiteralPath $c).Path }
+    }
+    return ''
+}
+
 function Start-Download {
     <#
       把选中/待下载条目交给内置下载器（独立进程，支持续传与并发）。
@@ -878,6 +896,8 @@ function Start-Download {
         '-PauseItemsFile', (ConvertTo-QuotedArg $DlPauseItems),
         '-AddFile', (ConvertTo-QuotedArg $DlAdd))
     if ($proxy) { $argList += @('-Proxy', (ConvertTo-QuotedArg $proxy)) }
+    $ffmpeg = Get-FfmpegPath
+    if ($ffmpeg) { $argList += @('-Ffmpeg', (ConvertTo-QuotedArg $ffmpeg)) }
 
     Remove-Item $DlCancel -Force -ErrorAction SilentlyContinue
     Remove-Item $DlAdd -Force -ErrorAction SilentlyContinue

@@ -687,9 +687,10 @@ async function load() {
     updateConcSelect();
     // 首次 load 之前 DOM 还没回填过设置，这里补一次，否则点「保存」会把配置清空
     if (state.SETTINGS) {
-      const px = document.querySelector('#proxyInput'), cc = document.querySelector('#concInput');
+      const px = document.querySelector('#proxyInput'), cc = document.querySelector('#concInput'), ff = document.querySelector('#ffmpegInput');
       if (px && document.activeElement !== px) px.value = state.SETTINGS.proxy || '';
       if (cc && document.activeElement !== cc) cc.value = String(state.SETTINGS.concurrent || 3);
+      if (ff && document.activeElement !== ff) ff.value = state.SETTINGS.ffmpegPath || '';
     }
     renderJob(s.job || {}, s.download);
     // 行或下载活跃集变了就重绘：避免进度推送时无意义重建 DOM，又保证按钮/蓝点即时更新
@@ -835,9 +836,10 @@ async function startDownloadRequest(limit) {
 async function saveNet() {
   const proxy = $('#proxyInput').value.trim();
   const concurrent = parseInt($('#concInput').value) || 3;
+  const ffmpegPath = ($('#ffmpegInput')?.value || '').trim();
   try {
-    const r = await api('/api/config', { proxy, concurrent });
-    toast(r.ok ? `已保存：代理 ${proxy || '跟随系统'}，并发 ${concurrent}` : '失败：' + r.error, 3500);
+    const r = await api('/api/config', { proxy, concurrent, ffmpegPath });
+    toast(r.ok ? `已保存：代理 ${proxy || '跟随系统'}，并发 ${concurrent}，FFmpeg ${ffmpegPath || '自动'}` : '失败：' + r.error, 3500);
   } catch (e) { toast('请求失败'); }
 }
 
@@ -1122,6 +1124,7 @@ function initControls() {
   if (state.SETTINGS) {
     $('#proxyInput').value = state.SETTINGS.proxy || '';
     $('#concInput').value = String(state.SETTINGS.concurrent || 3);
+    if ($('#ffmpegInput')) $('#ffmpegInput').value = state.SETTINGS.ffmpegPath || '';
   }
   $('#pageCount').addEventListener('change', e => {
     const raw = parseInt(e.target.value);

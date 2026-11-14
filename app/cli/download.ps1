@@ -15,6 +15,7 @@ param(
     [Parameter(Mandatory = $true)][string]$QueueFile,
     [Parameter(Mandatory = $true)][string]$Dir,
     [string]$Proxy = '',
+    [string]$Ffmpeg = '',
     [int]$Concurrent = 3,
     [Parameter(Mandatory = $true)][string]$ProgressFile,
     [string]$CancelFile = '',
@@ -75,6 +76,8 @@ if (-not $queue.Count) { Write-Error '队列为空'; exit 2 }
 if (-not (Test-Path $Dir)) { New-Item -ItemType Directory -Path $Dir -Force | Out-Null }
 
 $proxyArg = if ($NoProxy) { '' } else { Get-ProxyArg -p $Proxy }
+# ffmpeg 走环境变量代理（curl 用 -x）
+if ($Proxy) { $env:http_proxy = $Proxy; $env:https_proxy = $Proxy }
 
 # ---------------- 状态表 ----------------
 $states = @{}   # token -> @{ state; bytes; expected; error }
@@ -171,7 +174,22 @@ function Build-Args($item, $outFile) {
 }
 
 function Start-Curl($item, $part, $log) {
-    if ($item.mode -eq 'hls') { throw 'HLS（m3u8）需要 ffmpeg 支持，当前版本暂未内置 HLS 下载' }
+    if ($item.mode -eq 'hls') {
+        if (-not $Ffmpeg -or -not (Test-Path -LiteralPath $Ffmpeg -PathType Leaf)) {
+            throw 'HLS 下载需要 ffmpeg：请在「设置 → FFmpeg 路径」填写 ffmpeg.exe，或加入 PATH'
+        }
+        $headers = @()
+        if ($item.headers) {
+            foreach ($p in @($item.headers.PSObject.Properties)) { $headers += "$($p.Name): $($p.Value)" }
+        }
+        $a = @('-y', '-nostdin', '-loglevel', 'error')
+        if ($headers.Count -gt 0) {
+            $a += @('-headers', (Quote-Arg (($headers -join "`r`n") + "`r`n")))
+        }
+        $a += @('-i', (Quote-Arg $item.url), '-c', 'copy', '-bsf:a', 'aac_adtstoasc', '-f', 'mp4', (Quote-Arg $part))
+        return Start-Process -FilePath $Ffmpeg -ArgumentList $a -NoNewWindow -PassThru `
+            -RedirectStandardError $log -RedirectStandardOutput ($log + '.out') -ErrorAction Stop
+    }
     $spec = Build-Args -item $item -outFile $part
     return Start-Process -FilePath $spec.exe -ArgumentList $spec.args -NoNewWindow -PassThru `
         -RedirectStandardError $log -RedirectStandardOutput ($log + '.out') -ErrorAction Stop
@@ -378,7 +396,7 @@ try {
                 $proc = Start-Curl -item $item -part $part -log $log
                 $states[$tk].state = 'downloading'
                 $jobs[$tk] = @{
-                    proc = $proc; part = $part; final = $final; log = $log; expected = $expected
+                    proc = $proc; part = $part; final = $final; log = $log; expected = $expected; hls = ($item.mode -eq 'hls')
                     lastBytes = 0; lastTime = Get-Date; speed = 0; retries = 0
                 }
             } catch {
@@ -404,7 +422,7 @@ try {
 
             if ($j.proc.HasExited) {
                 # 成功判定：退出码 0 或 大小正好等于远端 Content-Length
-                $complete = ($j.proc.ExitCode -eq 0) -or ($j.expected -gt 0 -and $size -eq $j.expected)
+                $complete = ($j.proc.ExitCode -eq 0) -or ($j.expected -gt 0 -and $size -eq $j.expected) -or ($j.hls -and $j.proc.HasExited -and $size -gt 0)
                 if ($complete -and $size -gt 0) {
                     Complete-Item $tk
                 } else {

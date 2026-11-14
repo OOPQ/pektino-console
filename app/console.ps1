@@ -910,7 +910,7 @@ try {
             $reqStart = Get-Date
             $reqPath = ''
             try {
-                $client.ReceiveTimeout = 10000
+                $client.ReceiveTimeout = 1500
                 # SSE / 慢客户端写不进去时别把单线程主循环永久卡住
                 try { $client.Client.SendTimeout = 8000 } catch { }
                 $stream = $client.GetStream()

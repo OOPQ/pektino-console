@@ -15,9 +15,13 @@ function Send-Bytes {
     foreach ($k in $h.Keys) { $head += "$k`: $($h[$k])`r`n" }
     $head += "`r`n"
     $hb = [Text.Encoding]::ASCII.GetBytes($head)
-    $Stream.Write($hb, 0, $hb.Length)
-    if ($Bytes.Length -gt 0) { $Stream.Write($Bytes, 0, $Bytes.Length) }
-    $Stream.Flush()
+    try {
+        $Stream.Write($hb, 0, $hb.Length)
+        if ($Bytes.Length -gt 0) { $Stream.Write($Bytes, 0, $Bytes.Length) }
+        $Stream.Flush()
+    } catch {
+        # 浏览器提前断开（刷新/关标签/超时）时不要冒泡到主循环
+    }
 }
 
 function Send-Json {

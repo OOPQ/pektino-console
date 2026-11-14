@@ -711,6 +711,14 @@ async function doScrape() {
   const rank = $('#rank').value;
   const limit = parseInt($('#limit').value) || 50;
   const url = ($('#scrapeUrl')?.value || '').trim();
+  // 点击后立刻显示进度条，避免单条 URL/秒级任务来不及看到
+  const prog = $('#prog');
+  if (prog) {
+    prog.classList.add('on');
+    $('#progLabel').textContent = '抓取中 · 启动';
+    $('#progBar').style.width = '0%';
+    $('#progStat').textContent = '准备';
+  }
   try {
     state.SCRAPE_BASE = new Set(state.ROWS.map(r => r.token));
     state.ADDED = null; state.SHOW_ADDED = false; paintAddedChip(); render();
@@ -721,17 +729,20 @@ async function doScrape() {
       else if (url.includes('pektino.com')) source = 'pektino';
       else source = 'web';
     }
-    const hd = $('#scrapeHd') ? $('#scrapeHd').checked : true;
+    const hd = false;   // 高清需要登录/VIP，暂不开放
     const payload = url
       ? { source, url, hd, incremental: false }
       : { source, rank, limit, hd, incremental: $('#chkInc').checked };
     const r = await api('/api/scrape', payload);
-    if (!r.ok) return toast('失败：' + r.error, 5000);
+    if (!r.ok) {
+      if (prog) prog.classList.remove('on');
+      return toast('失败：' + r.error, 5000);
+    }
     toast(url ? '已开始：从 URL 抓取' : (r.incremental
       ? `已开始：抓 ${limit} 条（增量，跳过 ${r.skipped} 条）`
       : `已开始：抓 ${limit} 条`));
     load();
-  } catch (e) { toast('请求失败：' + e.message, 5000); }
+  } catch (e) { if (prog) prog.classList.remove('on'); toast('请求失败：' + e.message, 5000); }
 }
 
 async function doImport() {

@@ -160,6 +160,7 @@ function Invoke-Scan {
         if ($key -and $idx.Files.ContainsKey($key)) {
             $f = $idx.Files[$key]
             $r.file_name = $f.name
+            $r.file_path = $f.file
             $r.file_size = $f.size
             $r.file_date = $f.date
             $found++
@@ -170,7 +171,7 @@ function Invoke-Scan {
                 $changed++
             }
         } else {
-            if ($r.file_name) { $r.file_name = ''; $r.file_size = ''; $r.file_date = ''; $changed++ }
+            if ($r.file_name) { $r.file_name = ''; $r.file_path = ''; $r.file_size = ''; $r.file_date = ''; $changed++ }
             if (-not $KeepStatus -and $r.status -eq 'done' -and ($r.note -eq 'auto:file' -or $r.note -eq 'scan:init')) {
                 $r.status = 'new'
                 $r.note = ''
@@ -493,7 +494,8 @@ function Invoke-DeleteFiles {
         if (-not $file -or -not (Test-Path -LiteralPath $file -PathType Leaf)) {
             # 文件不在：如果台账也没记录过文件，就当作"无文件可删"，可以清状态；
             # 记录过文件但找不到，先不动，避免目录不可达时误清
-            if (-not $r.file_name) { $missingTokens += $r.token }
+            if ($Purge) { $missingTokens += $r.token }
+            elseif (-not $r.file_name) { $missingTokens += $r.token }
             else { $failed += "$($r.token): 台账记录有文件但磁盘上找不到（可能目录不可达），已跳过" }
             continue
         }
@@ -539,7 +541,7 @@ function Invoke-DeleteFiles {
         $changed = 0
         foreach ($r in $rows) {
             if ($okTokens -notcontains $r.token) { continue }
-            if ($r.file_name) { $r.file_name = ''; $r.file_size = ''; $r.file_date = ''; $changed++ }
+            if ($r.file_name) { $r.file_name = ''; $r.file_path = ''; $r.file_size = ''; $r.file_date = ''; $changed++ }
             if ($r.status -eq 'done') { $r.status = 'new'; $changed++ }
             $r.note = 'file:deleted'
         }
@@ -571,6 +573,9 @@ function Resolve-RowFile {
     param($Row)
     if (-not $Row) { return $null }
     # 优先按台账里记录的文件名直连（索引可能是旧的，且 [ ] 在 Test-Path 里会被当通配符）
+    if ($Row.file_path) {
+        try { if (Test-Path -LiteralPath $Row.file_path -PathType Leaf) { return $Row.file_path } } catch { }
+    }
     if ($Row.file_name) {
         try {
             $p = Join-Path $Config.contentDir $Row.file_name

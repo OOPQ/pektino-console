@@ -266,7 +266,7 @@ function Import-ProjectFiles {
             source = $srcKey; source_id = $sp.id; title = $tk
             cover_url = ''; download_kind = 'http'; download_headers = ''; extra = ''
             first_seen = $now; last_seen = $now; sent_at = ''; note = 'scan:init'
-            file_name = $f.Name; file_size = $f.Length; file_date = $f.LastWriteTime.ToString('yyyy-MM-dd HH:mm:ss')
+            file_name = $f.Name; file_path = $f.FullName; file_size = $f.Length; file_date = $f.LastWriteTime.ToString('yyyy-MM-dd HH:mm:ss')
             play_count = ''; last_play = ''; rating = ''
         }
         [void]$list.Add($row)

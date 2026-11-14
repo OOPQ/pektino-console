@@ -187,7 +187,8 @@ function Start-Curl($item, $part, $log) {
         }
         # 先探一下 m3u8：代理坏/5XX/超时直接给出可读原因，不让 ffmpeg 只报一句 5XX
         if ($item.url -match '^https?://') {
-            $baseProbe = @('-sS', '-L', '-o', 'NUL', '-w', '%{http_code}|%{content_type}|%{size_download}',
+            $probeBody = $log + '.m3u8'
+            $baseProbe = @('-sS', '-L', '-o', $probeBody, '-w', '%{http_code}|%{content_type}|%{size_download}',
                 '--max-time', '15', '-A', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/157.0.0.0')
             foreach ($h in $headers) { $baseProbe += @('-H', $h) }
 
@@ -223,6 +224,11 @@ function Start-Curl($item, $part, $log) {
                 Remove-Item Env:http_proxy, Env:https_proxy -ErrorAction SilentlyContinue
             } else {
                 throw "HLS 源不可用（$diagText）"
+            }
+            $probeText = ''
+            try { $probeText = Get-Content -LiteralPath $probeBody -Raw -Encoding UTF8 } catch { }
+            if ($probeText -match '__vnotice') {
+                throw '源站返回的是登录/VIP 提示片（__vnotice），不是正片；登录后再试'
             }
         }
         $a = @('-y', '-nostdin', '-loglevel', 'error')

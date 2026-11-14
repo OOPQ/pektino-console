@@ -190,25 +190,13 @@ function Get-QiseCoverUrl {
 
 function Resolve-QiseDownload {
     param($Context, $Row)
-    $url = [string]$Row.url
-    # 未登录/VIP 时 m3u8 只有一段 6 秒的提示片（__vnotice），不要当正片下载
-    if ($url -match '^https?://') {
-        try {
-            $client = Get-QiseHttpClient -Context $Context -TimeoutSec 15
-            try { $pl = Get-QiseHtml -Client $client -Url $url } finally { try { $client.Dispose() } catch { } }
-            $segs = [regex]::Matches($pl, '#EXTINF').Count
-            if ($pl -match '__vnotice' -or $segs -lt 2) {
-                return @{ url = $url; mode = 'vip'; headers = @{ Referer = "$script:QiseBase/" } }
-            }
-        } catch { }
-    }
+    # 不在主循环里联网探测：VIP 提示片交给下载器 preflight 识别
     return @{
-        url     = $url
+        url     = [string]$Row.url
         mode    = 'hls'
         headers = @{ Referer = "$script:QiseBase/" }
     }
 }
-
 function Invoke-QiseScrape {
     param($Context, $Options)
     $hd = if ($null -ne $Options.hd) { [bool]$Options.hd } else { $false }

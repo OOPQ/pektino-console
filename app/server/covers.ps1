@@ -125,7 +125,7 @@ function Repair-Covers {
       - 拿不到封面地址或图片 404 时写 <token>.missing 标记，避免反复重试
       - 修完顺带补缩略图
     #>
-    param([int]$Limit = 40, [switch]$LocalOnly, [int]$LocalMax = 3)
+    param([int]$Limit = 40, [switch]$LocalOnly, [int]$LocalMax = 60)
 
     if (-not (Test-Path $CoverDir)) { New-Item -ItemType Directory -Path $CoverDir -Force | Out-Null }
 
@@ -236,5 +236,5 @@ function Step-Covers {
     if ($missing -le 0) { return }
     if ($State.CoverRepairAt -and ((Get-Date) - [datetime]$State.CoverRepairAt).TotalMinutes -lt 10) { return }
     $State.CoverRepairAt = (Get-Date).ToString('s')
-    try { [void](Repair-Covers -Limit 15 -LocalOnly) } catch { }
+    try { [void](Repair-Covers -Limit 15 -LocalOnly -LocalMax 3) } catch { }
 }

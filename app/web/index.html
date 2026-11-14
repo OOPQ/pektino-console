@@ -339,27 +339,22 @@
   </div>
 </div>
 
-<!-- ===== 合集 ===== -->
-<div class="drawer" id="colDrawer">
-  <div class="sheet">
-    <h3>合集 <span class="sub" id="colHead"></span></h3>
-    <div style="display:flex;gap:6px;margin-bottom:12px">
-      <input id="colNewName" placeholder="新合集名称" style="flex:1" maxlength="60">
-      <button id="colCreate">新建</button>
-      <button class="ghost" id="colClose">关闭</button>
-    </div>
-    <div class="col-list" id="colList"></div>
-  </div>
-</div>
-
-<!-- ===== 合集浏览（卡片墙） ===== -->
+<!-- ===== 合集（弹窗：浏览 + 维护） ===== -->
 <div class="lightbox" id="colBrowser">
   <div class="colb-box">
     <div class="colb-head">
       <h3>合集</h3>
       <div class="colb-tabs" id="colbTabs"></div>
       <span class="spacer"></span>
-      <input id="colbSearch" placeholder="过滤 token / 时长" style="width:180px">
+      <button class="ghost" id="colbClose">关闭</button>
+    </div>
+    <div class="colb-tools">
+      <input id="colbNew" placeholder="新合集名称" maxlength="60" style="width:130px">
+      <button id="colbCreate">新建</button>
+      <button class="ghost" id="colbRename" title="重命名当前合集">重命名</button>
+      <button class="ghost danger" id="colbDelete" title="删除当前合集（不删条目）">删除</button>
+      <span class="spacer"></span>
+      <input id="colbSearch" placeholder="过滤 token / 时长" style="width:170px">
       <select id="colbStatus" style="padding:3px 6px">
         <option value="all">全部状态</option>
         <option value="new">待下载</option>
@@ -367,7 +362,6 @@
         <option value="failed">下载失败</option>
       </select>
       <button class="ghost" id="colbApply" title="关闭并在台账里只看这个合集">在台账中查看</button>
-      <button class="ghost" id="colbClose">关闭</button>
     </div>
     <div class="colb-body" id="colbBody"></div>
   </div>

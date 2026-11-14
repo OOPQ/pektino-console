@@ -1,4 +1,4 @@
-/* collections.js — 合集：维护 / 浏览（卡片墙）/ 加入 / 筛选 */
+/* collections.js — 合集：弹窗内浏览（卡片墙）+ 维护 */
 import { $, state, api, toast } from './core.js';
 import { render, cardHtml } from './table.js';
 import { onRowClick } from './rows.js';
@@ -16,7 +16,6 @@ export async function loadCollections() {
     if (!r || !r.ok) return;
     state.COLLECTIONS = r.items || [];
     paintCount();
-    renderColList();
     renderTabs();
     paintColFilterChip();
   } catch { }
@@ -33,41 +32,56 @@ function safe(s) {
   return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
-/* ---------- 维护抽屉 ---------- */
-export function openCollectionsDrawer() {
-  $('#colNewName').value = '';
-  $('#colDrawer').classList.add('on');
-  loadCollections();
-}
-
-function renderColList() {
-  const el = $('#colList');
-  if (!el) return;
+/* ---------- 弹窗 ---------- */
+export async function openCollections() {
+  $('#colbSearch').value = '';
+  $('#colbStatus').value = 'all';
+  browserQuery = '';
+  browserStatus = 'all';
+  $('#colBrowser').classList.add('on');
+  await loadCollections();
   const cols = state.COLLECTIONS || [];
   if (!cols.length) {
-    el.innerHTML = '<div class="bin-empty">还没有合集<br><span class="sub">在上面新建，或右键条目「加入合集」</span></div>';
+    browserCol = null;
+    browserRows = [];
+    renderBrowser();
     return;
   }
-  el.innerHTML = cols.map(c => `<div class="col-row" data-col-row="${c.id}">
-      <span class="name" data-col-open="${c.id}" title="打开卡片墙">${safe(c.name)}</span>
-      <span class="cnt">${c.count} 条</span>
-      <button class="ghost" data-col-rename="${c.id}" title="重命名">重命名</button>
-      <button class="ghost danger" data-col-del="${c.id}" title="删除合集（不删条目）">删除</button>
-    </div>`).join('');
+  const keep = browserCol && cols.find(c => c.id === browserCol.id);
+  await selectCollection((keep || cols[0]).id);
 }
 
-/* ---------- 卡片墙浏览 ---------- */
+function closeBrowser() {
+  $('#colBrowser').classList.remove('on');
+  browserCol = null;
+  browserRows = [];
+}
+
 function renderTabs() {
   const el = $('#colbTabs');
   if (!el) return;
   const cols = state.COLLECTIONS || [];
   el.innerHTML = cols.map(c => `<button class="colb-tab ${browserCol && browserCol.id === c.id ? 'on' : ''}" data-colb-tab="${c.id}">${safe(c.name)} <span class="sub">${c.count}</span></button>`).join('');
+  const has = !!browserCol;
+  if ($('#colbRename')) $('#colbRename').disabled = !has;
+  if ($('#colbDelete')) $('#colbDelete').disabled = !has;
 }
 
 async function fetchCollectionRows(id) {
   const r = await api(`/api/collections/items?id=${id}`);
   const tokens = (r && r.tokens) || [];
   return tokens.map(tk => state.ROWS.find(x => x.token === tk)).filter(Boolean);
+}
+
+async function selectCollection(id) {
+  const col = (state.COLLECTIONS || []).find(c => c.id === id);
+  if (!col) return;
+  browserCol = col;
+  renderTabs();
+  browserRows = [];
+  renderBrowser();
+  browserRows = await fetchCollectionRows(id);
+  renderBrowser();
 }
 
 function activeDownloadSet() {
@@ -92,11 +106,11 @@ function renderBrowser() {
   renderTabs();
   const el = $('#colbBody');
   if (!el) return;
-  const rows = filteredBrowserRows();
   if (!browserCol) {
-    el.innerHTML = '<div class="bin-empty">选择一个合集</div>';
+    el.innerHTML = '<div class="bin-empty">还没有合集<br><span class="sub">在上方输入名称，点「新建」</span></div>';
     return;
   }
+  const rows = filteredBrowserRows();
   if (!rows.length) {
     el.innerHTML = `<div class="bin-empty">${browserRows.length ? '没有匹配的条目' : '这个合集还是空的'}<br><span class="sub">在台账里右键条目 →「加入合集」</span></div>`;
     return;
@@ -109,26 +123,44 @@ function renderBrowser() {
     </div>`).join('')}</div>`;
 }
 
-export async function openCollectionBrowser(id) {
-  const col = (state.COLLECTIONS || []).find(c => c.id === id);
-  if (!col) return;
-  browserCol = col;
-  browserQuery = '';
-  browserStatus = 'all';
-  $('#colbSearch').value = '';
-  $('#colbStatus').value = 'all';
-  $('#colDrawer').classList.remove('on');
-  $('#colBrowser').classList.add('on');
-  browserRows = [];
-  renderBrowser();
-  browserRows = await fetchCollectionRows(id);
-  renderBrowser();
+/* ---------- 维护 ---------- */
+async function createCollection() {
+  const name = $('#colbNew').value.trim();
+  if (!name) return toast('先输入合集名称', 2500);
+  const r = await api('/api/collections', { action: 'create', name });
+  if (!r || !r.ok) return toast((r && r.error) || '新建失败', 3500);
+  $('#colbNew').value = '';
+  await loadCollections();
+  await selectCollection(r.id);
+  toast(`已新建合集「${name}」`, 2500);
 }
 
-function closeBrowser() {
-  $('#colBrowser').classList.remove('on');
+async function renameCurrent() {
+  if (!browserCol) return;
+  const name = prompt('新的合集名称', browserCol.name);
+  if (!name || name.trim() === browserCol.name) return;
+  const r = await api('/api/collections', { action: 'rename', id: browserCol.id, name: name.trim() });
+  if (!r || !r.ok) return toast((r && r.error) || '重命名失败', 3500);
+  browserCol.name = name.trim();
+  await loadCollections();
+  renderTabs();
+  toast('已重命名', 2000);
+}
+
+async function deleteCurrent() {
+  if (!browserCol) return;
+  const col = browserCol;
+  if (!confirm(`删除合集「${col.name}」？只会删合集，不会删条目。`)) return;
+  const r = await api('/api/collections', { action: 'delete', id: col.id });
+  if (!r || !r.ok) return toast((r && r.error) || '删除失败', 3500);
+  if (state.COL_FILTER && state.COL_FILTER.id === col.id) clearColFilter();
   browserCol = null;
   browserRows = [];
+  await loadCollections();
+  const cols = state.COLLECTIONS || [];
+  if (cols.length) await selectCollection(cols[0].id);
+  else renderBrowser();
+  toast('合集已删除', 2000);
 }
 
 /* ---------- 筛选 ---------- */
@@ -188,7 +220,7 @@ export async function createCollectionAndAdd(name, tokens) {
   } catch { toast('新建失败', 3500); }
 }
 
-/* ---------- 选择弹窗 ---------- */
+/* ---------- 选择弹窗（批量 / 右键加入） ---------- */
 export function openCollectionPicker(tokens) {
   pickTokens = (tokens || []).filter(Boolean);
   if (!pickTokens.length) { toast('先选中条目'); return; }
@@ -221,52 +253,7 @@ function closePick() {
 
 /* ---------- 初始化 ---------- */
 export function initCollections() {
-  $('#btnCollections').onclick = openCollectionsDrawer;
-  $('#colClose').onclick = () => $('#colDrawer').classList.remove('on');
-  $('#colDrawer').onclick = e => { if (e.target.id === 'colDrawer') $('#colDrawer').classList.remove('on'); };
-  $('#colCreate').onclick = async () => {
-    const name = $('#colNewName').value.trim();
-    if (!name) return toast('先输入合集名称', 2500);
-    const r = await api('/api/collections', { action: 'create', name });
-    if (!r || !r.ok) return toast((r && r.error) || '新建失败', 3500);
-    $('#colNewName').value = '';
-    await loadCollections();
-    toast(`已新建合集「${name}」`, 2500);
-  };
-  $('#colNewName').addEventListener('keydown', e => { if (e.key === 'Enter') $('#colCreate').click(); });
-
-  $('#colList').addEventListener('click', async e => {
-    const open = e.target.closest('[data-col-open]');
-    if (open) { openCollectionBrowser(+open.dataset.colOpen); return; }
-    const ren = e.target.closest('[data-col-rename]');
-    if (ren) {
-      const col = (state.COLLECTIONS || []).find(c => c.id === +ren.dataset.colRename);
-      if (!col) return;
-      const name = prompt('新的合集名称', col.name);
-      if (!name || name.trim() === col.name) return;
-      const r = await api('/api/collections', { action: 'rename', id: col.id, name: name.trim() });
-      if (!r || !r.ok) return toast((r && r.error) || '重命名失败', 3500);
-      await loadCollections();
-      if (browserCol && browserCol.id === col.id) { browserCol.name = name.trim(); renderBrowser(); }
-      toast('已重命名', 2000);
-      return;
-    }
-    const del = e.target.closest('[data-col-del]');
-    if (del) {
-      const col = (state.COLLECTIONS || []).find(c => c.id === +del.dataset.colDel);
-      if (!col) return;
-      if (!confirm(`删除合集「${col.name}」？只会删合集，不会删条目。`)) return;
-      const r = await api('/api/collections', { action: 'delete', id: col.id });
-      if (!r || !r.ok) return toast((r && r.error) || '删除失败', 3500);
-      if (state.COL_FILTER && state.COL_FILTER.id === col.id) clearColFilter();
-      if (browserCol && browserCol.id === col.id) closeBrowser();
-      await loadCollections();
-      toast('合集已删除', 2000);
-      return;
-    }
-  });
-
-  /* 卡片墙 */
+  $('#btnCollections').onclick = openCollections;
   $('#colbClose').onclick = closeBrowser;
   $('#colBrowser').onclick = e => { if (e.target.id === 'colBrowser') closeBrowser(); };
   $('#colbApply').onclick = () => {
@@ -279,9 +266,12 @@ export function initCollections() {
   $('#colbStatus').addEventListener('change', e => { browserStatus = e.target.value; renderBrowser(); });
   $('#colbTabs').addEventListener('click', e => {
     const b = e.target.closest('[data-colb-tab]');
-    if (!b) return;
-    openCollectionBrowser(+b.dataset.colbTab);
+    if (b) selectCollection(+b.dataset.colbTab);
   });
+  $('#colbCreate').onclick = createCollection;
+  $('#colbNew').addEventListener('keydown', e => { if (e.key === 'Enter') createCollection(); });
+  $('#colbRename').onclick = renameCurrent;
+  $('#colbDelete').onclick = deleteCurrent;
   $('#colbBody').addEventListener('click', async e => {
     const rm = e.target.closest('[data-colb-remove]');
     if (rm) {

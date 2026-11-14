@@ -549,7 +549,6 @@ export function initPanels() {
       else if ($('#lightbox').classList.contains('on')) closeLightbox();
       else if ($('#dlDrawer').classList.contains('on')) $('#dlDrawer').classList.remove('on');
       else if ($('#binDrawer').classList.contains('on')) $('#binDrawer').classList.remove('on');
-      else if ($('#colDrawer').classList.contains('on')) $('#colDrawer').classList.remove('on');
       else if ($('#colBrowser').classList.contains('on')) $('#colBrowser').classList.remove('on');
       else if ($('#colPick').classList.contains('on')) $('#colPick').classList.remove('on');
       else if ($('#drawer').classList.contains('on')) $('#drawer').classList.remove('on');

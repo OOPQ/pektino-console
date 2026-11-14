@@ -706,28 +706,19 @@ async function load() {
 }
 
 /* ================= 工具条 ================= */
-/* 抓取前 N 页：页码固定从 1 开始 */
-const MAX_PAGES = 20;
-function pageList() {
-  const raw = parseInt($('#pageCount').value);
-  const n = isNaN(raw) ? 3 : Math.max(1, Math.min(MAX_PAGES, raw));
-  if (String(n) !== $('#pageCount').value) $('#pageCount').value = String(n);
-  return Array.from({ length: n }, (_, i) => i + 1);
-}
 
 async function doScrape() {
   const rank = $('#rank').value;
-  const pages = pageList();
-  const limit = parseInt($('#limit').value) || 0;
+  const limit = parseInt($('#limit').value) || 50;
   try {
     // 记录抓取前的 token，任务结束后用来算「本次新增」
     state.SCRAPE_BASE = new Set(state.ROWS.map(r => r.token));
     state.ADDED = null; state.SHOW_ADDED = false; paintAddedChip(); render();
-    const r = await api('/api/scrape', { source: $('#scrapeSource').value || 'pektino', rank, pages, limit, incremental: $('#chkInc').checked });
+    const r = await api('/api/scrape', { source: $('#scrapeSource').value || 'pektino', rank, limit, incremental: $('#chkInc').checked });
     if (!r.ok) return toast('失败：' + r.error, 5000);
     toast(r.incremental
-      ? `已开始：前 ${pages.length} 页（增量，跳过 ${r.skipped} 条）`
-      : `已开始：前 ${pages.length} 页`);
+      ? `已开始：抓 ${limit} 条（增量，跳过 ${r.skipped} 条）`
+      : `已开始：抓 ${limit} 条`);
     load();
   } catch (e) { toast('请求失败：' + e.message, 5000); }
 }
@@ -905,12 +896,10 @@ function paintScrapeOptions() {
     const field = rankSel.closest('.field');
     if (field) field.style.display = ranks.length ? '' : 'none';
   }
-  const sizeEl = $('#pageSizeHint');
-  if (sizeEl) sizeEl.textContent = String((src && src.pageSize) || 50);
-  const pc = $('#pageCount');
-  if (pc) {
-    const field = pc.closest('.field');
-    if (field) field.style.display = (src && src.supportsPages === false) ? 'none' : '';
+  const sizeEl = $('#scrapeHint');
+  if (sizeEl) {
+    const ps = (src && src.pageSize) || 50;
+    sizeEl.textContent = `每页约 ${ps} 条；按数量自动翻页，超出会截断`;
   }
   const inc = $('#chkInc');
   if (inc) {
@@ -1155,18 +1144,11 @@ function initBulk() {
 /* ================= 初始化 ================= */
 function initControls() {
   $('#chkCovers').checked = state.SHOW_COVERS;
-  $('#pageCount').value = String(PREFS.pageCount || 3);
   if (state.SETTINGS) {
     $('#proxyInput').value = state.SETTINGS.proxy || '';
     $('#concInput').value = String(state.SETTINGS.concurrent || 3);
     if ($('#ffmpegInput')) $('#ffmpegInput').value = state.SETTINGS.ffmpegPath || '';
   }
-  $('#pageCount').addEventListener('change', e => {
-    const raw = parseInt(e.target.value);
-    PREFS.pageCount = isNaN(raw) ? 3 : Math.max(1, Math.min(MAX_PAGES, raw));
-    savePrefs();
-    e.target.value = String(PREFS.pageCount);
-  });
   document.body.classList.toggle('compact', !!PREFS.compact);
   $('#chkCompact').checked = !!PREFS.compact;
   $('#q').value = state.FILTER.q;

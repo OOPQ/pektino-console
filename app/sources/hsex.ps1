@@ -10,6 +10,7 @@
 #>
 
 $script:HsexBase = 'https://hsex.icu'
+$script:HsexRankPath = @{ latest = 'list'; weekly = 'top7_list'; monthly = 'top_list'; min5 = '5min_list'; long = 'long_list' }
 
 function Get-HsexHttpClient {
     param($Context, [int]$TimeoutSec = 30)
@@ -145,6 +146,8 @@ function Resolve-HsexDownload {
 
 function Invoke-HsexScrape {
     param($Context, $Options)
+    $rank = if ($Options.rank) { [string]$Options.rank } else { 'latest' }
+    if (-not $script:HsexRankPath.ContainsKey($rank)) { throw "不支持的榜单: $rank" }
     $pages = @($Options.pages | ForEach-Object { [int]$_ } | Sort-Object -Unique)
     if (-not $pages.Count) { $pages = @(1) }
     $threads = if ($Options.threads) { [int]$Options.threads } else { 8 }
@@ -163,7 +166,7 @@ function Invoke-HsexScrape {
         foreach ($p in $pages) {
             $pi++
             if ($p -lt 1) { continue }
-            $url = if ($p -eq 1) { "$script:HsexBase/" } else { "$script:HsexBase/index-$p.htm" }
+            $url = "$script:HsexBase/$($script:HsexRankPath[$rank])-$p.htm"
             $html = $null
             try { $html = $client.GetStringAsync($url).GetAwaiter().GetResult() } catch { continue }
             foreach ($it in @(ConvertFrom-HsexList -Html $html -Page $p)) {

@@ -515,22 +515,15 @@ function Handle-Request {
                     Send-Json -Stream $Stream -Object @{ ok = $false; error = "源 $($srcInfo.name) 没有榜单: $rank" }
                     return
                 }
-                $pages = @(1)
-                if ($null -ne $body.pages) {
-                    $raw = @($body.pages)
-                    $pages = @()
-                    foreach ($p in $raw) {
-                        $n = 0
-                        if ([int]::TryParse([string]$p, [ref]$n) -and $n -ge 1 -and $n -le 200) { $pages += $n }
-                    }
-                    if (-not $pages.Count) {
-                        Send-Json -Stream $Stream -Object @{ ok = $false; error = '页数必须是 1-200 之间的整数' }
-                        return
-                    }
-                }
                 $limit = 0
                 if ($body.limit) { try { $limit = [int]$body.limit } catch { $limit = 0 } }
-                if ($limit -lt 0) { $limit = 0 }
+                if ($limit -lt 1) { $limit = 50 }
+                if ($limit -gt 2000) { $limit = 2000 }
+                # 只按数量抓：根据源每页条数自动换算需要翻几页
+                $pageSize = if ($srcInfo.pageSize -gt 0) { [int]$srcInfo.pageSize } else { 50 }
+                $pageCount = [Math]::Max(1, [Math]::Ceiling([double]$limit / $pageSize))
+                if ($pageCount -gt 50) { $pageCount = 50 }
+                $pages = @(1..$pageCount)
                 $threads = 8
                 if ($body.threads) { try { $threads = [Math]::Max(2, [Math]::Min(24, [int]$body.threads)) } catch { $threads = 8 } }
                 $inc = $true

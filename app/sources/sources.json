@@ -29,7 +29,11 @@
     "supportsPages": true,
     "incremental": true,
     "ranks": [
-      { "key": "latest", "label": "最新" }
+      { "key": "latest", "label": "最新" },
+      { "key": "weekly", "label": "周榜" },
+      { "key": "monthly", "label": "月榜" },
+      { "key": "min5", "label": "5分钟+" },
+      { "key": "long", "label": "10分钟+" }
     ]
   },
   {

@@ -62,6 +62,10 @@ app/cli/import.ps1            通用本地入库（按 token 找源 → 详情�
 
 新增源时只改清单和适配器，不需要再改 `console.ps1` 的榜单枚举或前端下拉。
 
+前端抓取弹窗只填「抓取数量」，后端按当前源的 `pageSize` 自动换算要翻几页并截断到目标条数。
+
+hsex 的榜单：`latest`（最新）、`weekly`（周榜）、`monthly`（月榜）、`min5`（5 分钟+）、`long`（10 分钟+），对应 `list-N.htm / top7_list-N.htm / top_list-N.htm / 5min_list-N.htm / long_list-N.htm`。
+
 ## 适配器契约
 
 在 `sources/sources.json` 注册：

@@ -151,13 +151,10 @@
       <select id="rank"></select>
     </div>
     <div class="field">
-      <label>页数（从第 1 页抓到第 N 页，每页 <span id="pageSizeHint">50</span> 条）</label>
-      <input type="number" id="pageCount" value="3" min="1" max="20" step="1">
+      <label>抓取数量（条）</label>
+      <input type="number" id="limit" value="50" min="1" max="2000" step="1">
     </div>
-    <div class="field">
-      <label>条数限制（0 = 全部）</label>
-      <input type="number" id="limit" value="0" min="0" step="1">
-    </div>
+    <div class="sub" id="scrapeHint" style="margin-bottom:10px"></div>
     <label class="chk" style="margin-bottom:14px"><input type="checkbox" id="chkInc" checked>增量（跳过最近 3 天抓过的）</label>
     <div class="modal-actions">
       <button class="primary" id="btnScrapeGo">开始抓取</button>

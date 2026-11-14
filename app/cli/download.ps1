@@ -229,7 +229,7 @@ function Start-Curl($item, $part, $log) {
         if ($headers.Count -gt 0) {
             $a += @('-headers', (Quote-Arg (($headers -join "`r`n") + "`r`n")))
         }
-        $a += @('-i', (Quote-Arg $item.url), '-c', 'copy', '-bsf:a', 'aac_adtstoasc', '-f', 'mp4', (Quote-Arg $part))
+        $a += @('-i', (Quote-Arg $item.url), '-c', 'copy', '-bsf:a', 'aac_adtstoasc', '-movflags', '+faststart', '-f', 'mp4', (Quote-Arg $part))
         return Start-Process -FilePath $Ffmpeg -ArgumentList $a -NoNewWindow -PassThru `
             -RedirectStandardError $log -RedirectStandardOutput ($log + '.out') -ErrorAction Stop
     }

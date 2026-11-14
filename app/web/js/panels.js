@@ -41,7 +41,8 @@ function fitMedia(img, box) {
   const nw = img.naturalWidth, nh = img.naturalHeight;
   const maxH = Math.min(innerHeight * 0.78, 920);
   const maxImgW = Math.min(innerWidth * 0.94 - META_W - GAP - 24, 900);
-  const scale = Math.min(maxH / nh, maxImgW / nw, 1);   // 不放大，避免糊
+  // 小封面（qise 这类 162x300）也放大到统一的预览高度；上限 2.2 倍，避免糊得离谱
+  const scale = Math.min(maxH / nh, maxImgW / nw, 2.2);
   const w = Math.max(160, Math.round(nw * scale));
   const h = Math.max(160, Math.round(nh * scale));
   img.style.width = w + 'px';

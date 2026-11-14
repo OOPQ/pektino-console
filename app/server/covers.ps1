@@ -132,8 +132,11 @@ function Repair-Covers {
     # 先处理「本地有视频、没有封面」：直接抽视频帧，不联网、也不消耗抓取配额
     $localFixed = 0
     $localTried = 0
+    # 主循环里的自动任务必须短：最多抽 3 张、最多占 3 秒，避免 60 个视频帧把服务卡住
+    $localCap = [Math]::Max(1, [Math]::Min($Limit, 3))
+    $localSw = [Diagnostics.Stopwatch]::StartNew()
     foreach ($r in @($State.Ledger)) {
-        if ($localTried -ge 60) { break }
+        if ($localTried -ge $localCap -or $localSw.Elapsed.TotalSeconds -gt 3) { break }
         $tk = [string]$r.token
         if (-not (Test-SafeTokenName $tk)) { continue }
         if (-not $r.file_name) { continue }

@@ -67,6 +67,10 @@ app/cli/import.ps1            通用本地入库（按 token 找源 → 详情�
 
 hsex 的榜单：`latest`（最新）、`weekly`（周榜）、`monthly`（月榜）、`min5`（5 分钟+）、`long`（10 分钟+），对应 `list-N.htm / top7_list-N.htm / top_list-N.htm / 5min_list-N.htm / long_list-N.htm`。
 
+qise 的榜单来自站点分类：最近更新 / 高清视频 / 最近加精 / 当前最热 / 最近得分 / 非付费 / 91原创 / 10分钟以上 / 20分钟以上 / 本月讨论 / 本月收藏 / 收藏最多 / 本月最热 / 上月最热。
+
+抓取弹窗支持填「自定义 URL」：qise 支持列表页和 `/video/viewhd/<id>` 详情页；hsex/pektino 支持详情页。填了 URL 会忽略榜单/数量，用于测试单个页面。
+
 ## 适配器契约
 
 在 `sources/sources.json` 注册：

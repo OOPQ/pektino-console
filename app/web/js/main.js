@@ -710,15 +710,24 @@ async function load() {
 async function doScrape() {
   const rank = $('#rank').value;
   const limit = parseInt($('#limit').value) || 50;
+  const url = ($('#scrapeUrl')?.value || '').trim();
   try {
-    // 记录抓取前的 token，任务结束后用来算「本次新增」
     state.SCRAPE_BASE = new Set(state.ROWS.map(r => r.token));
     state.ADDED = null; state.SHOW_ADDED = false; paintAddedChip(); render();
-    const r = await api('/api/scrape', { source: $('#scrapeSource').value || 'pektino', rank, limit, incremental: $('#chkInc').checked });
+    let source = $('#scrapeSource').value || 'pektino';
+    if (url) {
+      if (url.includes('qise100.com')) source = 'qise';
+      else if (url.includes('hsex.icu')) source = 'hsex';
+      else if (url.includes('pektino.com')) source = 'pektino';
+    }
+    const payload = url
+      ? { source, url, incremental: false }
+      : { source, rank, limit, incremental: $('#chkInc').checked };
+    const r = await api('/api/scrape', payload);
     if (!r.ok) return toast('失败：' + r.error, 5000);
-    toast(r.incremental
+    toast(url ? '已开始：从 URL 抓取' : (r.incremental
       ? `已开始：抓 ${limit} 条（增量，跳过 ${r.skipped} 条）`
-      : `已开始：抓 ${limit} 条`);
+      : `已开始：抓 ${limit} 条`));
     load();
   } catch (e) { toast('请求失败：' + e.message, 5000); }
 }

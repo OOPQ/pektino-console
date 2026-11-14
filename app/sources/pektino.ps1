@@ -140,6 +140,15 @@ function Resolve-PektinoDownload {
 
 function Invoke-PektinoScrape {
     param($Context, $Options)
+    if ($Options.url) {
+        $m = [regex]::Match([string]$Options.url, '/movie/([A-Za-z0-9_\-]+)')
+        if (-not $m.Success) { throw 'pektino 自定义 URL 目前只支持 /movie/<token> 详情页' }
+        $d = Get-PektinoDetail -Context $Context -Id $m.Groups[1].Value
+        if (-not $d -or $d.error) { throw '详情解析失败' }
+        $d | Add-Member -NotePropertyName page -NotePropertyValue 1 -Force
+        $d | Add-Member -NotePropertyName rank -NotePropertyValue 1 -Force
+        return @($d)
+    }
 
     $rank = if ($Options.rank) { [string]$Options.rank } else { 'daily' }
     $pages = @($Options.pages | ForEach-Object { [int]$_ } | Sort-Object -Unique)

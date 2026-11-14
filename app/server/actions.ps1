@@ -239,7 +239,8 @@ function Start-Scrape {
         [int]$Limit = 0,
         [int]$Threads = 8,
         [bool]$Incremental = $true,
-        [int]$FreshDays = 3
+        [int]$FreshDays = 3,
+        [string]$Url = ''
     )
 
     if ($State.Job) { return @{ ok = $false; error = '已有抓取任务在跑，等它结束' } }
@@ -271,17 +272,19 @@ function Start-Scrape {
         $skipped = $fresh.Count
     }
 
+    if ($Url) { $Incremental = $false }
     $ps = $ScrapeScript; $out = $TmpCsv; $prog = $ProgressFile; $cov = $CoverDir
     $thm = $ThumbDir; $kn = $KnownFile
     $proxy = if ($Config -and $Config.proxy) { [string]$Config.proxy } else { '' }
     $job = Start-Job -ScriptBlock {
-        param($ps, $source, $rank, $pages, $limit, $out, $prog, $cov, $thm, $kn, $threads, $proxy)
+        param($ps, $source, $rank, $pages, $limit, $out, $prog, $cov, $thm, $kn, $threads, $proxy, $url)
         $p = @{ Source = $source; Rank = $rank; Page = $pages; Out = $out; ProgressFile = $prog; CoverDir = $cov; ThumbDir = $thm; Threads = $threads }
         if ($limit -gt 0) { $p['Limit'] = $limit }
         if ($proxy) { $p['Proxy'] = $proxy }
         if ($kn -and (Test-Path -LiteralPath $kn)) { $p['KnownFile'] = $kn }
+        if ($url) { $p['Url'] = $url }
         & $ps @p *>&1 | Out-File -LiteralPath ($out + ".log") -Encoding UTF8 -Append
-    } -ArgumentList $ps, $src.key, $Rank, $Pages, $Limit, $out, $prog, $cov, $thm, $kn, $Threads, $proxy
+    } -ArgumentList $ps, $src.key, $Rank, $Pages, $Limit, $out, $prog, $cov, $thm, $kn, $Threads, $proxy, $Url
 
     $State.Job = [pscustomobject]@{
         handle  = $job

@@ -48,8 +48,20 @@
     "supportsPages": true,
     "incremental": true,
     "ranks": [
-      { "key": "latest", "label": "最新" },
-      { "key": "hd", "label": "高清" }
+      { "key": "latest", "label": "最近更新" },
+      { "key": "hd", "label": "高清视频" },
+      { "key": "recent-favorite", "label": "最近加精" },
+      { "key": "hot-list", "label": "当前最热" },
+      { "key": "recent-rating", "label": "最近得分" },
+      { "key": "nonpaid", "label": "非付费" },
+      { "key": "ori", "label": "91原创" },
+      { "key": "long-list", "label": "10分钟以上" },
+      { "key": "longer-list", "label": "20分钟以上" },
+      { "key": "month-discuss", "label": "本月讨论" },
+      { "key": "top-favorite", "label": "本月收藏" },
+      { "key": "most-favorite", "label": "收藏最多" },
+      { "key": "top-list", "label": "本月最热" },
+      { "key": "top-last", "label": "上月最热" }
     ]
   },
   {

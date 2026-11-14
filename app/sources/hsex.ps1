@@ -147,6 +147,15 @@ function Resolve-HsexDownload {
 
 function Invoke-HsexScrape {
     param($Context, $Options)
+    if ($Options.url) {
+        $m = [regex]::Match([string]$Options.url, 'video-(\d+)\.htm')
+        if (-not $m.Success) { throw 'hsex 自定义 URL 目前只支持详情页 video-<id>.htm' }
+        $d = Get-HsexDetail -Context $Context -Id $m.Groups[1].Value
+        if (-not $d -or $d.error) { throw '详情解析失败' }
+        $d | Add-Member -NotePropertyName page -NotePropertyValue 1 -Force
+        $d | Add-Member -NotePropertyName rank -NotePropertyValue 1 -Force
+        return @($d)
+    }
     $rank = if ($Options.rank) { [string]$Options.rank } else { 'latest' }
     if (-not $script:HsexRankPath.ContainsKey($rank)) { throw "不支持的榜单: $rank" }
     $pages = @($Options.pages | ForEach-Object { [int]$_ } | Sort-Object -Unique)

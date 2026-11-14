@@ -210,6 +210,35 @@ function Resolve-QiseDownload {
 
 function Invoke-QiseScrape {
     param($Context, $Options)
+    # 直接从 URL 抓：详情页抓单条，列表页抓该页
+    if ($Options.url) {
+        $u = [string]$Options.url
+        $client = Get-QiseHttpClient -Context $Context
+        try {
+            $m = [regex]::Match($u, '/video/(?:viewhd|view|embed)/([0-9a-f]+)')
+            if ($m.Success) {
+                $d = Get-QiseDetail -Context $Context -Id $m.Groups[1].Value
+                if (-not $d -or $d.error) { throw "详情解析失败: $($d.error)" }
+                $d | Add-Member -NotePropertyName page -NotePropertyValue 1 -Force
+                $d | Add-Member -NotePropertyName rank -NotePropertyValue 1 -Force
+                return @($d)
+            }
+            $html = Get-QiseHtml -Client $client -Url $u
+            $items = @(ConvertFrom-QiseList -Html $html -Page 1)
+            if ($Options.limit -and [int]$Options.limit -gt 0) { $items = @($items | Select-Object -First ([int]$Options.limit)) }
+            $total = $items.Count; $done = 0
+            foreach ($it in $items) {
+                $viewHtml = Get-QiseHtml -Client $client -Url $it.page_url
+                $embedHtml = Get-QiseHtml -Client $client -Url "$script:QiseBase/video/embed/$($it.source_id)"
+                $d = ConvertFrom-QiseDetail -ViewHtml $viewHtml -EmbedHtml $embedHtml -Id $it.source_id
+                if ($d) { foreach ($f in @('title', 'url', 'cover_url', 'download_headers')) { if ($d.$f) { $it.$f = $d.$f } } }
+                $done++
+                Write-SourceProgress -Path ([string]$Options.progressFile) -Phase 'details' -Done $done -Total $total -Started (Get-Date)
+            }
+            return @($items | Where-Object { $_.url })
+        } finally { try { $client.Dispose() } catch { } }
+    }
+
     $rank = if ($Options.rank) { [string]$Options.rank } else { 'latest' }
     if (-not $script:QiseRanks.ContainsKey($rank)) { throw "不支持的榜单: $rank" }
     $pages = @($Options.pages | ForEach-Object { [int]$_ } | Sort-Object -Unique)

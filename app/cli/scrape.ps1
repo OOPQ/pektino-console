@@ -16,6 +16,7 @@ param(
     [string]$CoverDir = '',
     [string]$ThumbDir = '',
     [string]$KnownFile = '',
+    [string]$Url = '',
     [string]$Proxy = '',
     [int]$PageSize = 50,
     [switch]$Json
@@ -36,6 +37,7 @@ $options = @{
     pageSize   = $PageSize
     progressFile = $ProgressFile
     started    = $started
+    url        = $Url
 }
 if ($KnownFile -and (Test-Path -LiteralPath $KnownFile)) {
     $known = @()

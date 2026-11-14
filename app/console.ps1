@@ -498,7 +498,19 @@ function Handle-Request {
                 return
             }
             '/api/scrape' {
+                $url = if ($body.url) { ([string]$body.url).Trim() } else { '' }
+                if ($url -and $url -notmatch '^https?://') {
+                    Send-Json -Stream $Stream -Object @{ ok = $false; error = 'URL 必须是 http(s) 地址' }; return
+                }
                 $srcKey = if ($body.source) { [string]$body.source } else { 'pektino' }
+                if ($url) {
+                    try {
+                        $uh = ([uri]$url).Host.ToLowerInvariant()
+                        if ($uh -like '*qise100.com') { $srcKey = 'qise' }
+                        elseif ($uh -like '*hsex.icu') { $srcKey = 'hsex' }
+                        elseif ($uh -like '*pektino.com') { $srcKey = 'pektino' }
+                    } catch { }
+                }
                 $srcInfo = Get-SourceInfo $srcKey
                 if (-not $srcInfo) {
                     Send-Json -Stream $Stream -Object @{ ok = $false; error = "未知源: $srcKey" }
@@ -531,7 +543,7 @@ function Handle-Request {
                 if ($srcInfo.incremental -eq $false) { $inc = $false }
                 $fresh = 3
                 if ($body.freshDays) { try { $fresh = [Math]::Max(0, [Math]::Min(30, [int]$body.freshDays)) } catch { $fresh = 3 } }
-                Send-Json -Stream $Stream -Object (Start-Scrape -Source $srcKey -Rank $rank -Pages $pages -Limit $limit -Threads $threads -Incremental $inc -FreshDays $fresh)
+                Send-Json -Stream $Stream -Object (Start-Scrape -Source $srcKey -Rank $rank -Pages $pages -Limit $limit -Threads $threads -Incremental $inc -FreshDays $fresh -Url $url)
                 return
             }
             '/api/job/cancel' {

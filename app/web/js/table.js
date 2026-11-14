@@ -60,8 +60,9 @@ function passFilter(r) {
     if (min > 0 && (parseInt(r.seconds) || 0) < min * 60) return false;
   }
   if (state.FILTER.q) {
-    const t = state.FILTER.q.toLowerCase();
-    if (!((r.token + ' ' + r.res + ' ' + r.duration).toLowerCase().includes(t))) return false;
+    const words = state.FILTER.q.toLowerCase().trim().split(/\s+/).filter(Boolean);
+    const hay = [r.token, r.title, r.source, r.res, r.duration, r.page_url].join(' ').toLowerCase();
+    if (!words.every(w => hay.includes(w))) return false;
   }
   return true;
 }

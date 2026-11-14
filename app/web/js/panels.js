@@ -2,7 +2,7 @@
    灯箱与抽卡共用同一套布局：img + .meta 网格、同一个 fitMedia()、同一份 info 行 */
 import { $, state, api, toast, fmtMB, fmtNum, stTag, starsInner, emit, onEvent } from './core.js';
 import { render, visible } from './table.js';
-import { doPlay } from './rows.js';
+import { doPlay, toggleMulti } from './rows.js';
 import { siteUrl, copyText, setRating, setFav } from './actions.js';
 import { openCollectionPickerForToken } from './collections.js';
 
@@ -615,6 +615,7 @@ export function initPanels() {
       else if ($('#colPick').classList.contains('on')) $('#colPick').classList.remove('on');
       else if ($('#drawer').classList.contains('on')) $('#drawer').classList.remove('on');
       else if ($('#ctxmenu').classList.contains('on')) emit('close-ctx');
+      else if (state.MULTI) toggleMulti();
       else if (document.activeElement === $('#q')) emit('clear-query');
     }
   }, true);

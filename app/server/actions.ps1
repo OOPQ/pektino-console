@@ -875,6 +875,7 @@ function Start-Download {
                 source    = $(if ($dl.source) { [string]$dl.source } else { (Get-ItemSource $t) })
                 source_id = $(if ($dl.source_id) { [string]$dl.source_id } else { [string]$t.source_id })
                 section   = [string]$dl.section
+                page_url  = [string]$t.page_url
                 sd        = [bool]$dl.sd
             })
     }

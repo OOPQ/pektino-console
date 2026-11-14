@@ -311,7 +311,7 @@ function Handle-Request {
                         key = $_.key; name = $_.name; capabilities = @($_.capabilities)
                         siteUrl = $_.siteUrl; pageSize = $_.pageSize
                         supportsPages = [bool]$_.supportsPages; incremental = [bool]$_.incremental
-                        ranks = @($_.ranks | ForEach-Object { [pscustomobject]@{ key = $_.key; label = $_.label } })
+                        ranks = @($_.ranks | ForEach-Object { [pscustomobject]@{ key = $_.key; label = $_.label; group = $_.group; path = $_.path } })
                     }
                 })
             # 浏览器内播放用的媒体服务地址（前端拼成 <base>/<token>.mp4?k=<key>）

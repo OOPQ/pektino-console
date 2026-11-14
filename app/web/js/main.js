@@ -914,9 +914,20 @@ function paintScrapeOptions() {
   if (rankSel) {
     const prev = rankSel.value;
     const ranks = (src && src.ranks) || [];
-    rankSel.innerHTML = ranks.length
-      ? ranks.map(r => `<option value="${escHtml(r.key)}">${escHtml(r.label)}</option>`).join('')
-      : '<option value="default">默认</option>';
+    if (ranks.length) {
+      const groups = new Map();
+      for (const r of ranks) {
+        const g = r.group || '';
+        if (!groups.has(g)) groups.set(g, []);
+        groups.get(g).push(r);
+      }
+      rankSel.innerHTML = [...groups.entries()].map(([g, rs]) => {
+        const opts = rs.map(r => `<option value="${escHtml(r.key)}">${escHtml(r.label)}</option>`).join('');
+        return g ? `<optgroup label="${escHtml(g)}">${opts}</optgroup>` : opts;
+      }).join('');
+    } else {
+      rankSel.innerHTML = '<option value="default">默认</option>';
+    }
     if (prev && ranks.some(r => r.key === prev)) rankSel.value = prev;
     const field = rankSel.closest('.field');
     if (field) field.style.display = ranks.length ? '' : 'none';

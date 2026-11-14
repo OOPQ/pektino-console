@@ -38,6 +38,8 @@ function Get-SourceManifest {
             [void]$ranks.Add([pscustomobject]@{
                     key   = [string]$r.key
                     label = $(if ($r.label) { [string]$r.label } else { [string]$r.key })
+                    group = [string]$r.group
+                    path  = [string]$r.path
                 })
         }
         [void]$out.Add([pscustomobject]@{

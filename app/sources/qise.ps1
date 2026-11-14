@@ -76,27 +76,43 @@ function ConvertFrom-QiseList {
     $out = New-Object System.Collections.ArrayList
     $seen = @{}
     foreach ($block in [regex]::Split($Html, '<div class="video-elem">')) {
-        $m = [regex]::Match($block, 'href="/(video|vod)/viewhd/([A-Za-z0-9_-]+)"')
-        if (-not $m.Success) { continue }
-        $section = $m.Groups[1].Value
-        $id = $m.Groups[2].Value
-        if ($seen.ContainsKey($id)) { continue }
-        $seen[$id] = $true
+        $section = ''; $id = ''; $slug = ''; $pageUrl = ''
+        $m = [regex]::Match($block, 'href="(/videos/view/(\d+)/([^/"#?]+)/?)"')
+        if ($m.Success) {
+            $section = 'videos'; $id = $m.Groups[2].Value; $slug = $m.Groups[3].Value
+            $pageUrl = "$script:QiseBase/videos/view/$id/$slug/"
+        }
+        if (-not $id) {
+            $m = [regex]::Match($block, 'href="/(video|vod)/viewhd/([A-Za-z0-9_-]+)"')
+            if ($m.Success) { $section = $m.Groups[1].Value; $id = $m.Groups[2].Value; $pageUrl = "$script:QiseBase/$section/viewhd/$id" }
+        }
+        if (-not $id) {
+            $m = [regex]::Match($block, 'href="/(video|vod)/view/([A-Za-z0-9_-]+)"')
+            if ($m.Success) { $section = $m.Groups[1].Value; $id = $m.Groups[2].Value; $pageUrl = "$script:QiseBase/$section/view/$id" }
+        }
+        if (-not $id) { continue }
+        $key = if ($section -eq 'videos') { "videos:$id" } else { "${section}:$id" }
+        if ($seen.ContainsKey($key)) { continue }
+        $seen[$key] = $true
 
         $title = ''
         $mt = [regex]::Match($block, 'class="title[^"]*"[^>]*>([^<]*)</a>')
         if ($mt.Success) { $title = [System.Net.WebUtility]::HtmlDecode($mt.Groups[1].Value).Trim() }
 
         $cover = ''
-        $mc = [regex]::Match($block, '<img[^>]+src="([^"]*thumb/[^"]+)"')
-        if ($mc.Success) { $cover = $mc.Groups[1].Value; if ($cover.StartsWith('//')) { $cover = 'https:' + $cover } }
+        $mc = [regex]::Match($block, "background-image:\s*url\('([^']+)'\)")
+        if (-not $mc.Success) { $mc = [regex]::Match($block, '<img[^>]+src="([^"]*(?:thumb|screenshots)[^"]+)"') }
+        if ($mc.Success) {
+            $cover = [System.Net.WebUtility]::HtmlDecode($mc.Groups[1].Value)
+            if ($cover.StartsWith('//')) { $cover = 'https:' + $cover }
+        }
 
         $dur = ''
         $md = [regex]::Match($block, '<small class="layer">([^<]*)</small>')
         if ($md.Success) { $dur = $md.Groups[1].Value.Trim() }
 
         $views = ''
-        $mv = [regex]::Match($block, '([\d,]+)\s*次播放')
+        $mv = [regex]::Match($block, '([\d,\.]+[万千]?)\s*次播放')
         if ($mv.Success) { $views = $mv.Groups[1].Value -replace ',' }
 
         $date = ''
@@ -106,6 +122,7 @@ function ConvertFrom-QiseList {
         [void]$out.Add([pscustomobject]@{
                 source_id = $id
                 section   = $section
+                slug      = $slug
                 title     = $title
                 duration  = $dur
                 seconds   = (Get-QiseSeconds $dur)
@@ -114,9 +131,9 @@ function ConvertFrom-QiseList {
                 likes     = ''
                 uploaded  = $date
                 url       = ''
-                page_url  = "$script:QiseBase/$section/viewhd/$id"
+                page_url  = $pageUrl
                 cover_url = $cover
-                download_kind = 'hls'
+                download_kind = $(if ($section -eq 'videos') { 'http' } else { 'hls' })
                 download_headers = ''
                 extra     = "section=$section"
                 page      = $Page
@@ -124,37 +141,57 @@ function ConvertFrom-QiseList {
     }
     return @($out)
 }
-
 function ConvertFrom-QiseDetail {
-    param([string]$ViewHtml, [string]$EmbedHtml, [string]$Id, [string]$Section = 'video')
+    param([string]$ViewHtml, [string]$EmbedHtml, [string]$Id, [string]$Section = 'video', [string]$Slug = '')
     $title = ''
     $m = [regex]::Match($ViewHtml, 'property="og:title"\s+content="([^"]*)"')
     if ($m.Success) { $title = [System.Net.WebUtility]::HtmlDecode($m.Groups[1].Value).Trim() }
     if (-not $title) {
         $m = [regex]::Match($ViewHtml, '<title>(.*?)</title>')
-        if ($m.Success) { $title = ($m.Groups[1].Value -replace '\s*-\s*91.*$', '').Trim() }
+        if ($m.Success) { $title = [System.Net.WebUtility]::HtmlDecode(($m.Groups[1].Value -replace '\s*[-|].*$', '')).Trim() }
     }
     $cover = ''
-    $m = [regex]::Match($ViewHtml, 'thumb/(\d+)\.jpg')
-    if ($m.Success) { $cover = "https://4a45b142a0.ucloud165.xyz/thumb/$($m.Groups[1].Value).jpg" }
-    $m = [regex]::Match($EmbedHtml, 'data-poster="([^"]+)"')
+    $m = [regex]::Match($ViewHtml, 'data-poster="([^"]+)"')
     if ($m.Success) { $cover = $m.Groups[1].Value }
-
-    $m3u8 = ''
-    # 优先 view 页：/vod/view 是真实标清地址，/vod/viewhd 和 embed 里常是广告位
-    $m = [regex]::Match($ViewHtml, 'data-src="((?:https?:)?//[^"]+\.m3u8[^"]*)"')
-    if ($m.Success) { $m3u8 = $m.Groups[1].Value; if ($m3u8.StartsWith('//')) { $m3u8 = 'https:' + $m3u8 } }
-    if (-not $m3u8) {
-        $m = [regex]::Match($EmbedHtml, 'data-src="((?:https?:)?//[^"]+\.m3u8[^"]*)"')
-        if ($m.Success) { $m3u8 = $m.Groups[1].Value; if ($m3u8.StartsWith('//')) { $m3u8 = 'https:' + $m3u8 } }
+    if (-not $cover) {
+        $m = [regex]::Match($ViewHtml, 'property="og:image"\s+content="([^"]*)"')
+        if ($m.Success) { $cover = $m.Groups[1].Value }
     }
-    if ($m3u8) { $m3u8 = [System.Net.WebUtility]::HtmlDecode($m3u8) }
-    if ($m3u8 -match 'hlsd/js10|jiuse2\.cloud') { $m3u8 = '' }
-    if (-not $m3u8) { return $null }
+    if (-not $cover) {
+        $m = [regex]::Match($ViewHtml, '(?:thumb|screenshots)/(\d+)/([^"''\s]+)')
+        if ($m.Success) { $cover = "https://4a45b142a0.qiniuyun56.xyz/contents/videos_screenshots/$($m.Groups[1].Value)/$($m.Groups[2].Value)" }
+    }
 
+    $media = ''; $kind = 'hls'
+    if ($Section -eq 'videos') {
+        $m = [regex]::Match($ViewHtml, 'data-src="((?:https?:)?//[^"]+\.mp4[^"]*)"')
+        if ($m.Success) { $media = [System.Net.WebUtility]::HtmlDecode($m.Groups[1].Value); $kind = 'http' }
+        if (-not $media) {
+            $m = [regex]::Match($ViewHtml, 'https?://[^"''\s<>]+\.mp4[^"''\s<>]*')
+            if ($m.Success) { $media = $m.Value; $kind = 'http' }
+        }
+    } else {
+        $m = [regex]::Match($ViewHtml, 'data-src="((?:https?:)?//[^"]+\.m3u8[^"]*)"')
+        if ($m.Success) {
+            $media = [System.Net.WebUtility]::HtmlDecode($m.Groups[1].Value)
+            if ($media.StartsWith('//')) { $media = 'https:' + $media }
+        }
+        if (-not $media -and $EmbedHtml) {
+            $m = [regex]::Match($EmbedHtml, 'data-src="((?:https?:)?//[^"]+\.m3u8[^"]*)"')
+            if ($m.Success) {
+                $media = [System.Net.WebUtility]::HtmlDecode($m.Groups[1].Value)
+                if ($media.StartsWith('//')) { $media = 'https:' + $media }
+            }
+        }
+        if ($media -match 'hlsd/js10|jiuse2\.cloud') { $media = '' }
+    }
+    if (-not $media) { return $null }
+
+    $pageUrl = if ($Section -eq 'videos') { "$script:QiseBase/videos/view/$Id/$Slug/" } else { "$script:QiseBase/$Section/view/$Id" }
     return [pscustomobject]@{
         source_id = $Id
         section   = $Section
+        slug      = $Slug
         title     = $title
         duration  = ''
         seconds   = 0
@@ -162,29 +199,39 @@ function ConvertFrom-QiseDetail {
         views     = ''
         likes     = ''
         uploaded  = ''
-        url       = $m3u8
-        page_url  = "$script:QiseBase/$Section/view/$Id"
+        url       = $media
+        page_url  = $pageUrl
         cover_url = $cover
-        download_kind = 'hls'
+        download_kind = $kind
         download_headers = (@{ Referer = "$script:QiseBase/" } | ConvertTo-Json -Compress)
         extra     = "section=$Section"
     }
 }
-
 function Get-QiseDetail {
-    param($Context, [string]$Id, [bool]$Hd = $true, [string]$Section = 'video')
+    param($Context, [string]$Id, [bool]$Hd = $true, [string]$Section = 'video', [string]$Slug = '')
     if ($Section -eq 'vod') { $Hd = $false }
     if (-not $Id) { return $null }
     $client = Get-QiseHttpClient -Context $Context
     try {
-        $viewPath = if ($Hd) { 'viewhd' } else { 'view' }
-        try { $view = Get-QiseHtml -Client $client -Url "$script:QiseBase/$Section/$viewPath/$Id" } catch { $view = '' }
-        try { $embed = Get-QiseHtml -Client $client -Url "$script:QiseBase/$Section/embed/$Id" } catch { $embed = '' }
+        if ($Section -eq 'videos') {
+            $view = Get-QiseHtml -Client $client -Url "$script:QiseBase/videos/view/$Id/$Slug/"
+            if (-not $view) {
+                # 列表里带的 slug 可能过期，回退到不带 slug 的短地址
+                $view = Get-QiseHtml -Client $client -Url "$script:QiseBase/videos/view/$Id/"
+            }
+            $d = ConvertFrom-QiseDetail -ViewHtml $view -EmbedHtml '' -Id $Id -Section $Section -Slug $Slug
+        } else {
+            $viewPath = if ($Hd) { 'viewhd' } else { 'view' }
+            $view = Get-QiseHtml -Client $client -Url "$script:QiseBase/$Section/$viewPath/$Id"
+            $d = ConvertFrom-QiseDetail -ViewHtml $view -EmbedHtml '' -Id $Id -Section $Section
+            if (-not $d) {
+                # 只有 view 页没有 m3u8 时才请求 embed，少发一次无谓请求
+                $embed = Get-QiseHtml -Client $client -Url "$script:QiseBase/$Section/embed/$Id"
+                $d = ConvertFrom-QiseDetail -ViewHtml $view -EmbedHtml $embed -Id $Id -Section $Section
+            }
+        }
     } finally { try { $client.Dispose() } catch { } }
-    if (-not $embed -and -not $view) { return @{ error = '详情页请求失败' } }
-    $d = ConvertFrom-QiseDetail -ViewHtml $view -EmbedHtml $embed -Id $Id -Section $Section
-    if (-not $d) { return @{ error = '没有找到 m3u8（可能需要登录/VIP）' } }
-    # 列表页的时长在详情页没有，尽量从 viewhd 的 JSON 里补
+    if (-not $d) { return @{ error = '没有找到视频地址（可能需要登录/VIP 或页面结构变化）' } }
     if ($view -match '"duration"\s*:\s*"?(\d+)"?') {
         $sec = [int]$Matches[1]
         if ($sec -gt 0) {
@@ -194,18 +241,19 @@ function Get-QiseDetail {
     }
     return $d
 }
-
 function Get-QiseSection {
     param($Row)
-    if ($Row -and $Row.extra -and ([string]$Row.extra -match 'section=(video|vod)')) { return $Matches[1] }
-    if ($Row -and $Row.page_url -and ([string]$Row.page_url -match '/(video|vod)/')) { return $Matches[1] }
+    if ($Row -and $Row.extra -and ([string]$Row.extra -match 'section=(videos|video|vod)')) { return $Matches[1] }
+    if ($Row -and $Row.page_url -and ([string]$Row.page_url -match '/(videos|video|vod)/')) { return $Matches[1] }
     return 'video'
 }
 
 function Get-QiseCoverUrl {
     param($Context, $Row)
     if ($Row -and $Row.cover_url) { return [string]$Row.cover_url }
-    $d = Get-QiseDetail -Context $Context -Id (Get-ItemNativeId $Row) -Section (Get-QiseSection $Row)
+    $sec = Get-QiseSection $Row
+    $slug = ''; if ([string]$Row.page_url -match '/videos/view/\d+/([^/?#]+)') { $slug = $Matches[1] }
+    $d = Get-QiseDetail -Context $Context -Id (Get-ItemNativeId $Row) -Section $sec -Slug $slug
     if ($d -and -not $d.error) { return [string]$d.cover_url }
     return ''
 }
@@ -215,6 +263,10 @@ function Resolve-QiseDownload {
     # 不在主循环里联网探测：VIP 提示片交给下载器 preflight 识别
     $h = @{ Referer = "$script:QiseBase/" }
     if ($Context -and $Context.qiseCookie) { $h['Cookie'] = [string]$Context.qiseCookie }
+    $sec = Get-QiseSection $Row
+    if ($sec -eq 'videos') {
+        return @{ url = [string]$Row.url; mode = 'http'; headers = $h; source = 'qise'; source_id = [string]$Row.source_id; section = 'videos'; page_url = [string]$Row.page_url; sd = $false }
+    }
     $isSd = ([string]$Row.page_url -match '/(video|vod)/view/') -or ([string]$Row.extra -match 'hd=0')
     return @{
         url       = [string]$Row.url
@@ -222,7 +274,7 @@ function Resolve-QiseDownload {
         headers   = $h
         source    = 'qise'
         source_id = [string]$Row.source_id
-        section   = (Get-QiseSection $Row)
+        section   = $sec
         sd        = $isSd
     }
 }
@@ -235,6 +287,17 @@ function Invoke-QiseScrape {
         if ($u -match '#hd0') { $hd = $false; $u = $u -replace '#hd0$', '' }
         $client = Get-QiseHttpClient -Context $Context
         try {
+            $mv = [regex]::Match($u, '/videos/view/(\d+)/([^/?#]+)')
+            if ($mv.Success) {
+                $startedUrl = Get-Date
+                Write-SourceProgress -Path ([string]$Options.progressFile) -Phase 'details' -Done 0 -Total 1 -Started $startedUrl
+                $d = Get-QiseDetail -Context $Context -Id $mv.Groups[1].Value -Section 'videos' -Slug $mv.Groups[2].Value
+                if (-not $d -or $d.error) { throw "详情解析失败: $($d.error)" }
+                $d | Add-Member -NotePropertyName page -NotePropertyValue 1 -Force
+                $d | Add-Member -NotePropertyName rank -NotePropertyValue 1 -Force
+                Write-SourceProgress -Path ([string]$Options.progressFile) -Phase 'done' -Done 1 -Total 1 -Started $startedUrl
+                return @($d)
+            }
             $m = [regex]::Match($u, '/(video|vod)/(?:viewhd|view|embed)/([A-Za-z0-9_-]+)')
             if ($m.Success) {
                 $section = $m.Groups[1].Value; $vid = $m.Groups[2].Value
@@ -257,12 +320,12 @@ function Invoke-QiseScrape {
             $startedUrl = Get-Date
             Write-SourceProgress -Path ([string]$Options.progressFile) -Phase 'details' -Done 0 -Total $total -Started $startedUrl
             foreach ($it in $items) {
-                $it.page_url = "$script:QiseBase/video/$(if ($hd) { 'viewhd' } else { 'view' })/$($it.source_id)"
-                $viewHtml = Get-QiseHtml -Client $client -Url $it.page_url
-                $embedHtml = Get-QiseHtml -Client $client -Url "$script:QiseBase/video/embed/$($it.source_id)"
-                $d = ConvertFrom-QiseDetail -ViewHtml $viewHtml -EmbedHtml $embedHtml -Id $it.source_id
-                if ($d) { foreach ($f in @('title', 'url', 'cover_url', 'download_headers')) { if ($d.$f) { $it.$f = $d.$f } } }
-                $it.extra = "hd=$(if ($hd) { 1 } else { 0 })"
+                $section = if ($it.section) { [string]$it.section } else { 'video' }
+                $slug = [string]$it.slug
+                $itHd = if ($section -eq 'vod' -or $section -eq 'videos') { $false } else { $hd }
+                $d = Get-QiseDetail -Context $Context -Id $it.source_id -Hd $itHd -Section $section -Slug $slug
+                if ($d -and -not $d.error) { foreach ($f in @('title', 'url', 'cover_url', 'download_headers', 'download_kind', 'page_url')) { if ($d.$f) { $it.$f = $d.$f } } }
+                $it.extra = "section=$section;hd=$(if ($itHd) { 1 } else { 0 })"
                 $done++
                 Write-SourceProgress -Path ([string]$Options.progressFile) -Phase 'details' -Done $done -Total $total -Started $startedUrl
             }
@@ -271,7 +334,9 @@ function Invoke-QiseScrape {
     }
 
     $rank = if ($Options.rank) { [string]$Options.rank } else { 'latest' }
-    if (-not $script:QiseRanks.ContainsKey($rank)) { throw "不支持的榜单: $rank" }
+    $srcInfo = Get-SourceInfo 'qise'
+    $rankDef = @($srcInfo.ranks | Where-Object { $_.key -eq $rank }) | Select-Object -First 1
+    $rankPath = if ($rankDef -and $rankDef.path) { [string]$rankDef.path } elseif ($script:QiseRanks.ContainsKey($rank)) { [string]$script:QiseRanks[$rank] + '?page={page}' } else { throw "不支持的榜单: $rank" }
     $pages = @($Options.pages | ForEach-Object { [int]$_ } | Sort-Object -Unique)
     if (-not $pages.Count) { $pages = @(1) }
     $threads = if ($Options.threads) { [int]$Options.threads } else { 8 }
@@ -289,12 +354,13 @@ function Invoke-QiseScrape {
         Write-SourceProgress -Path $progress -Phase 'list' -Done 0 -Total $pages.Count -Started $started
         foreach ($p in $pages) {
             $pi++
-            $url = "$script:QiseBase$($script:QiseRanks[$rank])?page=$p"
+            $url = $script:QiseBase + ($rankPath -replace '\{page\}', [string]$p)
             $html = $null
             try { $html = Get-QiseHtml -Client $client -Url $url } catch { continue }
             foreach ($it in @(ConvertFrom-QiseList -Html $html -Page $p)) {
-                if ($seen.ContainsKey($it.source_id)) { continue }
-                $seen[$it.source_id] = $true
+                $sk = $(if ($it.section) { [string]$it.section } else { 'video' }) + ':' + [string]$it.source_id
+                if ($seen.ContainsKey($sk)) { continue }
+                $seen[$sk] = $true
                 [void]$items.Add($it)
             }
             Write-SourceProgress -Path $progress -Phase 'list' -Done $pi -Total $pages.Count -Started $started
@@ -307,13 +373,11 @@ function Invoke-QiseScrape {
         foreach ($it in $items) {
             if (-not $known.ContainsKey($it.source_id)) {
                 $section = if ($it.section) { [string]$it.section } else { 'video' }
-                $itHd = if ($section -eq 'vod') { $false } else { $hd }
-                $it.page_url = "$script:QiseBase/$section/$(if ($itHd) { 'viewhd' } else { 'view' })/$($it.source_id)"
-                $viewHtml = Get-QiseHtml -Client $client -Url $it.page_url
-                $embedHtml = Get-QiseHtml -Client $client -Url "$script:QiseBase/$section/embed/$($it.source_id)"
-                $d = ConvertFrom-QiseDetail -ViewHtml $viewHtml -EmbedHtml $embedHtml -Id $it.source_id -Section $section
-                if ($d) {
-                    foreach ($f in @('title', 'url', 'cover_url', 'download_headers')) {
+                $slug = [string]$it.slug
+                $itHd = if ($section -eq 'vod' -or $section -eq 'videos') { $false } else { $hd }
+                $d = Get-QiseDetail -Context $Context -Id $it.source_id -Hd $itHd -Section $section -Slug $slug
+                if ($d -and -not $d.error) {
+                    foreach ($f in @('title', 'url', 'cover_url', 'download_headers', 'download_kind', 'page_url')) {
                         if ($d.$f) { $it.$f = $d.$f }
                     }
                 }

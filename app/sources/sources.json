@@ -1,93 +1,382 @@
-[
-  {
-    "key": "pektino",
-    "name": "Pektino",
-    "file": "pektino.ps1",
-    "enabled": true,
-    "order": 10,
-    "capabilities": ["scrape", "detail", "cover", "download"],
-    "siteUrl": "https://pektino.com/zh-CN/movie/{id}",
-    "pageSize": 50,
-    "supportsPages": true,
-    "incremental": true,
-    "ranks": [
-      { "key": "daily", "label": "日榜" },
-      { "key": "weekly", "label": "周榜" },
-      { "key": "monthly", "label": "月榜" },
-      { "key": "all", "label": "总榜" }
-    ]
-  },
-  {
-    "key": "hsex",
-    "name": "Hsex",
-    "file": "hsex.ps1",
-    "enabled": true,
-    "order": 20,
-    "capabilities": ["scrape", "detail", "cover", "download"],
-    "siteUrl": "https://hsex.icu/video-{id}.htm",
-    "pageSize": 48,
-    "supportsPages": true,
-    "incremental": true,
-    "ranks": [
-      { "key": "latest", "label": "最新" },
-      { "key": "weekly", "label": "周榜" },
-      { "key": "monthly", "label": "月榜" },
-      { "key": "min5", "label": "5分钟+" },
-      { "key": "long", "label": "10分钟+" }
-    ]
-  },
-  {
-    "key": "qise",
-    "name": "Qise / 91视频",
-    "file": "qise.ps1",
-    "enabled": true,
-    "order": 30,
-    "capabilities": ["scrape", "detail", "cover", "download"],
-    "siteUrl": "https://rfdjzz.qise100.com/video/viewhd/{id}",
-    "pageSize": 24,
-    "supportsPages": true,
-    "incremental": true,
-    "ranks": [
-      { "key": "latest", "label": "最近更新" },
-      { "key": "hd", "label": "高清视频" },
-      { "key": "recent-favorite", "label": "最近加精" },
-      { "key": "hot-list", "label": "当前最热" },
-      { "key": "recent-rating", "label": "最近得分" },
-      { "key": "nonpaid", "label": "非付费" },
-      { "key": "ori", "label": "91原创" },
-      { "key": "long-list", "label": "10分钟以上" },
-      { "key": "longer-list", "label": "20分钟以上" },
-      { "key": "month-discuss", "label": "本月讨论" },
-      { "key": "top-favorite", "label": "本月收藏" },
-      { "key": "most-favorite", "label": "收藏最多" },
-      { "key": "top-list", "label": "本月最热" },
-      { "key": "top-last", "label": "上月最热" }
-    ]
-  },
-  {
-    "key": "web",
-    "name": "网页/直链",
-    "file": "web.ps1",
-    "enabled": true,
-    "order": 80,
-    "capabilities": ["scrape", "download"],
-    "siteUrl": "",
-    "pageSize": 1,
-    "supportsPages": false,
-    "incremental": false,
-    "ranks": []
-  },
-  {
-    "key": "local",
-    "name": "本地",
-    "file": "",
-    "enabled": true,
-    "order": 90,
-    "capabilities": [],
-    "siteUrl": "",
-    "pageSize": 0,
-    "supportsPages": false,
-    "incremental": false,
-    "ranks": []
-  }
+﻿[
+    {
+        "key":  "pektino",
+        "name":  "Pektino",
+        "file":  "pektino.ps1",
+        "enabled":  true,
+        "order":  10,
+        "capabilities":  [
+                             "scrape",
+                             "detail",
+                             "cover",
+                             "download"
+                         ],
+        "siteUrl":  "https://pektino.com/zh-CN/movie/{id}",
+        "pageSize":  50,
+        "supportsPages":  true,
+        "incremental":  true,
+        "ranks":  [
+                      {
+                          "key":  "daily",
+                          "label":  "日榜"
+                      },
+                      {
+                          "key":  "weekly",
+                          "label":  "周榜"
+                      },
+                      {
+                          "key":  "monthly",
+                          "label":  "月榜"
+                      },
+                      {
+                          "key":  "all",
+                          "label":  "总榜"
+                      }
+                  ]
+    },
+    {
+        "key":  "hsex",
+        "name":  "Hsex",
+        "file":  "hsex.ps1",
+        "enabled":  true,
+        "order":  20,
+        "capabilities":  [
+                             "scrape",
+                             "detail",
+                             "cover",
+                             "download"
+                         ],
+        "siteUrl":  "https://hsex.icu/video-{id}.htm",
+        "pageSize":  48,
+        "supportsPages":  true,
+        "incremental":  true,
+        "ranks":  [
+                      {
+                          "key":  "latest",
+                          "label":  "最新"
+                      },
+                      {
+                          "key":  "weekly",
+                          "label":  "周榜"
+                      },
+                      {
+                          "key":  "monthly",
+                          "label":  "月榜"
+                      },
+                      {
+                          "key":  "min5",
+                          "label":  "5分钟+"
+                      },
+                      {
+                          "key":  "long",
+                          "label":  "10分钟+"
+                      }
+                  ]
+    },
+    {
+        "key":  "qise",
+        "name":  "Qise / 91视频",
+        "file":  "qise.ps1",
+        "enabled":  true,
+        "order":  30,
+        "capabilities":  [
+                             "scrape",
+                             "detail",
+                             "cover",
+                             "download"
+                         ],
+        "siteUrl":  "https://rfdjzz.qise100.com/video/viewhd/{id}",
+        "pageSize":  24,
+        "supportsPages":  true,
+        "incremental":  true,
+        "ranks":  [
+                      {
+                          "key":  "videos-latest",
+                          "label":  "最近更新",
+                          "group":  "视频区",
+                          "path":  "/videos/latest-updates/{page}"
+                      },
+                      {
+                          "key":  "videos-top-rated",
+                          "label":  "最高评分",
+                          "group":  "视频区",
+                          "path":  "/videos/top-rated/{page}"
+                      },
+                      {
+                          "key":  "videos-most-popular",
+                          "label":  "最受欢迎",
+                          "group":  "视频区",
+                          "path":  "/videos/most-popular/{page}"
+                      },
+                      {
+                          "key":  "videos-europe-america",
+                          "label":  "欧美",
+                          "group":  "视频区",
+                          "path":  "/videos/categories/europe-america/{page}"
+                      },
+                      {
+                          "key":  "videos-pixelated",
+                          "label":  "有码",
+                          "group":  "视频区",
+                          "path":  "/videos/categories/pixelated/{page}"
+                      },
+                      {
+                          "key":  "videos-chinese",
+                          "label":  "国产",
+                          "group":  "视频区",
+                          "path":  "/videos/categories/chinese/{page}"
+                      },
+                      {
+                          "key":  "videos-fornication",
+                          "label":  "乱伦",
+                          "group":  "视频区",
+                          "path":  "/videos/categories/fornication/{page}"
+                      },
+                      {
+                          "key":  "videos-japan-korea",
+                          "label":  "日韩",
+                          "group":  "视频区",
+                          "path":  "/videos/categories/japan-korea/{page}"
+                      },
+                      {
+                          "key":  "videos-anime",
+                          "label":  "动漫",
+                          "group":  "视频区",
+                          "path":  "/videos/categories/anime/{page}"
+                      },
+                      {
+                          "key":  "videos-gangbang",
+                          "label":  "群交",
+                          "group":  "视频区",
+                          "path":  "/videos/categories/gangbang/{page}"
+                      },
+                      {
+                          "key":  "videos-homosexual",
+                          "label":  "同性",
+                          "group":  "视频区",
+                          "path":  "/videos/categories/homosexual/{page}"
+                      },
+                      {
+                          "key":  "videos-hd",
+                          "label":  "高清AV",
+                          "group":  "视频区",
+                          "path":  "/videos/categories/hd/{page}"
+                      },
+                      {
+                          "key":  "videos-unpixelated",
+                          "label":  "无码",
+                          "group":  "视频区",
+                          "path":  "/videos/categories/unpixelated/{page}"
+                      },
+                      {
+                          "key":  "videos-sm",
+                          "label":  "SM专区",
+                          "group":  "视频区",
+                          "path":  "/videos/categories/sm/{page}"
+                      },
+                      {
+                          "key":  "videos-jijin",
+                          "label":  "片商集锦",
+                          "group":  "视频区",
+                          "path":  "/videos/categories/jijin/{page}"
+                      },
+                      {
+                          "key":  "videos-guodong",
+                          "label":  "果冻传媒",
+                          "group":  "视频区",
+                          "path":  "/videos/categories/guodong/{page}"
+                      },
+                      {
+                          "key":  "videos-xingkong",
+                          "label":  "星空传媒",
+                          "group":  "视频区",
+                          "path":  "/videos/categories/xingkong/{page}"
+                      },
+                      {
+                          "key":  "videos-madou",
+                          "label":  "麻豆传媒",
+                          "group":  "视频区",
+                          "path":  "/videos/categories/madou/{page}"
+                      },
+                      {
+                          "key":  "videos-tianmei",
+                          "label":  "天美传媒",
+                          "group":  "视频区",
+                          "path":  "/videos/categories/tianmei/{page}"
+                      },
+                      {
+                          "key":  "videos-jingdong",
+                          "label":  "精东影业",
+                          "group":  "视频区",
+                          "path":  "/videos/categories/jingdong/{page}"
+                      },
+                      {
+                          "key":  "videos-swag",
+                          "label":  "台湾SWAG",
+                          "group":  "视频区",
+                          "path":  "/videos/categories/swag/{page}"
+                      },
+                      {
+                          "key":  "videos-tuzi",
+                          "label":  "兔子先生",
+                          "group":  "视频区",
+                          "path":  "/videos/categories/tuzi/{page}"
+                      },
+                      {
+                          "key":  "videos-mitao",
+                          "label":  "蜜桃传媒",
+                          "group":  "视频区",
+                          "path":  "/videos/categories/mitao/{page}"
+                      },
+                      {
+                          "key":  "videos-huangjia",
+                          "label":  "皇家华人",
+                          "group":  "视频区",
+                          "path":  "/videos/categories/huangjia/{page}"
+                      },
+                      {
+                          "key":  "vod-all",
+                          "label":  "全部",
+                          "group":  "精品区",
+                          "path":  "/vod?page={page}"
+                      },
+                      {
+                          "key":  "vod-original",
+                          "label":  "原创",
+                          "group":  "精品区",
+                          "path":  "/vod/%E5%8E%9F%E5%88%9B?page={page}"
+                      },
+                      {
+                          "key":  "vod-forward",
+                          "label":  "转发",
+                          "group":  "精品区",
+                          "path":  "/vod/%E8%BD%AC%E5%8F%91?page={page}"
+                      },
+                      {
+                          "key":  "vod-sponsor",
+                          "label":  "赞助",
+                          "group":  "精品区",
+                          "path":  "/vod/%E8%B5%9E%E5%8A%A9?page={page}"
+                      },
+                      {
+                          "key":  "latest",
+                          "label":  "最近更新",
+                          "group":  "单视频（旧）",
+                          "path":  "/video?page={page}"
+                      },
+                      {
+                          "key":  "hd",
+                          "label":  "高清视频",
+                          "group":  "单视频（旧）",
+                          "path":  "/video/category/hd?page={page}"
+                      },
+                      {
+                          "key":  "recent-favorite",
+                          "label":  "最近加精",
+                          "group":  "单视频（旧）",
+                          "path":  "/video/category/recent-favorite?page={page}"
+                      },
+                      {
+                          "key":  "hot-list",
+                          "label":  "当前最热",
+                          "group":  "单视频（旧）",
+                          "path":  "/video/category/hot-list?page={page}"
+                      },
+                      {
+                          "key":  "recent-rating",
+                          "label":  "最近得分",
+                          "group":  "单视频（旧）",
+                          "path":  "/video/category/recent-rating?page={page}"
+                      },
+                      {
+                          "key":  "nonpaid",
+                          "label":  "非付费",
+                          "group":  "单视频（旧）",
+                          "path":  "/video/category/nonpaid?page={page}"
+                      },
+                      {
+                          "key":  "ori",
+                          "label":  "91原创",
+                          "group":  "单视频（旧）",
+                          "path":  "/video/category/ori?page={page}"
+                      },
+                      {
+                          "key":  "long-list",
+                          "label":  "10分钟以上",
+                          "group":  "单视频（旧）",
+                          "path":  "/video/category/long-list?page={page}"
+                      },
+                      {
+                          "key":  "longer-list",
+                          "label":  "20分钟以上",
+                          "group":  "单视频（旧）",
+                          "path":  "/video/category/longer-list?page={page}"
+                      },
+                      {
+                          "key":  "month-discuss",
+                          "label":  "本月讨论",
+                          "group":  "单视频（旧）",
+                          "path":  "/video/category/month-discuss?page={page}"
+                      },
+                      {
+                          "key":  "top-favorite",
+                          "label":  "本月收藏",
+                          "group":  "单视频（旧）",
+                          "path":  "/video/category/top-favorite?page={page}"
+                      },
+                      {
+                          "key":  "most-favorite",
+                          "label":  "收藏最多",
+                          "group":  "单视频（旧）",
+                          "path":  "/video/category/most-favorite?page={page}"
+                      },
+                      {
+                          "key":  "top-list",
+                          "label":  "本月最热",
+                          "group":  "单视频（旧）",
+                          "path":  "/video/category/top-list?page={page}"
+                      },
+                      {
+                          "key":  "top-last",
+                          "label":  "上月最热",
+                          "group":  "单视频（旧）",
+                          "path":  "/video/category/top-last?page={page}"
+                      }
+                  ]
+    },
+    {
+        "key":  "web",
+        "name":  "网页/直链",
+        "file":  "web.ps1",
+        "enabled":  true,
+        "order":  80,
+        "capabilities":  [
+                             "scrape",
+                             "download"
+                         ],
+        "siteUrl":  "",
+        "pageSize":  1,
+        "supportsPages":  false,
+        "incremental":  false,
+        "ranks":  [
+
+                  ]
+    },
+    {
+        "key":  "local",
+        "name":  "本地",
+        "file":  "",
+        "enabled":  true,
+        "order":  90,
+        "capabilities":  [
+
+                         ],
+        "siteUrl":  "",
+        "pageSize":  0,
+        "supportsPages":  false,
+        "incremental":  false,
+        "ranks":  [
+
+                  ]
+    }
 ]

@@ -41,6 +41,47 @@ if (-not $curl) { $curl = 'C:\Windows\System32\curl.exe' }
 $aria = (Get-Command aria2c.exe -ErrorAction SilentlyContinue).Source
 $workDir = Split-Path $ProgressFile -Parent
 
+function Get-QiseVideosMp4 {
+    <# /videos 的 mp4 签名只有几分钟，下载前重新取一次详情页里的 data-src #>
+    param($Item)
+    $url = [string]$Item.page_url
+    if (-not $url) {
+        $id = [string]$Item.source_id
+        if (-not $id) { return '' }
+        $url = "https://rfdjzz.qise100.com/videos/view/$id/"
+    }
+    $cookie = ''
+    if ($Item.headers) {
+        foreach ($p in @($Item.headers.PSObject.Properties)) { if ($p.Name -eq 'Cookie') { $cookie = [string]$p.Value } }
+    }
+    Add-Type -AssemblyName System.Net.Http -ErrorAction SilentlyContinue
+    $handler = New-Object System.Net.Http.HttpClientHandler
+    $handler.UseProxy = $false
+    $client = New-Object System.Net.Http.HttpClient($handler)
+    $client.Timeout = [TimeSpan]::FromSeconds(20)
+    $client.DefaultRequestHeaders.UserAgent.ParseAdd('Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/157.0.0.0')
+    if ($cookie) { $client.DefaultRequestHeaders.Add('Cookie', $cookie) }
+    try {
+        $resp = $client.GetAsync($url, [System.Net.Http.HttpCompletionOption]::ResponseHeadersRead).GetAwaiter().GetResult()
+        $stream = $resp.Content.ReadAsStreamAsync().GetAwaiter().GetResult()
+        $ms = New-Object System.IO.MemoryStream
+        $buf = New-Object byte[] 8192
+        $sw = [Diagnostics.Stopwatch]::StartNew()
+        while ($sw.Elapsed.TotalSeconds -lt 15) {
+            $task = $stream.ReadAsync($buf, 0, $buf.Length)
+            if (-not $task.Wait(2500)) { break }
+            $n = $task.Result
+            if ($n -le 0) { break }
+            $ms.Write($buf, 0, $n)
+            if ($ms.Length -gt 2000) { break }
+        }
+        $html = [Text.Encoding]::UTF8.GetString($ms.ToArray())
+        $m = [regex]::Match($html, 'data-src="((?:https?:)?//[^"]+\.mp4[^"]*)"')
+        if ($m.Success) { return [System.Net.WebUtility]::HtmlDecode($m.Groups[1].Value) }
+    } catch { }
+    finally { try { $client.Dispose() } catch { } }
+    return ''
+}
 function Get-QiseSdM3u8 {
     <# 下载时强制取 qise 标清（/video/view 或 /vod/view）的 m3u8，不碰 viewhd 高清 #>
     param($Item)
@@ -228,6 +269,10 @@ function Build-Args($item, $outFile) {
 }
 
 function Start-Curl($item, $part, $log) {
+    if ($item.source -eq 'qise' -and $item.section -eq 'videos') {
+        $fresh = Get-QiseVideosMp4 $item
+        if ($fresh) { $item.url = $fresh; try { Add-Content -LiteralPath $log -Value "qise videos mp4: $fresh" -Encoding UTF8 } catch { } }
+    }
     if ($item.mode -and $item.mode -notin @('http', 'hls')) {
         throw "该源返回的不是可下载视频（mode=$($item.mode)）：通常需要登录/VIP，或源站只给了预告片"
     }
@@ -471,6 +516,13 @@ try {
                 $it = $pending.Dequeue()
                 if ($states[[string]$it.token].state -eq 'cancelled') { continue }
                 $batch += $it
+            }
+            # qise /videos 的 mp4 签名很短，必须在 HEAD/大小探测前刷新
+            foreach ($it in $batch) {
+                if ($it.source -eq 'qise' -and $it.section -eq 'videos') {
+                    $fresh = Get-QiseVideosMp4 $it
+                    if ($fresh) { $it.url = $fresh }
+                }
             }
             $sizes = @{}
             if ($batch.Count -gt 0) { $sizes = Get-RemoteSizesParallel -items $batch }

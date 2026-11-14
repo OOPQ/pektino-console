@@ -160,6 +160,16 @@ powershell -ExecutionPolicy Bypass -File .\app\console.ps1 -Project D:\my-data
 - 右键条目 → **📚 加入合集 ▸** 二级菜单，选已有合集或「新建合集…」
 - 多选后点浮条上的 **📚 合集**，批量加入
 
+## 播放优化
+
+如果导入的视频打开很慢，通常是 mp4 的 moov 索引在文件尾部。运行：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File app\dev\optimize-faststart.ps1
+```
+
+会扫描媒体目录并原地 remux 成 faststart（保留全部音轨/字幕）。新下载的 HLS 已自动 faststart。
+
 ## 在浏览器里播放
 
 预览灯箱里**点封面**（或中间的 ▶）就能直接在页面内播放，不用再开系统播放器：

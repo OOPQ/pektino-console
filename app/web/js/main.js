@@ -505,6 +505,7 @@ async function load() {
     }
     state.STATS = s.stats || {};
     let rowsChanged = false;
+    let forceRender = false;
     if (Array.isArray(s.rows)) {
       state.ROWS = s.rows;
       state.HAVE_ROWS = true;
@@ -527,9 +528,21 @@ async function load() {
       if (added.length) {
         state.ADDED = new Set(added);
         state.SHOW_ADDED = true;
+        forceRender = true;
         toast(`本次新增 ${added.length} 条，已临时筛选`, 4000);
       } else {
         toast('本次没有新增条目', 2500);
+      }
+    }
+    // 兜底：如果新增 token 在当前行里一个都匹配不上（数据已刷新/被清理），别把列表筛空
+    if (state.SHOW_ADDED && state.ADDED && state.ADDED.size) {
+      let hits = 0;
+      for (const r of state.ROWS) { if (state.ADDED.has(r.token)) hits++; }
+      if (!hits) {
+        state.ADDED = null;
+        state.SHOW_ADDED = false;
+        forceRender = true;
+        toast('本次新增条目已不在列表里，已恢复全部显示', 3500);
       }
     }
     paintAddedChip();
@@ -574,7 +587,7 @@ async function load() {
     }
     renderJob(s.job || {}, s.download);
     // 行或下载活跃集变了就重绘：避免进度推送时无意义重建 DOM，又保证按钮/蓝点即时更新
-    if (rowsChanged || dlChanged) render();
+    if (rowsChanged || dlChanged || forceRender) render();
     markActiveKpi();
     if ((s.job && s.job.running) || (s.download && s.download.running)) { clearTimeout(load._t); load._t = setTimeout(load, 1200); }
   } catch (e) {

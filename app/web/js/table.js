@@ -20,8 +20,8 @@ const RES_RANK = { '4k': 2160, '1080': 1080, '720': 720 };
 function passFilter(r) {
   /* 回收站条目只在「更多 → 回收站」里出现 */
   if (r.status === 'recycled' || r.status === 'ignored') return false;
-  /* 「本次新增」临时筛选 */
-  if (state.SHOW_ADDED && state.ADDED && state.ADDED.size && !state.ADDED.has(r.token)) return false;
+  /* 「本次新增」临时筛选：只看新增，不再叠加其他筛选（否则容易筛成空列表） */
+  if (state.SHOW_ADDED && state.ADDED && state.ADDED.size) return state.ADDED.has(r.token);
   /* 状态：任务生命周期（单选） */
   const st = state.FILTER.status;
   if (['new', 'done', 'failed'].includes(st) && r.status !== st) return false;

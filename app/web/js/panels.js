@@ -124,7 +124,7 @@ function endSpaceHold() {
   }
 }
 
-/* ←/→ 快退/快进 15 秒（不需要视频聚焦） */
+/* ←/→ 快退/快进 5 秒（不需要视频聚焦） */
 function showSeekBadge(key, text) {
   const el = key === 'g' ? $('#gSeek') : $('#lbSeek');
   if (!el) return;
@@ -141,7 +141,7 @@ function seekBy(key, delta) {
   if (t < 0) t = 0;
   if (dur && t > dur - 0.05) t = Math.max(0, dur - 0.05);
   try { v.currentTime = t; } catch { }
-  showSeekBadge(key, delta < 0 ? '−15s' : '+15s');
+  showSeekBadge(key, delta < 0 ? '−5s' : '+5s');
 }
 
 function stopPlayer(key) {
@@ -483,11 +483,11 @@ export function initPanels() {
       navLightbox(e.key === 'ArrowLeft' ? -1 : 1);
       return;
     }
-    // 单按 ←/→：快退/快进 15 秒（不需要先点视频）
+    // 单按 ←/→：快退/快进 5 秒（不需要先点视频）
     if ((lbOpen || gachaOpen) && !typing && !e.ctrlKey && !e.altKey && !e.metaKey &&
         (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
       e.preventDefault(); e.stopPropagation();
-      seekBy(gachaOpen ? 'g' : 'lb', e.key === 'ArrowLeft' ? -15 : 15);
+      seekBy(gachaOpen ? 'g' : 'lb', e.key === 'ArrowLeft' ? -5 : 5);
       return;
     }
     // 单按 ↑/↓：音量 ±5%

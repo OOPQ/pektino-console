@@ -853,7 +853,7 @@ async function openProjectFolder() {
 async function scanDir() {
   try {
     const r = await api('/api/scan', {});
-    toast(`扫描完成：${r.files} 个 mp4，命中 ${r.downloaded}，更新 ${r.changed}`, 4000);
+    toast(`扫描完成：${r.files} 个 mp4，命中 ${r.downloaded}，新入库 ${r.imported || 0}，更新 ${r.changed}`, 4000);
   } catch (e) { toast('扫描失败'); }
   load();
 }

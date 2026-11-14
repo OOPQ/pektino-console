@@ -678,9 +678,21 @@ function Handle-Request {
                 return
             }
             '/api/scan' {
+                # 手动扫库：先把 media\local 等目录里台账没有的 mp4 补成条目，再做一次全量扫描
+                $imported = 0
+                try {
+                    $imp = Import-ProjectFiles -Paths $WS -Rows $State.Ledger -SavePath $LedgerPath
+                    if ($imp.added -gt 0) {
+                        $State.Ledger = @($imp.rows)
+                        $imported = [int]$imp.added
+                        Touch-State
+                        Write-Log 'scan' "扫库新增本地条目 $imported 条"
+                    }
+                } catch { Write-FileLog "scan import failed: $($_.Exception.Message)" }
                 $r = Invoke-Scan
                 Send-Json -Stream $Stream -Object ([pscustomobject]@{
                         ok         = $true
+                        imported   = $imported
                         downloaded = $r.downloaded
                         missing    = $r.missing
                         changed    = $r.changed

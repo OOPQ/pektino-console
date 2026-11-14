@@ -209,6 +209,8 @@ function renderGallery(rows, active) {
 export function render() {
   applyColWidths();
   const all = visible();
+  const pendingCount = all.filter(r => r.url && !r.file_name && r.status === 'new').length;
+  const dlBtn = $('#btnDownload'); if (dlBtn) dlBtn.textContent = `下载待下载 (${pendingCount})`;
   const per = state.PER > 0 ? state.PER : all.length || 1;
   const pages = Math.max(1, Math.ceil(all.length / per));
   state.PAGE = Math.min(Math.max(1, state.PAGE), pages);

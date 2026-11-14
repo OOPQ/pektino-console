@@ -1,6 +1,6 @@
 /* main.js — 数据加载、工具条、批量操作、初始化 */
 import { $, state, PREFS, savePrefs, api, toast, onEvent, confirmDialog } from './core.js';
-import { render, markActiveKpi, initTable } from './table.js';
+import { render, markActiveKpi, initTable, visible } from './table.js';
 import { initRows, delFiles } from './rows.js';
 import { initPanels, connectSse, openLightbox } from './panels.js';
 import { initCollections, openCollectionPicker } from './collections.js';
@@ -54,7 +54,10 @@ function paintKpis(S) {
   $('#kToday').textContent = S.todayAdded;
   // 主按钮上直接显示待下载数量，点之前就知道要下多少
   const dlBtn = $('#btnDownload');
-  if (dlBtn) dlBtn.textContent = `下载待下载 (${S.new || 0})`;
+  if (dlBtn) {
+    const pending = visible().filter(r => r.url && !r.file_name && r.status === 'new').length;
+    dlBtn.textContent = `下载待下载 (${pending})`;
+  }
   // 「更多 → 回收站」上的数量角标
   const bc = $('#binCount');
   if (bc) bc.textContent = S.recycled ? `(${S.recycled})` : '';
@@ -856,6 +859,7 @@ async function scanDir() {
 }
 
 let dlPreview = null;
+let dlPendingTokens = [];
 
 function fmtBytes(v) {
   v = +v || 0;
@@ -866,13 +870,16 @@ function fmtBytes(v) {
 }
 
 async function openDownloadConfirm() {
-  const n = state.STATS.new || 0;
-  if (!n) return toast('没有可下载的条目');
+  const pending = visible().filter(r => r.url && !r.file_name && r.status === 'new');
+  if (!pending.length) return toast('当前筛选下没有待下载条目');
+  dlPendingTokens = pending.map(r => r.token);
   try {
     dlPreview = await api('/api/download/preview');
   } catch (e) { return toast('获取下载信息失败：' + e.message, 4000); }
   if (!dlPreview || !dlPreview.ok) return toast((dlPreview && dlPreview.error) || '获取失败', 4000);
   const p = dlPreview;
+  p.count = pending.length;
+  p.estimateBytes = (p.avgBytes || 0) * p.count;
   const estAll = (p.avgBytes || 0) * (p.count || 0);
   $('#dlcInfo').innerHTML = `待下载 <b>${p.count}</b> 条 · 已完成平均 <b>${fmtBytes(p.avgBytes)}</b>/条<br>`
     + `全部预计 <b>${fmtBytes(estAll)}</b> · 磁盘剩余 <b>${fmtBytes(p.freeBytes)}</b><br>`
@@ -901,7 +908,7 @@ function closeDownloadConfirm() {
 
 async function startDownloadRequest(limit) {
   try {
-    const r = await api('/api/download', { status: 'new', limit });
+    const r = await api('/api/download', { status: 'new', limit, tokens: dlPendingTokens });
     if (!r || !r.ok) return toast('失败：' + ((r && r.error) || '未知错误'), 5000);
     if (r.appended !== undefined) {
       if (r.appended > 0) pulseDlQueue(r.appended);

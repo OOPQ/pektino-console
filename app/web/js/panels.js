@@ -99,6 +99,31 @@ const PLAYERS = {
   g: { img: '#gImg', video: '#gVideo', overlay: '#gPlayOverlay', pip: '#gPip' }
 };
 
+/* ================= 播放记忆（续播 / 音量） ================= */
+const POS_KEY = 'pektino.playpos.v1';
+const VOL_KEY = 'pektino.volume';
+function loadPositions() {
+  try { return JSON.parse(localStorage.getItem(POS_KEY) || '{}') || {}; } catch { return {}; }
+}
+function positionOf(tk) {
+  const p = loadPositions()[tk];
+  return p && isFinite(p.t) ? +p.t : 0;
+}
+function savePosition(v) {
+  const tk = v && v.dataset ? v.dataset.tk : '';
+  if (!tk || !isFinite(v.currentTime) || !isFinite(v.duration) || v.duration < 10) return;
+  const all = loadPositions();
+  if (v.currentTime < 3 || v.currentTime > v.duration - 3) delete all[tk];
+  else all[tk] = { t: Math.round(v.currentTime), d: Math.round(v.duration), at: Date.now() };
+  const keys = Object.keys(all);
+  if (keys.length > 400) keys.sort((a, b) => (all[a].at || 0) - (all[b].at || 0)).slice(0, keys.length - 400).forEach(k => delete all[k]);
+  try { localStorage.setItem(POS_KEY, JSON.stringify(all)); } catch { }
+}
+function fmtClock(sec) {
+  sec = Math.max(0, Math.floor(sec || 0));
+  const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = sec % 60;
+  return h ? `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}` : `${m}:${String(s).padStart(2, '0')}`;
+}
 const isPip = v => !!v && document.pictureInPictureElement === v;
 
 /* 长按空格临时 2×：按住生效，松开恢复；短按仍然是 播放/暂停 */
@@ -165,6 +190,7 @@ function stopPlayer(key) {
   if (spaceHold && spaceHold.key === key) { clearTimeout(spaceHold.timer); spaceHold = null; }
   showSpeed(key, false);
   if (isPip(v)) { try { document.exitPictureInPicture(); } catch { } }
+  try { savePosition(v); } catch { }
   try { v.playbackRate = 1; } catch { }
   try { v.pause(); } catch { }
   v.hidden = true;
@@ -202,6 +228,25 @@ function playToken(key, tk, opts = {}) {
     if (ov) ov.hidden = false;
     if (key === 'lb') lbPlaying = false; else gPlaying = false;
   };
+  v.dataset.tk = tk;
+  try {
+    const sv = parseFloat(localStorage.getItem(VOL_KEY));
+    if (isFinite(sv)) v.volume = Math.max(0, Math.min(1, sv));
+  } catch { }
+  v.onloadedmetadata = () => {
+    if (v.dataset.forceStart) {
+      v.dataset.forceStart = '';
+      try { v.currentTime = 0; } catch { }
+      return;
+    }
+    const t = positionOf(tk);
+    if (t > 3 && isFinite(v.duration) && t < v.duration - 3) {
+      try { v.currentTime = t; } catch { }
+      toast(`从 ${fmtClock(t)} 继续播放`, 2200);
+    }
+  };
+  v.ontimeupdate = () => { if (!v._posAt || Date.now() - v._posAt > 3000) { v._posAt = Date.now(); savePosition(v); } };
+  v.onvolumechange = () => { try { localStorage.setItem(VOL_KEY, String(v.volume)); } catch { } };
   v.src = `${m.base}/${encodeURIComponent(tk)}.mp4?k=${encodeURIComponent(m.key)}`;
   try { v.playbackRate = 1; } catch { }
   const p = v.play();
@@ -257,6 +302,7 @@ function lbPaint(tk) {
   $('#lbMeta').innerHTML = metaRows(r, { ratingHtml: '<span class="rt" id="lbRate" title="点击打分，再点同一颗清除；数字键 1–5"></span>' });
   renderLRate(+r.rating || 0);
   $('#lbFav').textContent = r.fav === '1' ? '★ 已收藏' : '☆ 收藏';
+  if ($('#lbRestart')) $('#lbRestart').hidden = !(positionOf(tk) > 3);
   $('#lbCount').textContent = lbList.length ? `${lbIdx + 1} / ${lbList.length}` : '';
   const multi = lbList.length > 1;
   if ($('#lbPrev')) $('#lbPrev').hidden = !multi;
@@ -425,6 +471,17 @@ export function initPanels() {
     if (r && r.file_name) playToken('lb', state.LB_TOKEN);
   };
   $('#lbPip').onclick = () => togglePip('lb');
+  $('#lbRestart').onclick = () => {
+    if (!state.LB_TOKEN) return;
+    const v = $('#lbVideo');
+    if (v && !v.hidden) {
+      try { v.currentTime = 0; v.play(); } catch { }
+      savePosition(v);
+    } else {
+      if (v) v.dataset.forceStart = '1';
+      playToken('lb', state.LB_TOKEN);
+    }
+  };
   $('#lbPrev').onclick = () => navLightbox(-1);
   $('#lbNext').onclick = () => navLightbox(1);
   $('#lbPlay').onclick = () => { if (state.LB_TOKEN) doPlay(state.LB_TOKEN); };

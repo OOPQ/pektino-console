@@ -67,7 +67,7 @@ app/cli/import.ps1            通用本地入库（按 token 找源 → 详情�
 
 hsex 的榜单：`latest`（最新）、`latest-new`（最新排序）、`latest-hot`（最热排序）、`weekly`（周榜）、`monthly`（月榜）、`min5`（5 分钟+）、`long`（10 分钟+），对应 `list-N.htm?sort=new/hot`、`top7_list-N.htm / top_list-N.htm / 5min_list-N.htm / long_list-N.htm`。支持直接粘贴 `list-1.htm` 这类列表链接；hsex 直连不可达时默认跟随系统代理。
 
-qise 分两个区：`/videos` 视频区（最近更新/最高评分/最受欢迎 + 欧美、国产、日韩等 21 个分类，详情是 mp4 直链）和 `/vod` 精品区（全部/原创/转发/赞助，详情是 m3u8）。旧的 `/video` 单视频入口保留在「单视频（旧）」分组。视频区 mp4 由源站 CDN 签发，部分资源会 410/404，下载失败时建议复制 URL 在站内播放或等签名更新。
+qise 默认跟随系统代理（直连经常很慢/半途卡住）；设置里填了代理时优先用配置代理。qise 分两个区：`/videos` 视频区（最近更新/最高评分/最受欢迎 + 欧美、国产、日韩等 21 个分类，详情是 mp4 直链）和 `/vod` 精品区（全部/原创/转发/赞助，详情是 m3u8）。旧的 `/video` 单视频入口保留在「单视频（旧）」分组。视频区 mp4 由源站 CDN 签发，部分资源会 410/404，下载失败时建议复制 URL 在站内播放或等签名更新。
 
 抓取弹窗支持填「视频链接（单条）」：qise 支持列表页和 `/video/viewhd/<id>` 详情页；hsex/pektino 支持详情页；其他站点或直链自动走 `web` 源（og:video / <video> / <source> / 页面里的 m3u8|mp4）。填了 URL 会忽略榜单/数量。
 

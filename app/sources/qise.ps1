@@ -20,10 +20,10 @@ function Get-QiseHttpClient {
     Add-Type -AssemblyName System.Net.Http -ErrorAction SilentlyContinue
     $handler = New-Object System.Net.Http.HttpClientHandler
     $handler.MaxConnectionsPerServer = 8
-    $handler.UseProxy = $false
+    # qise 直连很慢/易半途卡住；默认跟随系统代理，配置了代理则用配置
+    $handler.UseProxy = $true
     $handler.AutomaticDecompression = [System.Net.DecompressionMethods]::GZip -bor [System.Net.DecompressionMethods]::Deflate
     if ($Context -and $Context.proxy) {
-        $handler.UseProxy = $true
         $handler.Proxy = New-Object System.Net.WebProxy([string]$Context.proxy)
     }
     $c = New-Object System.Net.Http.HttpClient($handler)
@@ -208,10 +208,11 @@ function ConvertFrom-QiseDetail {
     }
 }
 function Get-QiseDetail {
-    param($Context, [string]$Id, [bool]$Hd = $true, [string]$Section = 'video', [string]$Slug = '')
+    param($Context, [string]$Id, [bool]$Hd = $true, [string]$Section = 'video', [string]$Slug = '', $Client = $null)
     if ($Section -eq 'vod') { $Hd = $false }
     if (-not $Id) { return $null }
-    $client = Get-QiseHttpClient -Context $Context
+    $ownClient = -not $Client
+    $client = if ($Client) { $Client } else { Get-QiseHttpClient -Context $Context }
     try {
         if ($Section -eq 'videos') {
             $view = Get-QiseHtml -Client $client -Url "$script:QiseBase/videos/view/$Id/$Slug/"
@@ -230,7 +231,7 @@ function Get-QiseDetail {
                 $d = ConvertFrom-QiseDetail -ViewHtml $view -EmbedHtml $embed -Id $Id -Section $Section
             }
         }
-    } finally { try { $client.Dispose() } catch { } }
+    } finally { if ($ownClient) { try { $client.Dispose() } catch { } } }
     if (-not $d) { return @{ error = '没有找到视频地址（可能需要登录/VIP 或页面结构变化）' } }
     if ($view -match '"duration"\s*:\s*"?(\d+)"?') {
         $sec = [int]$Matches[1]
@@ -291,7 +292,7 @@ function Invoke-QiseScrape {
             if ($mv.Success) {
                 $startedUrl = Get-Date
                 Write-SourceProgress -Path ([string]$Options.progressFile) -Phase 'details' -Done 0 -Total 1 -Started $startedUrl
-                $d = Get-QiseDetail -Context $Context -Id $mv.Groups[1].Value -Section 'videos' -Slug $mv.Groups[2].Value
+                $d = Get-QiseDetail -Context $Context -Id $mv.Groups[1].Value -Section 'videos' -Slug $mv.Groups[2].Value -Client $client
                 if (-not $d -or $d.error) { throw "详情解析失败: $($d.error)" }
                 $d | Add-Member -NotePropertyName page -NotePropertyValue 1 -Force
                 $d | Add-Member -NotePropertyName rank -NotePropertyValue 1 -Force
@@ -304,7 +305,7 @@ function Invoke-QiseScrape {
                 if ($section -eq 'vod') { $hd = $false }
                 $startedUrl = Get-Date
                 Write-SourceProgress -Path ([string]$Options.progressFile) -Phase 'details' -Done 0 -Total 1 -Started $startedUrl
-                $d = Get-QiseDetail -Context $Context -Id $vid -Hd $hd -Section $section
+                $d = Get-QiseDetail -Context $Context -Id $vid -Hd $hd -Section $section -Client $client
                 if (-not $d -or $d.error) { throw "详情解析失败: $($d.error)" }
                 $d.page_url = "$script:QiseBase/$section/view/$vid"
                 $d.extra = "section=$section;hd=$(if ($hd) { 1 } else { 0 })"
@@ -323,7 +324,7 @@ function Invoke-QiseScrape {
                 $section = if ($it.section) { [string]$it.section } else { 'video' }
                 $slug = [string]$it.slug
                 $itHd = if ($section -eq 'vod' -or $section -eq 'videos') { $false } else { $hd }
-                $d = Get-QiseDetail -Context $Context -Id $it.source_id -Hd $itHd -Section $section -Slug $slug
+                $d = Get-QiseDetail -Context $Context -Id $it.source_id -Hd $itHd -Section $section -Slug $slug -Client $client
                 if ($d -and -not $d.error) { foreach ($f in @('title', 'url', 'cover_url', 'download_headers', 'download_kind', 'page_url')) { if ($d.$f) { $it.$f = $d.$f } } }
                 $it.extra = "section=$section;hd=$(if ($itHd) { 1 } else { 0 })"
                 $done++
@@ -375,7 +376,7 @@ function Invoke-QiseScrape {
                 $section = if ($it.section) { [string]$it.section } else { 'video' }
                 $slug = [string]$it.slug
                 $itHd = if ($section -eq 'vod' -or $section -eq 'videos') { $false } else { $hd }
-                $d = Get-QiseDetail -Context $Context -Id $it.source_id -Hd $itHd -Section $section -Slug $slug
+                $d = Get-QiseDetail -Context $Context -Id $it.source_id -Hd $itHd -Section $section -Slug $slug -Client $client
                 if ($d -and -not $d.error) {
                     foreach ($f in @('title', 'url', 'cover_url', 'download_headers', 'download_kind', 'page_url')) {
                         if ($d.$f) { $it.$f = $d.$f }

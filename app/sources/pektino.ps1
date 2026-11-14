@@ -20,8 +20,8 @@ function Get-PektinoHttpClient {
     $handler.UseProxy = $false
     $handler.AutomaticDecompression = [System.Net.DecompressionMethods]::GZip -bor [System.Net.DecompressionMethods]::Deflate
     if ($Context -and $Context.proxy) {
-        $handler.Proxy = New-Object System.Net.WebProxy([string]$Context.proxy)
         $handler.UseProxy = $true
+        $handler.Proxy = New-Object System.Net.WebProxy([string]$Context.proxy)
     }
     $client = New-Object System.Net.Http.HttpClient($handler)
     $client.Timeout = [TimeSpan]::FromSeconds($TimeoutSec)

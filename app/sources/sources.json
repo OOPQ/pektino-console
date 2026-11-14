@@ -53,23 +53,45 @@
         "ranks":  [
                       {
                           "key":  "latest",
-                          "label":  "最新"
+                          "label":  "最新",
+                          "group":  "榜单",
+                          "path":  "/list-{page}.htm"
+                      },
+                      {
+                          "key":  "latest-new",
+                          "label":  "最新排序",
+                          "group":  "榜单",
+                          "path":  "/list-{page}.htm?sort=new"
+                      },
+                      {
+                          "key":  "latest-hot",
+                          "label":  "最热排序",
+                          "group":  "榜单",
+                          "path":  "/list-{page}.htm?sort=hot"
                       },
                       {
                           "key":  "weekly",
-                          "label":  "周榜"
+                          "label":  "周榜",
+                          "group":  "榜单",
+                          "path":  "/top7_list-{page}.htm"
                       },
                       {
                           "key":  "monthly",
-                          "label":  "月榜"
+                          "label":  "月榜",
+                          "group":  "榜单",
+                          "path":  "/top_list-{page}.htm"
                       },
                       {
                           "key":  "min5",
-                          "label":  "5分钟+"
+                          "label":  "5分钟+",
+                          "group":  "榜单",
+                          "path":  "/5min_list-{page}.htm"
                       },
                       {
                           "key":  "long",
-                          "label":  "10分钟+"
+                          "label":  "10分钟+",
+                          "group":  "榜单",
+                          "path":  "/long_list-{page}.htm"
                       }
                   ]
     },

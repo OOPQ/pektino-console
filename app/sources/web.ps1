@@ -15,8 +15,8 @@ function Get-WebHttpClient {
     $handler.MaxConnectionsPerServer = 4
     $handler.UseProxy = $false
     if ($Context -and $Context.proxy) {
-        $handler.Proxy = New-Object System.Net.WebProxy([string]$Context.proxy)
         $handler.UseProxy = $true
+        $handler.Proxy = New-Object System.Net.WebProxy([string]$Context.proxy)
     }
     $c = New-Object System.Net.Http.HttpClient($handler)
     $c.Timeout = [TimeSpan]::FromSeconds($TimeoutSec)

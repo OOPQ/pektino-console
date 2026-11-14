@@ -17,11 +17,11 @@ function Get-HsexHttpClient {
     Add-Type -AssemblyName System.Net.Http -ErrorAction SilentlyContinue
     $handler = New-Object System.Net.Http.HttpClientHandler
     $handler.MaxConnectionsPerServer = 8
-    $handler.UseProxy = $false
+    # hsex 直连经常不可达：未单独配置代理时跟随系统代理（有代理就能用）
+    $handler.UseProxy = $true
     $handler.AutomaticDecompression = [System.Net.DecompressionMethods]::GZip -bor [System.Net.DecompressionMethods]::Deflate
     if ($Context -and $Context.proxy) {
         $handler.Proxy = New-Object System.Net.WebProxy([string]$Context.proxy)
-        $handler.UseProxy = $true
     }
     $c = New-Object System.Net.Http.HttpClient($handler)
     $c.Timeout = [TimeSpan]::FromSeconds($TimeoutSec)
@@ -148,8 +148,26 @@ function Resolve-HsexDownload {
 function Invoke-HsexScrape {
     param($Context, $Options)
     if ($Options.url) {
-        $m = [regex]::Match([string]$Options.url, 'video-(\d+)\.htm')
-        if (-not $m.Success) { throw 'hsex 自定义 URL 目前只支持详情页 video-<id>.htm' }
+        $u = [string]$Options.url
+        $m = [regex]::Match($u, 'video-(\d+)\.htm')
+        if (-not $m.Success) {
+            # 榜单/首页 URL：按列表页解析，再补详情
+            $client = Get-HsexHttpClient -Context $Context
+            try { $html = $client.GetStringAsync($u).GetAwaiter().GetResult() } finally { try { $client.Dispose() } catch { } }
+            $items = @(ConvertFrom-HsexList -Html $html -Page 1)
+            if ($Options.limit -and [int]$Options.limit -gt 0) { $items = @($items | Select-Object -First ([int]$Options.limit)) }
+            $total = $items.Count; $done = 0
+            $startedUrl = Get-Date
+            Write-SourceProgress -Path ([string]$Options.progressFile) -Phase 'details' -Done 0 -Total $total -Started $startedUrl
+            foreach ($it in $items) {
+                $d = Get-HsexDetail -Context $Context -Id $it.source_id
+                if ($d -and -not $d.error) { foreach ($f in @('title', 'url', 'cover_url', 'download_headers')) { if ($d.$f) { $it.$f = $d.$f } } }
+                $it.page_url = "$script:HsexBase/video-$($it.source_id).htm"
+                $done++
+                Write-SourceProgress -Path ([string]$Options.progressFile) -Phase 'details' -Done $done -Total $total -Started $startedUrl
+            }
+            return @($items | Where-Object { $_.url })
+        }
         $startedUrl = Get-Date
         Write-SourceProgress -Path ([string]$Options.progressFile) -Phase 'details' -Done 0 -Total 1 -Started $startedUrl
         $d = Get-HsexDetail -Context $Context -Id $m.Groups[1].Value
@@ -160,7 +178,9 @@ function Invoke-HsexScrape {
         return @($d)
     }
     $rank = if ($Options.rank) { [string]$Options.rank } else { 'latest' }
-    if (-not $script:HsexRankPath.ContainsKey($rank)) { throw "不支持的榜单: $rank" }
+    $srcInfo = Get-SourceInfo 'hsex'
+    $rankDef = @($srcInfo.ranks | Where-Object { $_.key -eq $rank }) | Select-Object -First 1
+    $rankPath = if ($rankDef -and $rankDef.path) { [string]$rankDef.path } elseif ($script:HsexRankPath.ContainsKey($rank)) { '/' + [string]$script:HsexRankPath[$rank] + '-{page}.htm' } else { throw "不支持的榜单: $rank" }
     $pages = @($Options.pages | ForEach-Object { [int]$_ } | Sort-Object -Unique)
     if (-not $pages.Count) { $pages = @(1) }
     $threads = if ($Options.threads) { [int]$Options.threads } else { 8 }
@@ -179,7 +199,7 @@ function Invoke-HsexScrape {
         foreach ($p in $pages) {
             $pi++
             if ($p -lt 1) { continue }
-            $url = "$script:HsexBase/$($script:HsexRankPath[$rank])-$p.htm"
+            $url = $script:HsexBase + ($rankPath -replace '\{page\}', [string]$p)
             $html = $null
             try { $html = $client.GetStringAsync($url).GetAwaiter().GetResult() } catch { continue }
             foreach ($it in @(ConvertFrom-HsexList -Html $html -Page $p)) {

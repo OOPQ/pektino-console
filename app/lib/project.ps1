@@ -190,7 +190,7 @@ function Get-ProjectSummary {
 
     $files = 0; $gb = 0
     if (Test-Path $Paths.Content) {
-        $mp4 = @(Get-ChildItem -Path $Paths.Content -Filter '*.mp4' -File -ErrorAction SilentlyContinue)
+        $mp4 = @(Get-ChildItem -Path $Paths.Content -Filter '*.mp4' -File -Recurse -Depth 4 -ErrorAction SilentlyContinue)
         $files = $mp4.Count
         $gb = [math]::Round((($mp4 | Measure-Object Length -Sum).Sum) / 1GB, 2)
     }
@@ -243,7 +243,7 @@ function Import-ProjectFiles {
     $added = 0; $skipped = 0
     if (-not (Test-Path $Paths.Content)) { return [pscustomobject]@{ added = 0; skipped = 0; rows = @($list) } }
 
-    foreach ($f in @(Get-ChildItem -Path $Paths.Content -Filter '*.mp4' -File -ErrorAction SilentlyContinue)) {
+    foreach ($f in @(Get-ChildItem -Path $Paths.Content -Filter '*.mp4' -File -Recurse -Depth 4 -ErrorAction SilentlyContinue)) {
         $tk = [System.IO.Path]::GetFileNameWithoutExtension($f.Name)
         $tk = ($tk -replace '\s*\(\d+\)$', '').Trim()
         if (-not $tk) { continue }

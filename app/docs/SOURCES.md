@@ -26,7 +26,7 @@ app/cli/import.ps1            通用本地入库（按 token 找源 → 详情�
 | `source_id` | 该站原生 id（老数据 = token） |
 | `title` | 标题，展示用；没有时前端回退 token |
 | `cover_url` | 封面原图 URL，补封面用 |
-| `download_kind` | 下载方式（目前 `http`） |
+| `download_kind` | 下载方式：`http` / `hls` |
 | `download_headers` | JSON，下载时附加的请求头 |
 | `extra` | 源特有字段 JSON，留给以后扩展 |
 
@@ -36,6 +36,15 @@ app/cli/import.ps1            通用本地入库（按 token 找源 → 详情�
 - 其他源用 `<source>@<native id>`，例如 `hanime@abc123`
 - `lib/sources.ps1` 的 `New-ItemToken` / `Split-ItemToken` 统一处理
 - 文件名、封面缓存、合集、下载队列都以 token 为准；`@` 在 Windows 文件名里合法
+- 新下载的文件按来源放进子目录：`media\<source>\<token>.mp4`；老文件继续平铺在 `media\`，
+  扫描/播放/补封面都按递归查找，两种布局可以共存
+
+当前已接入：
+
+| key | 抓取 | 详情 | 封面 | 下载 |
+|---|---|---|---|---|
+| `pektino` | 榜单 | JSON-LD | JSON-LD | HTTP（Referer） |
+| `hsex` | 首页 / `index-N.htm` | `<source>` 的 m3u8 | thumb 图 | **HLS**（下载器当前会明确拒绝，等 ffmpeg 支持） |
 
 ## 适配器契约
 
@@ -104,6 +113,6 @@ url, page_url, cover_url, download_kind, download_headers, extra
 
 ## 当前限制（后续可扩展）
 
-- `download_kind` 目前只实现 `http`；HLS/magnet/迅雷等需要扩展 `cli/download.ps1`
+- `hsex` 的 HLS 下载需要 ffmpeg，当前下载器只做解析并明确报错，不会把 m3u8 当 mp4 保存
 - `cli/import.ps1` 是串行核对，来源很多时可以考虑按源分批并发
 - `daily.ps1` / `thunder.ps1` 仍是 pektino 时代的 CLI 兼容入口，未接入多源

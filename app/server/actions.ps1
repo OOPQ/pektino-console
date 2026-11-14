@@ -823,6 +823,7 @@ function Start-Download {
                 url     = $(if ($dl.url) { [string]$dl.url } else { [string]$_.url })
                 mode    = $(if ($dl.mode) { [string]$dl.mode } else { 'http' })
                 headers = $dl.headers
+                subdir  = (Get-ItemSource $_)
             }
         })
 
@@ -1117,12 +1118,12 @@ function Repair-PartFiles {
 
     $renamed = 0; $deleted = 0; $kept = 0; $checked = 0
     $now = Get-Date
-    foreach ($p in @(Get-ChildItem -Path $dir -Filter '*.mp4.part' -File -ErrorAction SilentlyContinue)) {
+    foreach ($p in @(Get-ChildItem -Path $dir -Filter '*.mp4.part' -File -Recurse -Depth 2 -ErrorAction SilentlyContinue)) {
         if ($checked -ge $Limit) { break }
         if (($now - $p.LastWriteTime).TotalMinutes -lt 2) { $kept++; continue }
         $checked++
         $tk = $p.Name -replace '\.mp4\.part$', ''
-        $final = Join-Path $dir ($tk + '.mp4')
+        $final = Join-Path $p.DirectoryName ($tk + '.mp4')
         if (Test-Path -LiteralPath $final) {
             Remove-Item $p.FullName -Force -ErrorAction SilentlyContinue
             $deleted++

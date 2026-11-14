@@ -134,6 +134,12 @@ try {
             $name = [uri]::UnescapeDataString($pathPart.TrimStart('/'))
             if (-not (Test-SafeMediaName $name)) { Send-Simple $stream 404 'Not Found' 'not found'; continue }
             $full = [System.IO.Path]::GetFullPath((Join-Path $mediaFull $name))
+        if (-not (Test-Path -LiteralPath $full -PathType Leaf)) {
+            try {
+                $hit = @(Get-ChildItem -LiteralPath $mediaFull -File -Recurse -Depth 2 -ErrorAction SilentlyContinue | Where-Object { $_.Name -eq $name })[0]
+                if ($hit) { $full = $hit.FullName }
+            } catch { }
+        }
             if ($full -notlike ($mediaFull + '\*')) { Send-Simple $stream 403 'Forbidden' 'forbidden'; continue }
             if (-not (Test-Path -LiteralPath $full -PathType Leaf)) { Send-Simple $stream 404 'Not Found' 'not found'; continue }
 

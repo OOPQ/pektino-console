@@ -25,9 +25,10 @@ function Get-SourceManifest {
     param([string]$Root)
     $manifest = Join-Path $Root 'sources\sources.json'
     if (-not (Test-Path -LiteralPath $manifest)) { throw "缺少源清单: $manifest" }
-    $list = @(Get-Content -LiteralPath $manifest -Raw -Encoding UTF8 | ConvertFrom-Json)
+    $parsed = Get-Content -LiteralPath $manifest -Raw -Encoding UTF8 | ConvertFrom-Json
+    $items = if ($parsed -is [System.Array]) { @($parsed) } else { @($parsed) }
     $out = New-Object System.Collections.ArrayList
-    foreach ($m in $list) {
+    foreach ($m in $items) {
         if ($null -eq $m.key) { continue }
         $key = ([string]$m.key).ToLowerInvariant()
         if ($key -notmatch '^[a-z][a-z0-9]*$') { throw "源 key 不合法（只允许小写字母/数字）: $key" }
@@ -100,7 +101,7 @@ function New-ItemToken {
     $src = Resolve-SourceKey $Source
     $id = [string]$Id
     if ($src -eq $script:SourceDefault) { return $id }
-    return "$src@$id"
+    return ($src + '@' + $id)
 }
 
 function Split-ItemToken {

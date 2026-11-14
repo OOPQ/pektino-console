@@ -80,7 +80,7 @@ $proxyArg = if ($NoProxy) { '' } else { Get-ProxyArg -p $Proxy }
 $states = @{}   # token -> @{ state; bytes; expected; error }
 $queueMap = @{}
 foreach ($it in $queue) {
-    $states[[string]$it.token] = @{ state = 'queued'; bytes = 0; expected = 0; error = '' }
+    $states[[string]$it.token] = @{ state = 'queued'; bytes = 0; expected = 0; error = ''; dir = '' }
     # 重试时要用到原 item（url/file），之前没填导致重试 curl 没 URL 可用
     $queueMap[[string]$it.token] = $it
 }
@@ -171,6 +171,7 @@ function Build-Args($item, $outFile) {
 }
 
 function Start-Curl($item, $part, $log) {
+    if ($item.mode -eq 'hls') { throw 'HLS（m3u8）需要 ffmpeg 支持，当前版本暂未内置 HLS 下载' }
     $spec = Build-Args -item $item -outFile $part
     return Start-Process -FilePath $spec.exe -ArgumentList $spec.args -NoNewWindow -PassThru `
         -RedirectStandardError $log -RedirectStandardOutput ($log + '.out') -ErrorAction Stop
@@ -178,8 +179,9 @@ function Start-Curl($item, $part, $log) {
 
 function Complete-Item($tk) {
     $s = $states[$tk]
-    $part = Join-Path $Dir ($tk + '.mp4.part')
-    $final = Join-Path $Dir ($tk + '.mp4')
+    $fileDir = if ($s.dir) { $s.dir } else { $Dir }
+    $part = Join-Path $fileDir ($tk + '.mp4.part')
+    $final = Join-Path $fileDir ($tk + '.mp4')
     if (-not (Test-Path $part)) { $s.state = 'failed'; $s.error = '缺少 .part'; return }
     try {
         if (Test-Path $final) { Remove-Item $final -Force }
@@ -344,8 +346,11 @@ try {
         foreach ($item in $batch) {
             $tk = [string]$item.token
 
-            $final = Join-Path $Dir ($tk + '.mp4')
-            $part = Join-Path $Dir ($tk + '.mp4.part')
+            $itemDir = if ($item.subdir) { Join-Path $Dir ([string]$item.subdir) } else { $Dir }
+            if (-not (Test-Path -LiteralPath $itemDir)) { New-Item -ItemType Directory -Path $itemDir -Force | Out-Null }
+            $states[$tk].dir = $itemDir
+            $final = Join-Path $itemDir ($tk + '.mp4')
+            $part = Join-Path $itemDir ($tk + '.mp4.part')
             if (Test-Path $final) {
                 $states[$tk].state = 'done'
                 $states[$tk].bytes = (Get-Item $final).Length

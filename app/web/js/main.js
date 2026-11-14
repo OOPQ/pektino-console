@@ -721,9 +721,10 @@ async function doScrape() {
       else if (url.includes('pektino.com')) source = 'pektino';
       else source = 'web';
     }
+    const hd = $('#scrapeHd') ? $('#scrapeHd').checked : true;
     const payload = url
-      ? { source, url, incremental: false }
-      : { source, rank, limit, incremental: $('#chkInc').checked };
+      ? { source, url, hd, incremental: false }
+      : { source, rank, limit, hd, incremental: $('#chkInc').checked };
     const r = await api('/api/scrape', payload);
     if (!r.ok) return toast('失败：' + r.error, 5000);
     toast(url ? '已开始：从 URL 抓取' : (r.incremental
@@ -906,6 +907,8 @@ function paintScrapeOptions() {
     const field = rankSel.closest('.field');
     if (field) field.style.display = ranks.length ? '' : 'none';
   }
+  const hdField = $('#hdField');
+  if (hdField) hdField.style.display = (src && src.key === 'qise') ? '' : 'none';
   const sizeEl = $('#scrapeHint');
   if (sizeEl) {
     const ps = (src && src.pageSize) || 50;

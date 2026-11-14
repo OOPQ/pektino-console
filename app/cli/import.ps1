@@ -98,7 +98,7 @@ if ($ThumbDir) {
     }
 }
 
-$columns = 'source', 'source_id', 'token', 'title', 'rank', 'page', 'duration', 'seconds', 'res', 'views', 'likes', 'uploaded', 'url', 'page_url', 'cover_url', 'download_kind', 'download_headers'
+$columns = 'source', 'source_id', 'token', 'title', 'rank', 'page', 'duration', 'seconds', 'res', 'views', 'likes', 'uploaded', 'url', 'page_url', 'cover_url', 'download_kind', 'download_headers', 'extra'
 if ($Out) {
     $rows | Select-Object $columns | Export-Csv -LiteralPath $Out -NoTypeInformation -Encoding UTF8
 }

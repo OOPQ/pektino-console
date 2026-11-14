@@ -158,11 +158,12 @@ function ConvertFrom-QiseDetail {
 }
 
 function Get-QiseDetail {
-    param($Context, [string]$Id)
+    param($Context, [string]$Id, [bool]$Hd = $true)
     if (-not $Id) { return $null }
     $client = Get-QiseHttpClient -Context $Context
     try {
-        try { $view = Get-QiseHtml -Client $client -Url "$script:QiseBase/video/viewhd/$Id" } catch { $view = '' }
+        $viewPath = if ($Hd) { 'viewhd' } else { 'view' }
+        try { $view = Get-QiseHtml -Client $client -Url "$script:QiseBase/video/$viewPath/$Id" } catch { $view = '' }
         try { $embed = Get-QiseHtml -Client $client -Url "$script:QiseBase/video/embed/$Id" } catch { $embed = '' }
     } finally { try { $client.Dispose() } catch { } }
     if (-not $embed -and -not $view) { return @{ error = '详情页请求失败' } }
@@ -210,15 +211,19 @@ function Resolve-QiseDownload {
 
 function Invoke-QiseScrape {
     param($Context, $Options)
+    $hd = if ($null -ne $Options.hd) { [bool]$Options.hd } else { $true }
     # 直接从 URL 抓：详情页抓单条，列表页抓该页
     if ($Options.url) {
         $u = [string]$Options.url
+        if ($u -match '#hd0') { $hd = $false; $u = $u -replace '#hd0$', '' }
         $client = Get-QiseHttpClient -Context $Context
         try {
             $m = [regex]::Match($u, '/video/(?:viewhd|view|embed)/([0-9a-f]+)')
             if ($m.Success) {
-                $d = Get-QiseDetail -Context $Context -Id $m.Groups[1].Value
+                $d = Get-QiseDetail -Context $Context -Id $m.Groups[1].Value -Hd $hd
                 if (-not $d -or $d.error) { throw "详情解析失败: $($d.error)" }
+                $d.page_url = "$script:QiseBase/video/$(if ($hd) { 'viewhd' } else { 'view' })/$($m.Groups[1].Value)"
+                $d.extra = "hd=$(if ($hd) { 1 } else { 0 })"
                 $d | Add-Member -NotePropertyName page -NotePropertyValue 1 -Force
                 $d | Add-Member -NotePropertyName rank -NotePropertyValue 1 -Force
                 return @($d)
@@ -228,10 +233,12 @@ function Invoke-QiseScrape {
             if ($Options.limit -and [int]$Options.limit -gt 0) { $items = @($items | Select-Object -First ([int]$Options.limit)) }
             $total = $items.Count; $done = 0
             foreach ($it in $items) {
+                $it.page_url = "$script:QiseBase/video/$(if ($hd) { 'viewhd' } else { 'view' })/$($it.source_id)"
                 $viewHtml = Get-QiseHtml -Client $client -Url $it.page_url
                 $embedHtml = Get-QiseHtml -Client $client -Url "$script:QiseBase/video/embed/$($it.source_id)"
                 $d = ConvertFrom-QiseDetail -ViewHtml $viewHtml -EmbedHtml $embedHtml -Id $it.source_id
                 if ($d) { foreach ($f in @('title', 'url', 'cover_url', 'download_headers')) { if ($d.$f) { $it.$f = $d.$f } } }
+                $it.extra = "hd=$(if ($hd) { 1 } else { 0 })"
                 $done++
                 Write-SourceProgress -Path ([string]$Options.progressFile) -Phase 'details' -Done $done -Total $total -Started (Get-Date)
             }
@@ -275,6 +282,7 @@ function Invoke-QiseScrape {
         $done = 0
         foreach ($it in $items) {
             if (-not $known.ContainsKey($it.source_id)) {
+                $it.page_url = "$script:QiseBase/video/$(if ($hd) { 'viewhd' } else { 'view' })/$($it.source_id)"
                 $viewHtml = Get-QiseHtml -Client $client -Url $it.page_url
                 $embedHtml = Get-QiseHtml -Client $client -Url "$script:QiseBase/video/embed/$($it.source_id)"
                 $d = ConvertFrom-QiseDetail -ViewHtml $viewHtml -EmbedHtml $embedHtml -Id $it.source_id
@@ -283,6 +291,7 @@ function Invoke-QiseScrape {
                         if ($d.$f) { $it.$f = $d.$f }
                     }
                 }
+                $it.extra = "hd=$(if ($hd) { 1 } else { 0 })"
             }
             $done++
             Write-SourceProgress -Path $progress -Phase 'details' -Done $done -Total $total -Started $started

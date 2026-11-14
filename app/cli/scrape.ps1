@@ -17,6 +17,7 @@ param(
     [string]$ThumbDir = '',
     [string]$KnownFile = '',
     [string]$Url = '',
+    [bool]$Hd = $true,
     [string]$Proxy = '',
     [int]$PageSize = 50,
     [switch]$Json
@@ -38,6 +39,7 @@ $options = @{
     progressFile = $ProgressFile
     started    = $started
     url        = $Url
+    hd         = $Hd
 }
 if ($KnownFile -and (Test-Path -LiteralPath $KnownFile)) {
     $known = @()
@@ -111,7 +113,7 @@ if ($CoverDir -and $items.Count -gt 0) {
     }
 }
 
-$columns = 'source', 'source_id', 'token', 'title', 'rank', 'page', 'duration', 'seconds', 'res', 'views', 'likes', 'uploaded', 'url', 'page_url', 'cover_url', 'download_kind', 'download_headers'
+$columns = 'source', 'source_id', 'token', 'title', 'rank', 'page', 'duration', 'seconds', 'res', 'views', 'likes', 'uploaded', 'url', 'page_url', 'cover_url', 'download_kind', 'download_headers', 'extra'
 if ($Out) {
     $items | Select-Object $columns | Export-Csv -LiteralPath $Out -NoTypeInformation -Encoding UTF8
 }

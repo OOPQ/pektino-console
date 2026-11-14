@@ -529,6 +529,8 @@ function Handle-Request {
                     Send-Json -Stream $Stream -Object @{ ok = $false; error = "源 $($srcInfo.name) 没有榜单: $rank" }
                     return
                 }
+                $hd = $true
+                if ($body.ContainsKey('hd')) { $hd = [bool]$body['hd'] }
                 $limit = 0
                 if ($body.limit) { try { $limit = [int]$body.limit } catch { $limit = 0 } }
                 if ($limit -lt 1) { $limit = 50 }
@@ -545,7 +547,7 @@ function Handle-Request {
                 if ($srcInfo.incremental -eq $false) { $inc = $false }
                 $fresh = 3
                 if ($body.freshDays) { try { $fresh = [Math]::Max(0, [Math]::Min(30, [int]$body.freshDays)) } catch { $fresh = 3 } }
-                Send-Json -Stream $Stream -Object (Start-Scrape -Source $srcKey -Rank $rank -Pages $pages -Limit $limit -Threads $threads -Incremental $inc -FreshDays $fresh -Url $url)
+                Send-Json -Stream $Stream -Object (Start-Scrape -Source $srcKey -Rank $rank -Pages $pages -Limit $limit -Threads $threads -Incremental $inc -FreshDays $fresh -Url $url -Hd $hd)
                 return
             }
             '/api/job/cancel' {

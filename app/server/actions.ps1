@@ -240,7 +240,8 @@ function Start-Scrape {
         [int]$Threads = 8,
         [bool]$Incremental = $true,
         [int]$FreshDays = 3,
-        [string]$Url = ''
+        [string]$Url = '',
+        [bool]$Hd = $true
     )
 
     if ($State.Job) { return @{ ok = $false; error = '已有抓取任务在跑，等它结束' } }
@@ -273,18 +274,21 @@ function Start-Scrape {
     }
 
     if ($Url) { $Incremental = $false }
+    # Start-Job 对 $false 实参的序列化不可靠：把「标清」编码进 URL 片段
+    if ($Url -and -not $Hd) { $Url = $Url.TrimEnd('#') + '#hd0' }
     $ps = $ScrapeScript; $out = $TmpCsv; $prog = $ProgressFile; $cov = $CoverDir
     $thm = $ThumbDir; $kn = $KnownFile
     $proxy = if ($Config -and $Config.proxy) { [string]$Config.proxy } else { '' }
     $job = Start-Job -ScriptBlock {
-        param($ps, $source, $rank, $pages, $limit, $out, $prog, $cov, $thm, $kn, $threads, $proxy, $url)
+        param($ps, $source, $rank, $pages, $limit, $out, $prog, $cov, $thm, $kn, $threads, $proxy, $url, $hd)
         $p = @{ Source = $source; Rank = $rank; Page = $pages; Out = $out; ProgressFile = $prog; CoverDir = $cov; ThumbDir = $thm; Threads = $threads }
         if ($limit -gt 0) { $p['Limit'] = $limit }
         if ($proxy) { $p['Proxy'] = $proxy }
         if ($kn -and (Test-Path -LiteralPath $kn)) { $p['KnownFile'] = $kn }
         if ($url) { $p['Url'] = $url }
+        $p['Hd'] = $hd
         & $ps @p *>&1 | Out-File -LiteralPath ($out + ".log") -Encoding UTF8 -Append
-    } -ArgumentList $ps, $src.key, $Rank, $Pages, $Limit, $out, $prog, $cov, $thm, $kn, $Threads, $proxy, $Url
+    } -ArgumentList $ps, $src.key, $Rank, $Pages, $Limit, $out, $prog, $cov, $thm, $kn, $Threads, $proxy, $Url, $Hd
 
     $State.Job = [pscustomobject]@{
         handle  = $job

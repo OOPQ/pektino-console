@@ -432,9 +432,9 @@ body.multi .card .playbtn { display: none; }
 body.multi .card .foot .dlbtn { display: none; }
 
 /* ===== 表格列宽 / 标题截断 / 冻结操作列 ===== */
-#tablewrap table { table-layout: fixed; width: max-content; min-width: 100%; }
+#tablewrap table { table-layout: fixed; width: 100%; min-width: 1580px; }
 #tablewrap td.col-title { white-space: normal; overflow: hidden; }
-#tablewrap td.col-token { overflow: hidden; text-overflow: ellipsis; }
+#tablewrap th.col-token, #tablewrap td.col-token { width: 140px; max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #tablewrap td.col-title .ttl {
   display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2;
   overflow: hidden; line-height: 1.35; max-height: 2.7em; word-break: break-word;

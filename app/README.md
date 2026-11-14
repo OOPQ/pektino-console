@@ -25,7 +25,7 @@ app\
   server\
     transport.ps1      HTTP 传输：Send-Bytes / Send-Json / Read-Request / Push-Sse
     actions.ps1        业务：统计、扫描、抓取/导入 Job、收藏/评分/观看、播放、删除、下载器、源地址刷新
-    media.ps1          浏览器内播放的独立媒体服务（Range 流式、单次 8MB、只服务 media\ 下的 mp4）
+    media.ps1          浏览器内播放的独立媒体服务（Range 流式、单次 8MB、只服务 media\ 下的 mp4，token 允许中文）
     covers.ps1         封面补齐：本地视频取帧（Shell 缩略图）+ 站点抓取，含主循环里的自动补封面
   lib\
     project.ps1        项目（数据单元）解析、初始化、媒体识别
@@ -115,7 +115,7 @@ app\
 
 ## 4. 数据模型
 
-单个 `items` 表，`token` 为主键（`data\data.db`）：
+单个 `items` 表，`token` 为主键（`data\data.db`）；另有 `collections` / `collection_items` 两张表存合集：
 
 ```
 站点元数据   rank page duration seconds res views likes uploaded url page_url site
@@ -250,6 +250,9 @@ POST /api/download/reset                                             强制解�
 POST /api/download/clear-done                                        清理队列里的完成记录（不动文件/台账）
 POST /api/download/repair                                            整理 .part
 POST /api/mark      {tokens,status}                                  改状态（new/done/recycled/failed）
+GET  /api/collections                                                合集列表（含条目数）
+GET  /api/collections/items?id=N                                     合集内 token
+POST /api/collections {action,id,name,tokens}                        合集 create/rename/delete/add/remove
 POST /api/fav       {tokens,on}                                      收藏
 POST /api/watched   {tokens,on}                                      已看/未看
 POST /api/rate      {tokens,value}                                   评分 0–5（0 = 清除）

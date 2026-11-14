@@ -88,6 +88,61 @@ function Get-Stats {
     }
 }
 
+$script:ShellApp = $null
+function Get-LocalMediaMeta {
+    <#  本地视频的时长/分辨率：读 Windows Shell 属性，不依赖站点  #>
+    param([string]$File)
+    $out = [pscustomobject]@{ duration = ''; seconds = ''; res = '' }
+    try {
+        if (-not $script:ShellApp) { $script:ShellApp = New-Object -ComObject Shell.Application }
+        $dir = Split-Path -Parent $File
+        $name = Split-Path -Leaf $File
+        $ns = $script:ShellApp.Namespace($dir)
+        if (-not $ns) { return $out }
+        $item = $ns.ParseName($name)
+        if (-not $item) { return $out }
+        $ticks = $item.ExtendedProperty('System.Media.Duration')
+        if ($null -ne $ticks) {
+            try {
+                $sec = [int64]([int64]$ticks / 10000000)
+                if ($sec -gt 0) {
+                    $out.seconds = [string]$sec
+                    $out.duration = if ($sec -ge 3600) {
+                        '{0:D2}:{1:D2}:{2:D2}' -f [int]($sec / 3600), [int](($sec % 3600) / 60), [int]($sec % 60)
+                    } else {
+                        '{0:D2}:{1:D2}' -f [int]($sec / 60), [int]($sec % 60)
+                    }
+                }
+            } catch { }
+        }
+        $w = $item.ExtendedProperty('System.Video.FrameWidth')
+        $h = $item.ExtendedProperty('System.Video.FrameHeight')
+        if ($w -and $h) { $out.res = "$([int]$w)x$([int]$h)" }
+    } catch { }
+    return $out
+}
+
+function Repair-MediaMeta {
+    <#  给「有本地文件但缺时长/分辨率」的历史条目补元数据（Shell 属性），最多 Limit 条  #>
+    param([int]$Limit = 300)
+    $checked = 0; $fixed = 0
+    foreach ($r in @($State.Ledger)) {
+        if ($checked -ge $Limit) { break }
+        if (-not $r.file_name) { continue }
+        if ($r.duration -and $r.res) { continue }
+        $file = Resolve-RowFile $r
+        if (-not $file -or -not (Test-Path -LiteralPath $file)) { continue }
+        $checked++
+        $meta = Get-LocalMediaMeta -File $file
+        $changed = $false
+        if ($meta.duration -and -not $r.duration) { $r.duration = $meta.duration; $r.seconds = $meta.seconds; $changed = $true }
+        if ($meta.res -and -not $r.res) { $r.res = $meta.res; $changed = $true }
+        if ($changed) { $fixed++ }
+    }
+    if ($fixed -gt 0) { Save-Ledger -Rows @($State.Ledger) -NoSnapshot; Touch-State }
+    return $fixed
+}
+
 function Invoke-Scan {
     param([switch]$Silent, [switch]$KeepStatus)
     $idx = Get-DownloadIndex -Dir $Config.contentDir
@@ -661,6 +716,9 @@ function Start-Download {
       不再直接拒绝 —— 这就是「任务队列」语义。
     #>
     param($Tokens, [string]$Status = 'new', [int]$Limit = 0, [switch]$Force)
+
+    # 一旦开始下载，「继续上次未完成」的提示就失效
+    $State.Resume = $null
 
     # 快速路径：跟踪中的下载器直接判活，不再枚举进程（CIM 在这台机器上要 ~1s）。
     # 只有「服务重启后 State 丢失」时才需要探测孤儿进程，那一步放在启动时做一次。

@@ -339,6 +339,23 @@ button.danger:hover:not(:disabled){background:#3a1d1d;border-color:#7a2b2b;color
 .added-chip #addedClear{padding:0 8px;color:var(--dim);font-size:14px}
 .added-chip.on{background:#1f4f86;border-color:#2b6cb0}
 .added-chip.on button{color:#eaf4ff}
+/* 上次未完成下载的提示 */
+.resume-bar{display:inline-flex;align-items:center;gap:6px;border:1px solid #6b4b1f;background:#2a2113;border-radius:999px;padding:3px 10px;font-size:12px;color:#e3b341;height:26px}
+.resume-bar[hidden]{display:none}
+.resume-bar button{background:transparent;border:0;color:#ffd479;padding:0 4px;font-size:12px;cursor:pointer}
+.resume-bar button:hover{color:#fff}
+/* 合集 */
+.col-list{display:flex;flex-direction:column;gap:6px}
+.col-row{display:flex;align-items:center;gap:8px;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:8px 10px}
+.col-row .name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer;color:var(--text);font-size:13px}
+.col-row .name:hover{color:var(--acc)}
+.col-row .cnt{color:var(--dim);font-size:11px;flex:0 0 auto}
+.col-row button{padding:2px 8px;font-size:12px;flex:0 0 auto}
+.colpick-box{width:min(420px,92vw);background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;max-height:80vh;overflow:auto}
+.ctx-sub{position:fixed;display:none;min-width:150px;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:4px;z-index:80;box-shadow:0 8px 24px rgba(0,0,0,.45);max-height:50vh;overflow:auto}
+.ctx-sub.on{display:block}
+.ctx-sub button{display:block;width:100%;text-align:left;background:transparent;border:0;padding:6px 10px;border-radius:5px;font-size:12px;color:var(--text);cursor:pointer}
+.ctx-sub button:hover{background:#22303f}
 /* ---------- 表格 / 画廊切换 ---------- */
 .seg{display:inline-flex;border:1px solid var(--line);border-radius:7px;overflow:hidden}
 .seg button{background:transparent;border:0;color:var(--dim);padding:3px 10px;font-size:12px;cursor:pointer}

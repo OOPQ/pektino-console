@@ -303,6 +303,8 @@ function Handle-Request {
             settings = [pscustomobject]@{ proxy = [string]$Config.proxy; concurrent = $(if ($Config.concurrent) { [int]$Config.concurrent } else { 3 }) }
             # 浏览器内播放用的媒体服务地址（前端拼成 <base>/<token>.mp4?k=<key>）
             media    = $(if ($State.Media) { [pscustomobject]@{ base = [string]$State.Media.Base; key = [string]$State.Media.Key } } else { $null })
+            # 上次退出时没下完的条目（重启后前端提示「继续下载」）
+            resume   = $(if ($State.Resume) { [pscustomobject]@{ count = [int]$State.Resume.count; tokens = @($State.Resume.tokens) } } else { $null })
             metrics  = [pscustomobject]@{
                 total        = $State.Metrics.total
                 avgMs        = if ($State.Metrics.total -gt 0) { [math]::Round($State.Metrics.sumMs / $State.Metrics.total, 1) } else { 0 }
@@ -339,6 +341,18 @@ function Handle-Request {
 
     if ($method -eq 'GET' -and $path -eq '/api/project') {
         Send-Json -Stream $Stream -Object ([pscustomobject]@{ ok = $true; project = (Get-ProjectSummary -Paths $WS) })
+        return
+    }
+
+    if ($method -eq 'GET' -and $path -eq '/api/collections') {
+        Send-Json -Stream $Stream -Object ([pscustomobject]@{ ok = $true; items = @(Get-Collections) })
+        return
+    }
+
+    if ($method -eq 'GET' -and $path -eq '/api/collections/items') {
+        $cid = 0
+        try { $cid = [int]$Req.Query['id'] } catch { }
+        Send-Json -Stream $Stream -Object ([pscustomobject]@{ ok = $true; id = $cid; tokens = @(Get-CollectionTokens -Id $cid) })
         return
     }
 
@@ -505,6 +519,23 @@ function Handle-Request {
                 if (-not $tokens.Count) { Send-Json -Stream $Stream -Object @{ ok = $false; error = '没选条目' }; return }
                 $status = if ($body.status) { [string]$body.status } else { 'done' }
                 Send-Json -Stream $Stream -Object (Invoke-Mark -Tokens $tokens -Status $status)
+                return
+            }
+            '/api/collections' {
+                $action = [string]$body.action
+                $cid = 0
+                try { $cid = [int]$body.id } catch { }
+                $ctokens = @()
+                if ($body.tokens) { $ctokens = @($body.tokens | Where-Object { $_ } | ForEach-Object { [string]$_ }) }
+                $cr = switch ($action) {
+                    'create' { New-Collection -Name ([string]$body.name) }
+                    'rename' { Rename-Collection -Id $cid -Name ([string]$body.name) }
+                    'delete' { Remove-Collection -Id $cid }
+                    'add' { Add-CollectionItems -Id $cid -Tokens $ctokens }
+                    'remove' { Remove-CollectionItems -Id $cid -Tokens $ctokens }
+                    default { @{ ok = $false; error = "未知操作: $action" } }
+                }
+                Send-Json -Stream $Stream -Object $cr
                 return
             }
             '/api/fav' {
@@ -696,10 +727,28 @@ try {
 # 服务重启后 State 是空的：清掉上一轮可能残留的下载器/curl，
 # 这样 Start-Download 可以走「只查跟踪状态」的快速路径，不必每次枚举进程
 try {
+    # 重启前没下完的条目：先记下来，等前端提示「继续下载」（Clean-StaleProgress 会清掉进度里的排队记录）
+    try {
+        if (Test-Path $DlProgress) {
+            $pjResume = Get-Content $DlProgress -Raw -Encoding UTF8 | ConvertFrom-Json
+            $resumeTokens = @($pjResume.items | Where-Object { $_.state -in @('queued', 'downloading', 'paused') } |
+                    ForEach-Object { [string]$_.token } | Where-Object { $_ } | Select-Object -Unique)
+            if ($resumeTokens.Count -gt 0) {
+                $State.Resume = @{ count = $resumeTokens.Count; tokens = $resumeTokens; at = (Get-Date).ToString('s') }
+                Write-FileLog "boot resume: $($resumeTokens.Count) unfinished items"
+            }
+        }
+    } catch { }
     $killedBoot = Stop-AllDownloadProcesses
     if ($killedBoot -gt 0) { Write-FileLog "boot cleanup: 清掉 $killedBoot 个残留下载进程" }
     # 进程都清掉了：进度文件里还挂着的 queued/downloading 都是假的，收尾成只剩已完成
     Clean-StaleProgress
+} catch { }
+
+# 历史本地条目补时长/分辨率（Shell 属性）
+try {
+    $mmFixed = Repair-MediaMeta
+    if ($mmFixed -gt 0) { Write-FileLog "media meta repaired: $mmFixed" }
 } catch { }
 
 

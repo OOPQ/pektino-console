@@ -42,6 +42,13 @@ export const state = {
   SHOW_ADDED: false,
   JOB_RUNNING: false,
   SCRAPE_BASE: null,
+  // 合集
+  COLLECTIONS: [],
+  COL_FILTER: null,     // { id, name }
+  COL_TOKENS: null,     // Set
+  // 上次未完成的下载
+  RESUME: null,
+  RESUME_DISMISSED: false,
   // 由 load() 每次填充；在这里声明，避免「运行时才挂属性」的隐式字段
   DOWNLOAD: null,
   SETTINGS: null,

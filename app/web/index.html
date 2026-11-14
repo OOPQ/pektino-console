@@ -102,9 +102,19 @@
   <button class="primary" id="btnDownload" title="用内置下载器下载（支持续传 / 并发 / 追加）">下载待下载</button>
   <button id="btnDlQueue" title="下载队列：进行中 / 已完成，可暂停继续">下载队列<span class="badge" id="dlBadge" hidden>0</span></button>
   <button class="ghost" id="btnGacha" title="从在盘条目里随机抽一个（快捷键 R）">🎲 抽一卡</button>
+  <button class="ghost" id="btnCollections" title="合集：查看 / 管理 / 批量加入">📚 合集 <span class="sub" id="colCount"></span></button>
+  <span class="resume-bar" id="resumeBar" hidden title="上次退出时还有没下完的条目">
+    上次有 <b id="resumeCount">0</b> 条未完成
+    <button id="resumeGo">继续</button>
+    <button id="resumeIgnore" title="忽略">×</button>
+  </span>
   <span class="added-chip" id="addedChip" hidden title="只看本次抓取/入库新增的条目">
     <button id="addedToggle">本次新增 <b id="addedCount">0</b> 条</button>
     <button id="addedClear" title="清除本次新增筛选">×</button>
+  </span>
+  <span class="added-chip" id="colFilterChip" hidden title="只看这个合集">
+    <button id="colFilterName">合集</button>
+    <button id="colFilterClear" title="清除合集筛选">×</button>
   </span>
   <span style="position:relative;margin-left:auto">
     <button class="ghost" id="btnMore" title="更多操作">更多 ▾</button>
@@ -212,6 +222,8 @@
 <div class="selbar" id="selbar">
   <b id="selCount">已选 0</b>
   <button class="ghost rowbtn" id="selDownload" title="把选中的条目加入下载队列">⬇ 下载</button>
+  <button class="ghost rowbtn" id="selCollection" title="把选中的条目加入合集">📚 合集</button>
+  <button class="ghost rowbtn danger" id="selRecycle" title="把选中的条目移入回收站">🗑 回收站</button>
   <button class="ghost rowbtn" id="selFavToggle">★ 收藏</button>
   <button class="ghost rowbtn" id="selDone">标记完成</button>
   <button class="ghost rowbtn" id="selWatchedToggle">✓ 标记已看</button>
@@ -294,6 +306,7 @@
       <button id="dlPause" disabled>⏸ 全部暂停</button>
       <button class="ghost" id="dlCancelAll">全部取消</button>
       <button class="ghost" id="dlClearDone" title="只清理队列里的完成记录，不删文件、不改台账">清理已完成</button>
+      <button class="ghost" id="dlRetry" title="把失败的条目重新加入下载队列" hidden>重试失败</button>
       <span class="sub">并发</span>
       <select id="dlConc" style="padding:2px 4px" title="同时下载的文件数（1-16）"></select>
       <span class="spacer"></span>
@@ -323,6 +336,44 @@
       <button class="ghost" id="binClose">关闭</button>
     </div>
     <div class="bin-list" id="binList"></div>
+  </div>
+</div>
+
+<!-- ===== 合集 ===== -->
+<div class="drawer" id="colDrawer">
+  <div class="sheet">
+    <h3>合集 <span class="sub" id="colHead"></span></h3>
+    <div style="display:flex;gap:6px;margin-bottom:12px">
+      <input id="colNewName" placeholder="新合集名称" style="flex:1" maxlength="60">
+      <button id="colCreate">新建</button>
+      <button class="ghost" id="colClose">关闭</button>
+    </div>
+    <div class="col-list" id="colList"></div>
+    <div id="colItemsView" hidden>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap">
+        <button class="ghost" id="colBack">← 返回</button>
+        <b id="colItemsName"></b>
+        <span class="sub" id="colItemsCount"></span>
+        <span class="spacer"></span>
+        <button class="ghost" id="colViewFilter" title="回到列表只显示这个合集">在列表中查看</button>
+      </div>
+      <div class="bin-list" id="colItemsList"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 合集选择（批量 / 右键） ===== -->
+<div class="lightbox" id="colPick">
+  <div class="colpick-box">
+    <h3>加入合集 <span class="sub" id="colPickCount"></span></h3>
+    <div class="col-list" id="colPickList"></div>
+    <div style="display:flex;gap:6px;margin-top:12px">
+      <input id="colPickNew" placeholder="新建合集名称" style="flex:1" maxlength="60">
+      <button id="colPickCreate">新建并加入</button>
+    </div>
+    <div class="actions single" style="margin-top:10px">
+      <button class="ghost" id="colPickCancel">取消</button>
+    </div>
   </div>
 </div>
 

@@ -78,6 +78,10 @@ export async function delFiles(tokens, purge) {
 }
 
 /* ================= 右键菜单 ================= */
+function escapeHtml(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
 function ctxItemsFor(row) {
   const favOn = !!row && row.fav === '1';
   const seen = !!row && !!row.last_play;
@@ -92,6 +96,7 @@ function ctxItemsFor(row) {
     { act: 'download', label: '⬇ 用内置下载器下载', off: !row || !row.url || !!row.file_name },
     { act: 'toggleFav', label: favOn ? '☆ 取消收藏' : '★ 收藏' },
     { act: 'toggleWatched', label: seen ? '↺ 标记未看' : '✓ 标记已看' },
+    { act: 'addcol', sub: true, label: '📚 加入合集 ▸' },
     { rate: true, value: +((row && row.rating) || 0) },
     { sep: true },
     { act: 'done', label: '标记完成' },
@@ -110,7 +115,11 @@ function ctxItemsFor(row) {
 
 let CTX_TOKEN = null;
 let CTX_FROM_GALLERY = false;
-const closeCtx = () => $('#ctxmenu').classList.remove('on');
+const closeCtx = () => {
+  $('#ctxmenu').classList.remove('on');
+  const sub = $('#ctxSub');
+  if (sub) sub.classList.remove('on');
+};
 
 async function onCtxRate(e) {
   const row = state.ROWS.find(r => r.token === CTX_TOKEN);
@@ -292,17 +301,58 @@ export function initRows() {
     menu.innerHTML = ctxItemsFor(row).map(i => {
       if (i.sep) return '<div class="sep"></div>';
       if (i.rate) return `<div class="ctxrate">${starsHtml(i.value)}<span class="clr">清除</span></div>`;
+      if (i.sub) return `<button data-act="${i.act}" data-sub="1"${i.off ? ' disabled' : ''}>${i.label}</button>`;
       return `<button data-act="${i.act}"${i.off ? ' disabled' : ''}>${i.label}</button>`;
-    }).join('');
+    }).join('') + '<div class="ctx-sub" id="ctxSub"></div>';
     menu.classList.add('on');
     const w = menu.offsetWidth, h = menu.offsetHeight;
     menu.style.left = Math.max(6, Math.min(e.clientX, innerWidth - w - 8)) + 'px';
     menu.style.top = Math.max(6, Math.min(e.clientY, innerHeight - h - 8)) + 'px';
+
+    // 「加入合集 ▸」二级菜单
+    const subBtn = menu.querySelector('button[data-sub]');
+    const sub = menu.querySelector('#ctxSub');
+    if (subBtn && sub) {
+      const showSub = () => {
+        const cols = state.COLLECTIONS || [];
+        sub.innerHTML = (cols.length
+          ? cols.map(c => `<button data-col="${c.id}">${escapeHtml(c.name)}</button>`).join('')
+          : '<div class="sub" style="padding:6px 10px">还没有合集</div>')
+          + '<button data-col-new="1">＋ 新建合集…</button>';
+        const r = subBtn.getBoundingClientRect();
+        sub.style.left = Math.max(6, Math.min(r.right + 2, innerWidth - 180)) + 'px';
+        sub.style.top = Math.max(6, Math.min(r.top, innerHeight - 80)) + 'px';
+        sub.classList.add('on');
+      };
+      subBtn.addEventListener('mouseenter', showSub);
+      subBtn.addEventListener('click', showSub);
+    }
   };
   $('#tbody').addEventListener('contextmenu', onContextMenu);
   if (gal) gal.addEventListener('contextmenu', onContextMenu);
 
   $('#ctxmenu').addEventListener('click', async e => {
+    // 二级菜单：加入已有合集 / 新建合集
+    const colBtn = e.target.closest('#ctxSub button[data-col]');
+    if (colBtn) {
+      const id = +colBtn.dataset.col;
+      const tk = CTX_TOKEN;
+      closeCtx();
+      const m = await import('./collections.js');
+      m.addToCollection(id, [tk]);
+      return;
+    }
+    const colNew = e.target.closest('#ctxSub button[data-col-new]');
+    if (colNew) {
+      const name = prompt('新合集名称');
+      const tk = CTX_TOKEN;
+      closeCtx();
+      if (name && name.trim()) {
+        const m = await import('./collections.js');
+        m.createCollectionAndAdd(name.trim(), [tk]);
+      }
+      return;
+    }
     if (e.target.closest('.ctxrate')) return onCtxRate(e);
     const btn = e.target.closest('button[data-act]');
     if (!btn) return;

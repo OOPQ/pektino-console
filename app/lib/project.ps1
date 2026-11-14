@@ -250,9 +250,17 @@ function Import-ProjectFiles {
         if ($known.ContainsKey($tk.ToLower())) { $skipped++; continue }
 
         $now = (Get-Date).ToString('yyyy-MM-dd HH:mm:ss')
+        # 本地文件顺便读时长/分辨率（Shell 属性），不依赖站点
+        $meta = $null
+        if (Get-Command Get-LocalMediaMeta -ErrorAction SilentlyContinue) {
+            try { $meta = Get-LocalMediaMeta -File $f.FullName } catch { }
+        }
         $row = [pscustomobject]@{
-            token = $tk; status = 'done'; fav = ''; rank = ''; page = ''; duration = ''; seconds = ''
-            res = ''; views = ''; likes = ''; uploaded = ''; url = ''; page_url = ''; site = 'local'
+            token = $tk; status = 'done'; fav = ''; rank = ''; page = ''
+            duration = $(if ($meta) { $meta.duration } else { '' })
+            seconds = $(if ($meta) { $meta.seconds } else { '' })
+            res = $(if ($meta) { $meta.res } else { '' })
+            views = ''; likes = ''; uploaded = ''; url = ''; page_url = ''; site = 'local'
             first_seen = $now; last_seen = $now; sent_at = ''; note = 'scan:init'
             file_name = $f.Name; file_size = $f.Length; file_date = $f.LastWriteTime.ToString('yyyy-MM-dd HH:mm:ss')
             play_count = ''; last_play = ''; rating = ''

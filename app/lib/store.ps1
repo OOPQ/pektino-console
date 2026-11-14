@@ -70,6 +70,20 @@ CREATE TABLE IF NOT EXISTS items (
 );
 CREATE INDEX IF NOT EXISTS idx_items_status ON items(status);
 CREATE INDEX IF NOT EXISTS idx_items_fav ON items(fav);
+CREATE TABLE IF NOT EXISTS collections (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  name       TEXT NOT NULL,
+  created_at TEXT DEFAULT '',
+  updated_at TEXT DEFAULT ''
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_collections_name ON collections(name COLLATE NOCASE);
+CREATE TABLE IF NOT EXISTS collection_items (
+  collection_id INTEGER NOT NULL,
+  token         TEXT NOT NULL,
+  added_at      TEXT DEFAULT '',
+  PRIMARY KEY (collection_id, token)
+);
+CREATE INDEX IF NOT EXISTS idx_collection_items_token ON collection_items(token);
 '@
     $cmd = $script:DbConn.CreateCommand()
     $cmd.CommandText = $schema
@@ -221,6 +235,171 @@ function Get-StoreCount {
     $n = [int]$cmd.ExecuteScalar()
     $cmd.Dispose()
     return $n
+}
+
+# ---------------- 合集 ----------------
+
+function Get-Collections {
+    $conn = Get-StoreConnection
+    $cmd = $conn.CreateCommand()
+    $cmd.CommandText = @'
+SELECT c.id, c.name, c.created_at, c.updated_at,
+       (SELECT COUNT(*) FROM collection_items ci WHERE ci.collection_id = c.id) AS cnt
+FROM collections c
+ORDER BY c.name COLLATE NOCASE ASC
+'@
+    $r = $cmd.ExecuteReader()
+    $out = New-Object System.Collections.ArrayList
+    while ($r.Read()) {
+        [void]$out.Add([pscustomobject]@{
+                id        = [int]$r.GetInt64(0)
+                name      = [string]$r.GetString(1)
+                createdAt = [string]$r.GetString(2)
+                updatedAt = [string]$r.GetString(3)
+                count     = [int]$r.GetInt64(4)
+            })
+    }
+    $r.Close(); $cmd.Dispose()
+    return @($out)
+}
+
+function New-Collection {
+    param([string]$Name)
+    $Name = ([string]$Name).Trim()
+    if (-not $Name) { return @{ ok = $false; error = '合集名称不能为空' } }
+    if ($Name.Length -gt 60) { return @{ ok = $false; error = '合集名称最长 60 字' } }
+    $conn = Get-StoreConnection
+    $chk = $conn.CreateCommand()
+    $chk.CommandText = 'SELECT id FROM collections WHERE name = @n COLLATE NOCASE LIMIT 1'
+    [void]$chk.Parameters.AddWithValue('@n', $Name)
+    $exists = $chk.ExecuteScalar()
+    $chk.Dispose()
+    if ($null -ne $exists) { return @{ ok = $false; error = '已有同名合集'; id = [int]$exists } }
+    $now = (Get-Date).ToString('yyyy-MM-dd HH:mm:ss')
+    $cmd = $conn.CreateCommand()
+    $cmd.CommandText = 'INSERT INTO collections (name, created_at, updated_at) VALUES (@n, @t, @t)'
+    [void]$cmd.Parameters.AddWithValue('@n', $Name)
+    [void]$cmd.Parameters.AddWithValue('@t', $now)
+    [void]$cmd.ExecuteNonQuery()
+    $cmd.Dispose()
+    $idCmd = $conn.CreateCommand()
+    $idCmd.CommandText = 'SELECT last_insert_rowid()'
+    $id = [int]$idCmd.ExecuteScalar()
+    $idCmd.Dispose()
+    return @{ ok = $true; id = $id; name = $Name }
+}
+
+function Rename-Collection {
+    param([int]$Id, [string]$Name)
+    if ($Id -le 0) { return @{ ok = $false; error = '合集不存在' } }
+    $Name = ([string]$Name).Trim()
+    if (-not $Name) { return @{ ok = $false; error = '合集名称不能为空' } }
+    if ($Name.Length -gt 60) { return @{ ok = $false; error = '合集名称最长 60 字' } }
+    $conn = Get-StoreConnection
+    $chk = $conn.CreateCommand()
+    $chk.CommandText = 'SELECT id FROM collections WHERE name = @n COLLATE NOCASE AND id <> @id LIMIT 1'
+    [void]$chk.Parameters.AddWithValue('@n', $Name)
+    [void]$chk.Parameters.AddWithValue('@id', $Id)
+    $exists = $chk.ExecuteScalar()
+    $chk.Dispose()
+    if ($null -ne $exists) { return @{ ok = $false; error = '已有同名合集' } }
+    $cmd = $conn.CreateCommand()
+    $cmd.CommandText = 'UPDATE collections SET name = @n, updated_at = @t WHERE id = @id'
+    [void]$cmd.Parameters.AddWithValue('@n', $Name)
+    [void]$cmd.Parameters.AddWithValue('@t', (Get-Date).ToString('yyyy-MM-dd HH:mm:ss'))
+    [void]$cmd.Parameters.AddWithValue('@id', $Id)
+    $n = $cmd.ExecuteNonQuery()
+    $cmd.Dispose()
+    if ($n -le 0) { return @{ ok = $false; error = '合集不存在' } }
+    return @{ ok = $true; id = $Id; name = $Name }
+}
+
+function Remove-Collection {
+    param([int]$Id)
+    if ($Id -le 0) { return @{ ok = $false; error = '合集不存在' } }
+    $conn = Get-StoreConnection
+    $tx = $conn.BeginTransaction()
+    try {
+        $c1 = $conn.CreateCommand(); $c1.Transaction = $tx
+        $c1.CommandText = 'DELETE FROM collection_items WHERE collection_id = @id'
+        [void]$c1.Parameters.AddWithValue('@id', $Id)
+        [void]$c1.ExecuteNonQuery(); $c1.Dispose()
+        $c2 = $conn.CreateCommand(); $c2.Transaction = $tx
+        $c2.CommandText = 'DELETE FROM collections WHERE id = @id'
+        [void]$c2.Parameters.AddWithValue('@id', $Id)
+        $n = $c2.ExecuteNonQuery(); $c2.Dispose()
+        $tx.Commit()
+    } catch { $tx.Rollback(); throw } finally { $tx.Dispose() }
+    if ($n -le 0) { return @{ ok = $false; error = '合集不存在' } }
+    return @{ ok = $true; id = $Id }
+}
+
+function Add-CollectionItems {
+    param([int]$Id, [string[]]$Tokens)
+    if ($Id -le 0) { return @{ ok = $false; error = '合集不存在' } }
+    $Tokens = @($Tokens | Where-Object { $_ })
+    if (-not $Tokens.Count) { return @{ ok = $false; error = '没有选中条目' } }
+    $conn = Get-StoreConnection
+    $chk = $conn.CreateCommand()
+    $chk.CommandText = 'SELECT 1 FROM collections WHERE id = @id'
+    [void]$chk.Parameters.AddWithValue('@id', $Id)
+    if ($null -eq $chk.ExecuteScalar()) { $chk.Dispose(); return @{ ok = $false; error = '合集不存在' } }
+    $chk.Dispose()
+    $now = (Get-Date).ToString('yyyy-MM-dd HH:mm:ss')
+    $n = 0
+    $tx = $conn.BeginTransaction()
+    try {
+        $cmd = $conn.CreateCommand(); $cmd.Transaction = $tx
+        $cmd.CommandText = 'INSERT OR IGNORE INTO collection_items (collection_id, token, added_at) VALUES (@id, @t, @a)'
+        [void]$cmd.Parameters.AddWithValue('@id', $Id)
+        [void]$cmd.Parameters.AddWithValue('@t', '')
+        [void]$cmd.Parameters.AddWithValue('@a', $now)
+        foreach ($tk in $Tokens) { $cmd.Parameters['@t'].Value = [string]$tk; $n += $cmd.ExecuteNonQuery() }
+        $cmd.Dispose()
+        $up = $conn.CreateCommand(); $up.Transaction = $tx
+        $up.CommandText = 'UPDATE collections SET updated_at = @a WHERE id = @id'
+        [void]$up.Parameters.AddWithValue('@a', $now); [void]$up.Parameters.AddWithValue('@id', $Id)
+        [void]$up.ExecuteNonQuery(); $up.Dispose()
+        $tx.Commit()
+    } catch { $tx.Rollback(); throw } finally { $tx.Dispose() }
+    return @{ ok = $true; id = $Id; added = $n }
+}
+
+function Remove-CollectionItems {
+    param([int]$Id, [string[]]$Tokens)
+    $Tokens = @($Tokens | Where-Object { $_ })
+    if ($Id -le 0 -or -not $Tokens.Count) { return @{ ok = $false; error = '参数不完整' } }
+    $conn = Get-StoreConnection
+    $n = 0
+    $tx = $conn.BeginTransaction()
+    try {
+        $cmd = $conn.CreateCommand(); $cmd.Transaction = $tx
+        $cmd.CommandText = 'DELETE FROM collection_items WHERE collection_id = @id AND token = @t'
+        [void]$cmd.Parameters.AddWithValue('@id', $Id)
+        [void]$cmd.Parameters.AddWithValue('@t', '')
+        foreach ($tk in $Tokens) { $cmd.Parameters['@t'].Value = [string]$tk; $n += $cmd.ExecuteNonQuery() }
+        $cmd.Dispose()
+        $up = $conn.CreateCommand(); $up.Transaction = $tx
+        $up.CommandText = 'UPDATE collections SET updated_at = @a WHERE id = @id'
+        [void]$up.Parameters.AddWithValue('@a', (Get-Date).ToString('yyyy-MM-dd HH:mm:ss'))
+        [void]$up.Parameters.AddWithValue('@id', $Id)
+        [void]$up.ExecuteNonQuery(); $up.Dispose()
+        $tx.Commit()
+    } catch { $tx.Rollback(); throw } finally { $tx.Dispose() }
+    return @{ ok = $true; removed = $n }
+}
+
+function Get-CollectionTokens {
+    param([int]$Id)
+    $conn = Get-StoreConnection
+    $cmd = $conn.CreateCommand()
+    $cmd.CommandText = 'SELECT token FROM collection_items WHERE collection_id = @id ORDER BY added_at ASC, token ASC'
+    [void]$cmd.Parameters.AddWithValue('@id', $Id)
+    $r = $cmd.ExecuteReader()
+    $out = New-Object System.Collections.ArrayList
+    while ($r.Read()) { [void]$out.Add([string]$r.GetString(0)) }
+    $r.Close(); $cmd.Dispose()
+    return @($out)
 }
 
 # ---------------- CSV 快照（原子写 + 每日备份） ----------------

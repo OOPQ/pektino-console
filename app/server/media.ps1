@@ -58,8 +58,17 @@ function Read-RequestText($stream) {
     return $sb.ToString()
 }
 
-function Send-Simple($stream, [int]$code, [string]$reason, [string]$body) {
-    $bytes = [System.Text.Encoding]::UTF8.GetBytes($body)
+function Test-SafeMediaName([string]$name) {
+    <#  允许中文文件名，但挡掉路径分隔符和 ..  #>
+    if (-not $name) { return $false }
+    if ($name -notmatch '\.mp4$') { return $false }
+    if ($name.Length -gt 180) { return $false }
+    if ($name -match '[\\/:*?"<>|]') { return $false }
+    if ($name -match '\.\.') { return $false }
+    return $true
+}
+
+function Send-Simple($stream, [int]$code, [string]$reason, [string]$body) {    $bytes = [System.Text.Encoding]::UTF8.GetBytes($body)
     $head = "HTTP/1.1 $code $reason`r`nContent-Type: text/plain; charset=utf-8`r`nContent-Length: $($bytes.Length)`r`nConnection: close`r`nCache-Control: no-store`r`n`r`n"
     Send-Text $stream $head
     try { $stream.Write($bytes, 0, $bytes.Length); $stream.Flush() } catch { }
@@ -123,7 +132,7 @@ try {
             if ($Key -and [string]$query['k'] -ne $Key) { Send-Simple $stream 403 'Forbidden' 'forbidden'; continue }
 
             $name = [uri]::UnescapeDataString($pathPart.TrimStart('/'))
-            if ($name -notmatch '^[A-Za-z0-9_\-]+\.mp4$') { Send-Simple $stream 404 'Not Found' 'not found'; continue }
+            if (-not (Test-SafeMediaName $name)) { Send-Simple $stream 404 'Not Found' 'not found'; continue }
             $full = [System.IO.Path]::GetFullPath((Join-Path $mediaFull $name))
             if ($full -notlike ($mediaFull + '\*')) { Send-Simple $stream 403 'Forbidden' 'forbidden'; continue }
             if (-not (Test-Path -LiteralPath $full -PathType Leaf)) { Send-Simple $stream 404 'Not Found' 'not found'; continue }

@@ -22,6 +22,8 @@ function passFilter(r) {
   if (r.status === 'recycled' || r.status === 'ignored') return false;
   /* 「本次新增」临时筛选：只看新增，不再叠加其他筛选（否则容易筛成空列表） */
   if (state.SHOW_ADDED && state.ADDED && state.ADDED.size) return state.ADDED.has(r.token);
+  /* 合集筛选（可与其他筛选叠加） */
+  if (state.COL_FILTER && state.COL_TOKENS && !state.COL_TOKENS.has(r.token)) return false;
   /* 状态：任务生命周期（单选） */
   const st = state.FILTER.status;
   if (['new', 'done', 'failed'].includes(st) && r.status !== st) return false;

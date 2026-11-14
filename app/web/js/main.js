@@ -3,6 +3,7 @@ import { $, state, PREFS, savePrefs, api, toast, onEvent } from './core.js';
 import { render, markActiveKpi, initTable } from './table.js';
 import { initRows, delFiles } from './rows.js';
 import { initPanels, connectSse, openLightbox } from './panels.js';
+import { initCollections, openCollectionPicker } from './collections.js';
 import { setFav, setWatched, setStatus, setRating, reload, copyText } from './actions.js';
 
 /* ================= 任务进度条 ================= */
@@ -271,6 +272,11 @@ function renderDownloadQueue(dl) {
   if (failHead) failHead.hidden = failed.length === 0;
   $('#dlFailInfo').textContent = failed.length ? `（${failed.length} 条）` : '';
   dlList($('#dlFailList'), failed, '没有失败条目');
+  const retryBtn = $('#dlRetry');
+  if (retryBtn) {
+    retryBtn.hidden = failed.length === 0;
+    retryBtn.textContent = `重试失败 (${failed.length})`;
+  }
 
   const cancelHead = $('#dlCancelHead');
   if (cancelHead) cancelHead.hidden = cancelled.length === 0;
@@ -367,6 +373,16 @@ function initDownloadQueue() {
     } catch (e) { toast('请求失败：' + e.message, 4000); }
     load();
   };
+  $('#dlRetry').onclick = async () => {
+    const items = (state.DOWNLOAD && state.DOWNLOAD.items) || [];
+    const tokens = items.filter(i => ['failed', 'dead'].includes(i.state)).map(i => i.token);
+    if (!tokens.length) return;
+    try {
+      const r = await api('/api/download', { tokens });
+      toast(r.ok ? `已重新加入 ${r.count || tokens.length} 条` : (r.error || '失败'), 3500);
+    } catch (e) { toast('请求失败：' + e.message, 4000); }
+    load();
+  };
   $('#dlActiveList').addEventListener('click', onDqAction);
   $('#dlPausedList').addEventListener('click', onDqAction);
   $('#dlDoneList').addEventListener('click', onDqAction);
@@ -458,14 +474,25 @@ function initBin() {
   });
 }
 
-function paintAddedChip() {
-  const chip = $('#addedChip');
+function paintAddedChip() {  const chip = $('#addedChip');
   if (!chip) return;
   const n = state.ADDED ? state.ADDED.size : 0;
   chip.hidden = n === 0;
   chip.classList.toggle('on', n > 0 && !!state.SHOW_ADDED);
   const cnt = $('#addedCount');
   if (cnt) cnt.textContent = String(n);
+}
+
+function paintResume() {
+  const bar = $('#resumeBar');
+  if (!bar) return;
+  const r = state.RESUME;
+  const show = !!(r && r.count && !state.RESUME_DISMISSED);
+  bar.hidden = !show;
+  if (show) {
+    const c = $('#resumeCount');
+    if (c) c.textContent = String(r.count);
+  }
 }
 
 function paintProject(ws) {
@@ -568,6 +595,8 @@ async function load() {
 
     state.DOWNLOAD = s.download || null;
     state.MEDIA = s.media || null;
+    state.RESUME = s.resume || null;
+    paintResume();
     // 下载队列里的活跃条目变了（开始/取消/完成）也要重绘表格：
     // 行内按钮要在「下载 / 取消」之间切换，状态列要显示/隐藏下载中的蓝点
     const dlItems = (s.download && s.download.items) || [];
@@ -765,6 +794,31 @@ function initToolbar() {
       render();
     };
   }
+  // 上次未完成的下载
+  if ($('#resumeGo')) {
+    $('#resumeGo').onclick = async () => {
+      const r = state.RESUME;
+      if (!r || !r.tokens) return;
+      const tokens = r.tokens.filter(tk => {
+        const row = state.ROWS.find(x => x.token === tk);
+        return row && !row.file_name;
+      });
+      state.RESUME = null;
+      paintResume();
+      if (!tokens.length) { toast('没有可继续的条目（可能已经下完了）', 3000); return; }
+      try {
+        const res = await api('/api/download', { tokens });
+        toast(res.ok ? `继续下载 ${res.count || tokens.length} 条` : (res.error || '失败'), 3500);
+      } catch (e) { toast('请求失败：' + e.message, 4000); }
+      load();
+    };
+  }
+  if ($('#resumeIgnore')) {
+    $('#resumeIgnore').onclick = () => {
+      state.RESUME_DISMISSED = true;
+      paintResume();
+    };
+  }
   $('#btnCancelJob').onclick = doCancelJob;
   $('#btnDownload').onclick = downloadNew;
   $('#btnSaveNet').onclick = saveNet;
@@ -828,8 +882,21 @@ function initToolbar() {
 function initBulk() {
   const sel = () => [...state.SEL];
 
-  $('#selFavToggle').onclick = async () => {
+  $('#selCollection').onclick = () => {
+    if (state.SEL.size) openCollectionPicker([...state.SEL]);
+  };
+  $('#selRecycle').onclick = async () => {
     if (!state.SEL.size) return;
+    const count = state.SEL.size;
+    if (!confirm(`把选中的 ${count} 条移入回收站？`)) return;
+    const r = await setStatus([...state.SEL], 'recycled');
+    if (!r || !r.ok) return toast((r && r.error) || '操作失败', 3500);
+    state.SEL.clear();
+    render();
+    toast(`已移入回收站 ${r.count || count} 条`, 2500);
+  };
+
+  $('#selFavToggle').onclick = async () => {    if (!state.SEL.size) return;
     const on = $('#selFavToggle').dataset.on !== '1';
     const r = await setFav(sel(), on);
     if (!r.ok) return;
@@ -924,6 +991,7 @@ initToolbar();
 initBulk();
 initDownloadQueue();
 initBin();
+initCollections();
 
 onEvent('reload', load);
 onEvent('delete', d => delFiles(d.tokens, d.purge));

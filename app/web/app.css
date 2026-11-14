@@ -424,8 +424,8 @@ body:not(.multi) #tablewrap th:first-child,
 body:not(.multi) #tablewrap td:first-child { display: none; }
 body.multi #tbody tr.sel > td { background: rgba(88,166,255,.10); }
 .card { position: relative; }
-.card .selcard { display: none; position: absolute; right: 8px; top: 8px; z-index: 3; width: 24px; height: 24px; border-radius: 50%; border: 1px solid rgba(255,255,255,.7); background: rgba(0,0,0,.45); color: #fff; font-size: 14px; line-height: 22px; text-align: center; cursor: pointer; }
-body.multi .card .selcard { display: block; }
+.card .selcard { display: none; position: absolute; right: 8px; top: 8px; z-index: 3; width: 22px; height: 22px; box-sizing: border-box; padding: 0; border-radius: 50%; border: 1px solid rgba(255,255,255,.8); background: rgba(0,0,0,.45); color: #fff; font-size: 13px; font-weight: 700; line-height: 1; align-items: center; justify-content: center; cursor: pointer; text-align: center; }
+body.multi .card .selcard { display: flex; }
 body.multi .card .selcard.on { background: var(--accent, #2f81f7); border-color: var(--accent, #2f81f7); }
 body.multi .card.sel { outline: 2px solid var(--accent, #2f81f7); outline-offset: -2px; }
 body.multi .card .playbtn { display: none; }

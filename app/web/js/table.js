@@ -129,7 +129,7 @@ export function cardHtml(r, active) {
       ? `<button class="dlbtn danger" data-dl-cancel="${r.token}">取消</button>`
       : `<button class="dlbtn" data-dl="${r.token}">下载</button>`);
   return `<div class="card ${selected ? 'sel' : ''}" data-row="${r.token}">
-    <button class="selcard ${selected ? 'on' : ''}" data-sel="${r.token}" title="选择">✓</button>
+    <button class="selcard ${selected ? 'on' : ''}" data-sel="${r.token}" title="选择"><svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path d="M3 8.5l3.2 3.2L13 4.8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
     <div class="cover" data-lb="${r.token}" title="点击放大">
       <img src="/api/cover?token=${encodeURIComponent(r.token)}&full=1" loading="lazy" alt=""
            onerror="if(!this.dataset.f){this.dataset.f=1;this.src=this.src.replace('&full=1','');}else{this.parentNode.classList.add('nocover');this.remove();}">

@@ -125,7 +125,7 @@ function Repair-Covers {
       - 拿不到封面地址或图片 404 时写 <token>.missing 标记，避免反复重试
       - 修完顺带补缩略图
     #>
-    param([int]$Limit = 40)
+    param([int]$Limit = 40, [switch]$LocalOnly)
 
     if (-not (Test-Path $CoverDir)) { New-Item -ItemType Directory -Path $CoverDir -Force | Out-Null }
 
@@ -143,6 +143,17 @@ function Repair-Covers {
         if (-not $file -or -not (Test-Path -LiteralPath $file)) { continue }
         $localTried++
         if (New-LocalCover -Video $file -Dest $dest) { $localFixed++ }
+    }
+
+    if ($LocalOnly) {
+        # 主循环自动任务只做本地视频帧，绝不联网（站点慢/挂会拖死整个控制台）
+        if ($localFixed -gt 0) {
+            try { [void](Update-Thumbs -CoverDir $CoverDir -ThumbDir $ThumbDir) } catch { }
+            Touch-State
+            Write-Log 'cover' "封面自动修复：用视频帧补 $localFixed 张（本地）"
+        }
+        $leftLocal = (Get-CoverMissingList).Count
+        return [pscustomobject]@{ ok = $true; fixed = $localFixed; local = $localFixed; failed = 0; missing = $leftLocal; scanned = $localTried }
     }
 
     $candidates = Get-CoverMissingList -Limit $Limit
@@ -222,5 +233,5 @@ function Step-Covers {
     if ($missing -le 0) { return }
     if ($State.CoverRepairAt -and ((Get-Date) - [datetime]$State.CoverRepairAt).TotalMinutes -lt 10) { return }
     $State.CoverRepairAt = (Get-Date).ToString('s')
-    try { [void](Repair-Covers -Limit 15) } catch { }
+    try { [void](Repair-Covers -Limit 15 -LocalOnly) } catch { }
 }

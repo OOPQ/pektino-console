@@ -331,6 +331,14 @@ button.danger:hover:not(:disabled){background:#3a1d1d;border-color:#7a2b2b;color
 .bin-actions{display:flex;gap:6px;flex-shrink:0}
 .bin-actions button{padding:3px 8px;font-size:12px}
 .bin-empty{padding:44px 0;text-align:center;color:var(--dim);line-height:1.9}
+/* 「本次新增」临时筛选 chip */
+.added-chip{display:inline-flex;align-items:center;border:1px solid #2b5c8f;border-radius:999px;background:#12253a;overflow:hidden;height:26px}
+.added-chip[hidden]{display:none}
+.added-chip button{background:transparent;border:0;border-radius:0;padding:0 10px;height:100%;font-size:12px;color:var(--acc);cursor:pointer}
+.added-chip button:hover{background:#1b3a5c;color:#fff}
+.added-chip #addedClear{padding:0 8px;color:var(--dim);font-size:14px}
+.added-chip.on{background:#1f4f86;border-color:#2b6cb0}
+.added-chip.on button{color:#eaf4ff}
 /* ---------- 表格 / 画廊切换 ---------- */
 .seg{display:inline-flex;border:1px solid var(--line);border-radius:7px;overflow:hidden}
 .seg button{background:transparent;border:0;color:var(--dim);padding:3px 10px;font-size:12px;cursor:pointer}

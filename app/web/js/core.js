@@ -37,6 +37,11 @@ export const state = {
   VIEW: PREFS.view || 'table',
   LB_TOKEN: null,
   GACHA_TOKEN: null,
+  // 「本次新增」临时筛选：抓取/入库结束后记录新增的 token
+  ADDED: null,
+  SHOW_ADDED: false,
+  JOB_RUNNING: false,
+  SCRAPE_BASE: null,
   // 由 load() 每次填充；在这里声明，避免「运行时才挂属性」的隐式字段
   DOWNLOAD: null,
   SETTINGS: null,

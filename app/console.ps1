@@ -703,6 +703,44 @@ try {
 } catch { }
 
 
+# ---------- 文件系统监听：media 目录有变动才扫盘 ----------
+# 之前每 10 秒递归枚举整个 media 目录，几千个文件时会持续吃磁盘 IO。
+# 现在用 FileSystemWatcher 收集事件，主循环按需扫描；另外每 10 分钟兜底扫一次。
+$script:FsWatcher = $null
+$script:FsDirty = $false
+$script:FsPollAt = $null
+
+function Start-FsWatcher {
+    param([string]$Dir)
+    if (-not $Dir -or -not (Test-Path -LiteralPath $Dir)) { return }
+    try {
+        $w = New-Object System.IO.FileSystemWatcher
+        $w.Path = $Dir
+        $w.IncludeSubdirectories = $true
+        $w.Filter = '*.mp4'
+        $w.NotifyFilter = [System.IO.NotifyFilters]::FileName -bor [System.IO.NotifyFilters]::LastWrite -bor [System.IO.NotifyFilters]::Size
+        $w.InternalBufferSize = 65536
+        foreach ($ev in @('Created', 'Changed', 'Deleted', 'Renamed', 'Error')) {
+            Register-ObjectEvent -InputObject $w -EventName $ev -SourceIdentifier "pektino.fs.$ev" | Out-Null
+        }
+        $w.EnableRaisingEvents = $true
+        $script:FsWatcher = $w
+        Write-FileLog "fs watcher started: $Dir"
+    } catch { Write-FileLog "fs watcher failed: $($_.Exception.Message)" }
+}
+
+function Read-FsDirty {
+    <#  把排队的文件事件读掉，有事件就返回 $true  #>
+    $dirty = $false
+    foreach ($ev in @('Created', 'Changed', 'Deleted', 'Renamed', 'Error')) {
+        $e = Get-Event -SourceIdentifier "pektino.fs.$ev" -ErrorAction SilentlyContinue
+        if ($e) { $dirty = $true; Remove-Event -SourceIdentifier "pektino.fs.$ev" -ErrorAction SilentlyContinue }
+    }
+    return $dirty
+}
+
+Start-FsWatcher -Dir $Config.contentDir
+
 # 端口被别的程序占用：往后找一个空闲端口
 $bindPort = $Port
 $listener = $null
@@ -845,14 +883,20 @@ try {
             }
             if (-not $mediaAlive) { $null = Start-MediaServer }
         }
-        # 空闲扫盘：优先在「这一轮没有待处理请求」时跑，这样 media\ 里有几千个文件时，
-        # 扫描不会拉长任何一次页面请求的响应时间。
-        # 但持续轮询（前端任务期间 1.2s 一次）可能让 Poll 一直是 true、永远等不到空闲 →
-        # 加一条兜底：超过 30 秒没扫就强制扫一次，避免扫描被轮询饿死。
+        # 扫盘：文件系统监听报有变动才扫；另外每 10 分钟兜底扫一次
         $lastScan = $null
         if ($State.Scan -and $State.Scan.lastScan) { try { $lastScan = [datetime]$State.Scan.lastScan } catch { } }
         $scanAge = if ($lastScan) { ((Get-Date) - $lastScan).TotalSeconds } else { [double]::MaxValue }
-        if ($scanAge -ge 10 -and (-not $pending -or $scanAge -ge 30)) {
+        if ($script:FsWatcher -and (-not $script:FsPollAt -or ((Get-Date) - [datetime]$script:FsPollAt).TotalSeconds -ge 1)) {
+            $script:FsPollAt = (Get-Date).ToString('s')
+            if (Read-FsDirty) { $script:FsDirty = $true }
+        }
+        # 有请求在处理时先不扫（避免拉长页面响应），但最多拖 30 秒
+        $canScan = (-not $pending) -or ($scanAge -ge 30)
+        if ($script:FsDirty -and $scanAge -ge 5 -and $canScan) {
+            $script:FsDirty = $false
+            try { [void](Invoke-Scan -Silent) } catch { try { Write-FileLog "fs scan failed: $($_.Exception.Message)" } catch { } }
+        } elseif ($scanAge -ge 600 -and $canScan) {
             try { [void](Invoke-Scan -Silent) } catch { try { Write-FileLog "idle scan failed: $($_.Exception.Message)" } catch { } }
         }
         # CSV 快照（内部 30 秒节流）也放空闲轮次：几千行时 Export-Csv 要一两百毫秒。
@@ -865,6 +909,12 @@ try {
 } catch {
     try { Write-FileLog "main loop crashed: $($_.Exception.Message) / $($_.ScriptStackTrace)" } catch { }
 } finally {
+    if ($script:FsWatcher) {
+        try { $script:FsWatcher.EnableRaisingEvents = $false; $script:FsWatcher.Dispose() } catch { }
+    }
+    foreach ($ev in @('Created', 'Changed', 'Deleted', 'Renamed', 'Error')) {
+        try { Unregister-Event -SourceIdentifier "pektino.fs.$ev" -ErrorAction SilentlyContinue } catch { }
+    }
     if ($State.Media -and $State.Media.Pid) {
         try { & taskkill.exe /PID $State.Media.Pid /T /F 2>&1 | Out-Null } catch { }
     }

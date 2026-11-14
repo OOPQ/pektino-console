@@ -458,6 +458,16 @@ function initBin() {
   });
 }
 
+function paintAddedChip() {
+  const chip = $('#addedChip');
+  if (!chip) return;
+  const n = state.ADDED ? state.ADDED.size : 0;
+  chip.hidden = n === 0;
+  chip.classList.toggle('on', n > 0 && !!state.SHOW_ADDED);
+  const cnt = $('#addedCount');
+  if (cnt) cnt.textContent = String(n);
+}
+
 function paintProject(ws) {
   const el = $('#wsInfo');
   if (!el) return;
@@ -506,6 +516,24 @@ async function load() {
         for (const tk of [...state.SEL]) { if (!alive.has(tk)) state.SEL.delete(tk); }
       }
     }
+    // 抓取/入库结束：算出本次新增，自动套一个临时筛选
+    const jobRunning = !!(s.job && s.job.running);
+    const wasRunning = state.JOB_RUNNING;
+    state.JOB_RUNNING = jobRunning;
+    if (wasRunning && !jobRunning && state.SCRAPE_BASE) {
+      const base = state.SCRAPE_BASE;
+      state.SCRAPE_BASE = null;
+      const added = state.ROWS.filter(r => !base.has(r.token)).map(r => r.token);
+      if (added.length) {
+        state.ADDED = new Set(added);
+        state.SHOW_ADDED = true;
+        toast(`本次新增 ${added.length} 条，已临时筛选`, 4000);
+      } else {
+        toast('本次没有新增条目', 2500);
+      }
+    }
+    paintAddedChip();
+
     _WS = s.project || _WS;
     const S = state.STATS;
 
@@ -571,6 +599,9 @@ async function doScrape() {
   const pages = pageList();
   const limit = parseInt($('#limit').value) || 0;
   try {
+    // 记录抓取前的 token，任务结束后用来算「本次新增」
+    state.SCRAPE_BASE = new Set(state.ROWS.map(r => r.token));
+    state.ADDED = null; state.SHOW_ADDED = false; paintAddedChip(); render();
     const r = await api('/api/scrape', { rank, pages, limit, incremental: $('#chkInc').checked });
     if (!r.ok) return toast('失败：' + r.error, 5000);
     toast(r.incremental
@@ -584,6 +615,8 @@ async function doImport() {
   const media = (_WS && _WS.media) || '';
   if (!confirm(`扫描项目里的媒体目录并入库？\n${media}\n\n会逐个用文件名(token)去站点查证，能查到的才入库并标记为已完成。`)) return;
   try {
+    state.SCRAPE_BASE = new Set(state.ROWS.map(x => x.token));
+    state.ADDED = null; state.SHOW_ADDED = false; paintAddedChip(); render();
     const r = await api('/api/import', {});
     if (!r.ok) return toast('失败：' + r.error, 5000);
     toast('已开始扫描本地文件');
@@ -702,6 +735,23 @@ function initToolbar() {
   $('#btnScrapeGo').onclick = () => { closeScrapeModal(); doScrape(); };
   $('#btnScrapeCancel').onclick = closeScrapeModal;
   $('#scrapeModal').onclick = e => { if (e.target.id === 'scrapeModal') closeScrapeModal(); };
+  // 「本次新增」临时筛选
+  if ($('#addedToggle')) {
+    $('#addedToggle').onclick = () => {
+      if (!state.ADDED || !state.ADDED.size) return;
+      state.SHOW_ADDED = !state.SHOW_ADDED;
+      paintAddedChip();
+      render();
+    };
+  }
+  if ($('#addedClear')) {
+    $('#addedClear').onclick = () => {
+      state.ADDED = null;
+      state.SHOW_ADDED = false;
+      paintAddedChip();
+      render();
+    };
+  }
   $('#btnCancelJob').onclick = doCancelJob;
   $('#btnDownload').onclick = downloadNew;
   $('#btnSaveNet').onclick = saveNet;

@@ -102,6 +102,10 @@
   <button class="primary" id="btnDownload" title="用内置下载器下载（支持续传 / 并发 / 追加）">下载待下载</button>
   <button id="btnDlQueue" title="下载队列：进行中 / 已完成，可暂停继续">下载队列<span class="badge" id="dlBadge" hidden>0</span></button>
   <button class="ghost" id="btnGacha" title="从在盘条目里随机抽一个（快捷键 R）">🎲 抽一卡</button>
+  <span class="added-chip" id="addedChip" hidden title="只看本次抓取/入库新增的条目">
+    <button id="addedToggle">本次新增 <b id="addedCount">0</b> 条</button>
+    <button id="addedClear" title="清除本次新增筛选">×</button>
+  </span>
   <span style="position:relative;margin-left:auto">
     <button class="ghost" id="btnMore" title="更多操作">更多 ▾</button>
     <div class="menu" id="moreMenu">

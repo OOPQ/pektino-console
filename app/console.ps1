@@ -587,7 +587,10 @@ function Handle-Request {
                 return
             }
             '/api/play' {
-                Send-Json -Stream $Stream -Object (Invoke-Play -Token ([string]$body.token) -CountOnly:([bool]$body.count))
+                # 注意：$body 是 hashtable，$body.count 会拿到「键的数量」而不是 count 字段
+                $countOnly = $false
+                if ($body.ContainsKey('count')) { $countOnly = [bool]$body['count'] }
+                Send-Json -Stream $Stream -Object (Invoke-Play -Token ([string]$body['token']) -CountOnly:$countOnly)
                 return
             }
             '/api/reveal' {

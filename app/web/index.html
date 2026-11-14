@@ -105,6 +105,7 @@
 <!-- ===== 操作条 ===== -->
 <div class="bar actions">
   <button class="primary" id="btnScrape" title="抓取榜单并写入台账（可设置榜单/页数/条数）">抓取榜单</button>
+  <button class="ghost" id="btnUrlScrape" title="粘贴单条视频页面或直链，独立抓取">链接抓取</button>
   <span class="divider"></span>
   <button class="primary" id="btnDownload" title="用内置下载器下载（支持续传 / 并发 / 追加）">下载待下载</button>
   <button id="btnDlQueue" title="下载队列：进行中 / 已完成，可暂停继续">下载队列<span class="badge" id="dlBadge" hidden>0</span></button>
@@ -146,10 +147,6 @@
       <label>来源</label>
       <select id="scrapeSource"></select>
     </div>
-    <div class="field">
-      <label>视频链接（单条；填了按该链接抓取，忽略下方榜单/数量）</label>
-      <input type="text" id="scrapeUrl" placeholder="视频页 /video/viewhd/… 或直链 .m3u8 / .mp4">
-    </div>
     <label class="chk" id="hdField" style="margin-bottom:10px" title="高清需要登录/VIP，暂未开放"><input type="checkbox" id="scrapeHd" disabled> 高清（viewhd，需登录/VIP，暂未开放）</label>
     <div class="field">
       <label>榜单</label>
@@ -164,6 +161,22 @@
     <div class="modal-actions">
       <button class="primary" id="btnScrapeGo">开始抓取</button>
       <button class="ghost" id="btnScrapeCancel">取消</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 链接抓取弹窗 ===== -->
+<div class="modal" id="urlModal">
+  <div class="modal-box">
+    <h3>通过链接抓取</h3>
+    <div class="field">
+      <label>视频链接</label>
+      <input type="text" id="urlInput" placeholder="视频页，或 .m3u8 / .mp4 直链；自动识别来源">
+    </div>
+    <div class="sub" style="margin-bottom:14px">支持 qise / hsex / pektino 视频页与直链；填一条抓一条，不影响榜单设置。</div>
+    <div class="modal-actions">
+      <button class="primary" id="btnUrlGo">开始抓取</button>
+      <button class="ghost" id="btnUrlCancel">取消</button>
     </div>
   </div>
 </div>

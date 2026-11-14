@@ -712,8 +712,7 @@ async function load() {
 async function doScrape() {
   const rank = $('#rank').value;
   const limit = parseInt($('#limit').value) || 50;
-  const url = ($('#scrapeUrl')?.value || '').trim();
-  // 点击后立刻显示进度条，避免单条 URL/秒级任务来不及看到
+  // 点击后立刻显示进度条，避免秒级任务来不及看到
   const prog = $('#prog');
   if (prog) {
     prog.classList.add('on');
@@ -724,25 +723,46 @@ async function doScrape() {
   try {
     state.SCRAPE_BASE = new Set(state.ROWS.map(r => r.token));
     state.ADDED = null; state.SHOW_ADDED = false; paintAddedChip(); render();
-    let source = $('#scrapeSource').value || 'pektino';
-    if (url) {
-      if (url.includes('qise100.com')) source = 'qise';
-      else if (url.includes('hsex.icu')) source = 'hsex';
-      else if (url.includes('pektino.com')) source = 'pektino';
-      else source = 'web';
-    }
+    const source = $('#scrapeSource').value || 'pektino';
     const hd = false;   // 高清需要登录/VIP，暂不开放
-    const payload = url
-      ? { source, url, hd, incremental: false }
-      : { source, rank, limit, hd, incremental: $('#chkInc').checked };
+    const payload = { source, rank, limit, hd, incremental: $('#chkInc').checked };
     const r = await api('/api/scrape', payload);
     if (!r.ok) {
       if (prog) prog.classList.remove('on');
       return toast('失败：' + r.error, 5000);
     }
-    toast(url ? '已开始：从 URL 抓取' : (r.incremental
+    toast(r.incremental
       ? `已开始：抓 ${limit} 条（增量，跳过 ${r.skipped} 条）`
-      : `已开始：抓 ${limit} 条`));
+      : `已开始：抓 ${limit} 条`);
+    load();
+  } catch (e) { if (prog) prog.classList.remove('on'); toast('请求失败：' + e.message, 5000); }
+}
+
+async function doUrlScrape() {
+  const url = ($('#urlInput')?.value || '').trim();
+  if (!url) return toast('先粘贴一个视频链接', 3000);
+  if (!/^https?:\/\//i.test(url)) return toast('链接必须以 http(s):// 开头', 4000);
+  let source = 'web';
+  if (url.includes('qise100.com')) source = 'qise';
+  else if (url.includes('hsex.icu')) source = 'hsex';
+  else if (url.includes('pektino.com')) source = 'pektino';
+  const prog = $('#prog');
+  if (prog) {
+    prog.classList.add('on');
+    $('#progLabel').textContent = '链接抓取 · 启动';
+    $('#progBar').style.width = '0%';
+    $('#progStat').textContent = '准备';
+  }
+  try {
+    state.SCRAPE_BASE = new Set(state.ROWS.map(r => r.token));
+    state.ADDED = null; state.SHOW_ADDED = false; paintAddedChip(); render();
+    const r = await api('/api/scrape', { source, url, hd: false, incremental: false });
+    if (!r.ok) {
+      if (prog) prog.classList.remove('on');
+      return toast('失败：' + r.error, 5000);
+    }
+    closeUrlModal();
+    toast('已开始：从链接抓取');
     load();
   } catch (e) { if (prog) prog.classList.remove('on'); toast('请求失败：' + e.message, 5000); }
 }
@@ -948,9 +968,20 @@ function paintScrapeOptions() {
 
 function openScrapeModal() { paintScrapeOptions(); $('#scrapeModal').classList.add('on'); }
 function closeScrapeModal() { $('#scrapeModal').classList.remove('on'); }
+function openUrlModal() {
+  const m = $('#urlModal'); if (!m) return;
+  m.classList.add('on');
+  const i = $('#urlInput'); if (i) { i.value = ''; setTimeout(() => i.focus(), 30); }
+}
+function closeUrlModal() { $('#urlModal')?.classList.remove('on'); }
 
 function initToolbar() {
   $('#btnScrape').onclick = openScrapeModal;
+  $('#btnUrlScrape').onclick = openUrlModal;
+  $('#btnUrlGo').onclick = doUrlScrape;
+  $('#btnUrlCancel').onclick = closeUrlModal;
+  $('#urlModal').onclick = e => { if (e.target.id === 'urlModal') closeUrlModal(); };
+  if ($('#urlInput')) $('#urlInput').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); doUrlScrape(); } });
   $('#btnScrapeGo').onclick = () => { closeScrapeModal(); doScrape(); };
   $('#btnScrapeCancel').onclick = closeScrapeModal;
   $('#scrapeModal').onclick = e => { if (e.target.id === 'scrapeModal') closeScrapeModal(); };

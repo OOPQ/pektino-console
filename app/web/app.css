@@ -191,12 +191,12 @@ td.playable:hover{color:#cfe6ff}
 @media (max-width:900px){.lbNav.prev{left:4px}.lbNav.next{right:4px}}
 /* 计数放右上角：右下角会压住 <video> 的原生控件 */
 .lbCount{position:absolute;right:8px;top:8px;padding:2px 7px;border-radius:999px;background:rgba(8,12,18,.7);color:#c9d6e3;font-size:11px;pointer-events:none;z-index:3}
-.lightbox .meta{
+.lightbox .box > .meta{
   min-width:0;display:flex;flex-direction:column;gap:8px;max-height:86vh;overflow:auto;
   background:rgba(13,17,23,.72);border:1px solid var(--line);border-radius:12px;padding:14px
 }
-.lightbox .meta h3{margin:0;font-size:14px;word-break:break-all;line-height:1.35}
-.lightbox .meta .big{font-size:12px;color:var(--dim);line-height:1.9;word-break:break-all}
+.lightbox .box > .meta h3{margin:0;font-size:14px;word-break:break-all;line-height:1.35}
+.lightbox .box > .meta .big{font-size:12px;color:var(--dim);line-height:1.9;word-break:break-all}
 
 /* 灯箱信息列表：标签暗、值亮，主信息放大 */
 .mstats{display:flex;flex-direction:column;gap:2px}
@@ -209,16 +209,16 @@ td.playable:hover{color:#cfe6ff}
 .mstats .mrow > em{font-style:normal;color:var(--val);font-weight:550;font-variant-numeric:tabular-nums;text-align:right}
 .mstats .mrow > em.gold{color:var(--gold);letter-spacing:1px}
 .mstats .mfile{margin-top:6px;font-family:ui-monospace,Consolas,monospace;font-size:11px;color:var(--faint);word-break:break-all}
-.lightbox .actions{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:4px}
-.lightbox .actions.single{grid-template-columns:1fr}
-.lightbox .actions button{width:100%;padding:7px 8px;white-space:nowrap}
+.lightbox .box > .meta .actions{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:4px}
+.lightbox .box > .meta .actions.single{grid-template-columns:1fr}
+.lightbox .box > .meta .actions button{width:100%;padding:7px 8px;white-space:nowrap}
 .lightbox .box{animation:fadein .16s ease-out}
 @keyframes fadein{from{opacity:0}to{opacity:1}}
 
 @media (max-width:820px){
   .lightbox .box{grid-template-columns:1fr;width:94vw !important;max-height:92vh;overflow:auto}
   .lightbox img{max-height:60vh}
-  .lightbox .meta{max-height:none}
+  .lightbox .box > .meta{max-height:none}
 }
 /* ---------- 选中浮条 ---------- */
 .selbar{position:fixed;left:50%;bottom:58px;transform:translate(-50%,20px);opacity:0;pointer-events:none;
@@ -353,7 +353,7 @@ button.danger:hover:not(:disabled){background:#3a1d1d;border-color:#7a2b2b;color
 .col-row button{padding:2px 8px;font-size:12px;flex:0 0 auto}
 .colpick-box{width:min(420px,92vw);background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;max-height:80vh;overflow:auto}
 /* 合集卡片墙 */
-.colb-box{width:min(1200px,96vw);height:86vh;background:var(--panel);border:1px solid var(--line);border-radius:12px;display:flex;flex-direction:column;padding:12px}
+.colb-box{width:min(1440px,98vw);height:88vh;background:var(--panel);border:1px solid var(--line);border-radius:12px;display:flex;flex-direction:column;padding:10px}
 .colb-head{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px}
 .colb-tools{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:10px}
 .colb-tools button{padding:4px 10px;font-size:12px}
@@ -363,7 +363,7 @@ button.danger:hover:not(:disabled){background:#3a1d1d;border-color:#7a2b2b;color
 .colb-tab{background:transparent;border:1px solid var(--line);border-radius:999px;padding:3px 10px;font-size:12px;color:var(--dim);white-space:nowrap;cursor:pointer}
 .colb-tab.on{background:#1f4f86;border-color:#2b6cb0;color:#eaf4ff}
 .colb-body{flex:1 1 auto;overflow:auto;min-height:0}
-.colb-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;padding:2px}
+.colb-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:14px;padding:4px 2px 12px}
 .colb-card{position:relative}
 .colb-remove{position:absolute;right:6px;top:6px;z-index:5;width:22px;height:22px;border-radius:50%;border:1px solid var(--line);background:rgba(8,12,18,.8);color:#c9d6e3;font-size:13px;line-height:1;padding:0;cursor:pointer;opacity:0;transition:.15s}
 .colb-card:hover .colb-remove{opacity:1}

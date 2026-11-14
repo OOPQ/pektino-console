@@ -90,7 +90,7 @@ function ctxItemsFor(row) {
     { act: 'play', label: '▶ 播放', off: !hasFile },
     { act: 'reveal', label: '📂 在文件夹中定位', off: !hasFile },
     { sep: true },
-    { act: 'copy', label: '复制 URL' },
+    { act: 'copy', label: (row && row.download_kind === 'hls') ? '复制 HLS 直链（可给迅雷）' : '复制下载直链' },
     { act: 'copytoken', label: '复制 token' },
     { sep: true },
     { act: 'download', label: '⬇ 用内置下载器下载', off: !row || !row.url || !!row.file_name },

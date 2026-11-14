@@ -182,6 +182,46 @@ function Start-Curl($item, $part, $log) {
         if ($item.headers) {
             foreach ($p in @($item.headers.PSObject.Properties)) { $headers += "$($p.Name): $($p.Value)" }
         }
+        # 先探一下 m3u8：代理坏/5XX/超时直接给出可读原因，不让 ffmpeg 只报一句 5XX
+        if ($item.url -match '^https?://') {
+            $baseProbe = @('-sS', '-L', '-o', 'NUL', '-w', '%{http_code}|%{content_type}|%{size_download}',
+                '--max-time', '15', '-A', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/157.0.0.0')
+            foreach ($h in $headers) { $baseProbe += @('-H', $h) }
+
+            $runProbe = {
+                param($useProxy)
+                $a = @($baseProbe)
+                if ($useProxy) { $a += @('-x', $useProxy) }
+                $a += $item.url
+                try { return (& $curl @a 2>&1 | Out-String).Trim() } catch { return $_.Exception.Message }
+            }
+            $probeProxy = ''; $codeProxy = 0
+            if ($proxyArg) {
+                $probeProxy = & $runProbe $proxyArg
+                if ($probeProxy -match '^(\d{3})\|') { $codeProxy = [int]$Matches[1] }
+            }
+            $probeDirect = ''; $codeDirect = 0
+            if (-not $codeProxy -or $codeProxy -ge 400) {
+                $probeDirect = & $runProbe $null
+                if ($probeDirect -match '^(\d{3})\|') { $codeDirect = [int]$Matches[1] }
+            }
+
+            $diag = @()
+            if ($proxyArg) { $diag += "proxy[$proxyArg]=$codeProxy $probeProxy" }
+            $diag += "direct=$codeDirect $probeDirect"
+            $diagText = ($diag -join ' ; ')
+            try { Set-Content -LiteralPath ($log + '.probe') -Value $diagText -Encoding UTF8 } catch { }
+
+            if ($codeProxy -ge 200 -and $codeProxy -lt 400) {
+                # 代理可用：ffmpeg 也走同一个代理
+                if ($proxyArg) { $env:http_proxy = $proxyArg; $env:https_proxy = $proxyArg }
+            } elseif ($codeDirect -ge 200 -and $codeDirect -lt 400) {
+                # 代理坏了但直连可用：ffmpeg 不走代理
+                Remove-Item Env:http_proxy, Env:https_proxy -ErrorAction SilentlyContinue
+            } else {
+                throw "HLS 源不可用（$diagText）"
+            }
+        }
         $a = @('-y', '-nostdin', '-loglevel', 'error')
         if ($headers.Count -gt 0) {
             $a += @('-headers', (Quote-Arg (($headers -join "`r`n") + "`r`n")))

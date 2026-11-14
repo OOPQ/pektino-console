@@ -333,6 +333,9 @@ function Start-Curl($item, $part, $log) {
                 # 代理坏了但直连可用：ffmpeg 不走代理
                 Remove-Item Env:http_proxy, Env:https_proxy -ErrorAction SilentlyContinue
             } else {
+                if ($item.source -eq 'qise') {
+                    throw "qise 播放地址失效（可能签名过期）：已尝试刷新仍失败，请重新抓取该条或稍后重试（$diagText）"
+                }
                 throw "HLS 源不可用（$diagText）"
             }
             $probeText = ''
@@ -525,7 +528,9 @@ try {
                 }
             }
             $sizes = @{}
-            if ($batch.Count -gt 0) { $sizes = Get-RemoteSizesParallel -items $batch }
+            # HLS 的签名 URL 经常几分钟就失效，不能拿 HEAD 结果直接判死；交给 Start-Hls 先刷新再探测
+            $probeItems = @($batch | Where-Object { $_.mode -ne 'hls' })
+            if ($probeItems.Count -gt 0) { $sizes = Get-RemoteSizesParallel -items $probeItems }
 
         foreach ($item in $batch) {
             $tk = [string]$item.token

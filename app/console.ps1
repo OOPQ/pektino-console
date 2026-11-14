@@ -509,6 +509,7 @@ function Handle-Request {
                         if ($uh -like '*qise100.com') { $srcKey = 'qise' }
                         elseif ($uh -like '*hsex.icu') { $srcKey = 'hsex' }
                         elseif ($uh -like '*pektino.com') { $srcKey = 'pektino' }
+                        else { $srcKey = 'web' }
                     } catch { }
                 }
                 $srcInfo = Get-SourceInfo $srcKey
@@ -523,6 +524,7 @@ function Handle-Request {
                 $allowedRanks = @($srcInfo.ranks | ForEach-Object { $_.key })
                 if (-not $allowedRanks.Count) { $allowedRanks = @('default') }
                 $rank = if ($body.rank) { [string]$body.rank } else { $allowedRanks[0] }
+                if ($url) { $rank = $allowedRanks[0] }
                 if ($allowedRanks -notcontains $rank) {
                     Send-Json -Stream $Stream -Object @{ ok = $false; error = "源 $($srcInfo.name) 没有榜单: $rank" }
                     return

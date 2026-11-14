@@ -46,7 +46,7 @@ app/cli/import.ps1            通用本地入库（按 token 找源 → 详情�
 | `pektino` | 榜单 | JSON-LD | JSON-LD | HTTP（Referer） |
 | `hsex` | 首页 / `index-N.htm` | `<source>` 的 m3u8 | thumb 图 | HLS（ffmpeg，需配置路径） |
 | `qise` | `/video`、`/video/category/hd` | `/video/embed/<id>` 的 m3u8 | thumb 图 | HLS（未登录/VIP 时只有 6 秒提示片，会被识别并拒绝） |
-| `local` | 本地文件（无抓取能力） | - | 本地取帧 | - |
+| `web` | 任意单条视频页/直链（用于测试） | og:video / video / source | og:image | 按解析出的 m3u8/mp4 |`r`n| `local` | 本地文件（无抓取能力） | - | 本地取帧 | - |
 
 ### 源清单里的 UI/行为字段
 
@@ -69,7 +69,7 @@ hsex 的榜单：`latest`（最新）、`weekly`（周榜）、`monthly`（月�
 
 qise 的榜单来自站点分类：最近更新 / 高清视频 / 最近加精 / 当前最热 / 最近得分 / 非付费 / 91原创 / 10分钟以上 / 20分钟以上 / 本月讨论 / 本月收藏 / 收藏最多 / 本月最热 / 上月最热。
 
-抓取弹窗支持填「自定义 URL」：qise 支持列表页和 `/video/viewhd/<id>` 详情页；hsex/pektino 支持详情页。填了 URL 会忽略榜单/数量，用于测试单个页面。
+抓取弹窗支持填「视频链接（单条）」：qise 支持列表页和 `/video/viewhd/<id>` 详情页；hsex/pektino 支持详情页；其他站点或直链自动走 `web` 源（og:video / <video> / <source> / 页面里的 m3u8|mp4）。填了 URL 会忽略榜单/数量。
 
 ## 适配器契约
 

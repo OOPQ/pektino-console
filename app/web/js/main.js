@@ -719,6 +719,7 @@ async function doScrape() {
       if (url.includes('qise100.com')) source = 'qise';
       else if (url.includes('hsex.icu')) source = 'hsex';
       else if (url.includes('pektino.com')) source = 'pektino';
+      else source = 'web';
     }
     const payload = url
       ? { source, url, incremental: false }

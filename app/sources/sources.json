@@ -65,6 +65,19 @@
     ]
   },
   {
+    "key": "web",
+    "name": "网页/直链",
+    "file": "web.ps1",
+    "enabled": true,
+    "order": 80,
+    "capabilities": ["scrape", "download"],
+    "siteUrl": "",
+    "pageSize": 1,
+    "supportsPages": false,
+    "incremental": false,
+    "ranks": []
+  },
+  {
     "key": "local",
     "name": "本地",
     "file": "",

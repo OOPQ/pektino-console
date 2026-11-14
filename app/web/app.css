@@ -178,6 +178,7 @@ td.playable:hover{color:#cfe6ff}
 .lbMedia video:focus,.lbMedia video:focus-visible{outline:none}
 .speed-badge{position:absolute;left:8px;bottom:8px;padding:2px 8px;border-radius:999px;background:rgba(31,79,134,.9);color:#eaf4ff;font-size:12px;font-weight:600;z-index:4;pointer-events:none}
 .speed-badge.seek-badge{left:50%;transform:translateX(-50%);bottom:44px;background:rgba(8,12,18,.82);font-weight:500}
+.kbd-hint{margin-top:6px;font-size:11px;line-height:1.7;color:var(--dim);opacity:.85;word-break:break-word}
 .lightbox .box.nocover .lbMedia::after{content:'无封面';position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--faint);font-size:12px;pointer-events:none}
 .lbMedia img{cursor:pointer}
 .lbMedia img:not(.canplay){cursor:default}

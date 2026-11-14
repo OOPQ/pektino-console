@@ -490,6 +490,22 @@ export function initPanels() {
       seekBy(gachaOpen ? 'g' : 'lb', e.key === 'ArrowLeft' ? -15 : 15);
       return;
     }
+    // 单按 ↑/↓：音量 ±5%
+    if ((lbOpen || gachaOpen) && !typing && !e.ctrlKey && !e.altKey && !e.metaKey &&
+        (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+      e.preventDefault(); e.stopPropagation();
+      const vkey = gachaOpen ? 'g' : 'lb';
+      const v = $(PLAYERS[vkey].video);
+      if (v && !v.hidden) {
+        const step = e.key === 'ArrowUp' ? 0.05 : -0.05;
+        let vol = Math.round((v.volume + step) * 100) / 100;
+        vol = Math.max(0, Math.min(1, vol));
+        v.volume = vol;
+        if (vol > 0 && v.muted) v.muted = false;
+        showSeekBadge(vkey, v.muted ? '静音' : `音量 ${Math.round(vol * 100)}%`);
+      }
+      return;
+    }
     if (lbOpen && !typing && /^[1-5]$/.test(e.key)) { e.preventDefault(); e.stopPropagation(); rateLightbox(parseInt(e.key)); return; }
     if (gachaOpen && /^[1-5]$/.test(e.key) && !typing) { e.preventDefault(); e.stopPropagation(); rateGacha(parseInt(e.key)); return; }
     // 播放快捷键：空格 播放/暂停（长按 2×），F 全屏，M 静音（灯箱和抽卡都生效）

@@ -4,7 +4,7 @@
 
 全程在你自己的电脑上运行，服务只监听 `127.0.0.1`，数据不上传。
 
-当前版本：**v2.0.0** · [更新日志](CHANGELOG.md) · [发版与维护流程](docs/RELEASING.md)
+当前版本：**v2.1.0** · [更新日志](CHANGELOG.md) · [发版与维护流程](docs/RELEASING.md)
 
 - 程序的界面是中文
 - 数据来源通过**源适配器**接入：当前内置 `pektino`（HTTP）和 `hsex`（HLS 解析），新增源只需在 `app/sources/` 加一个文件，见 [多源与适配器](app/docs/SOURCES.md)
@@ -103,7 +103,7 @@ powershell -ExecutionPolicy Bypass -File .\app\console.ps1 -Project D:\my-data
 
 ## 网络与代理
 
-抓取榜单、下载封面、解析直链都要访问所启用的源（`pektino.com`、`hsex.icu`、`qise100.com`；hsex 通常需要代理，qise 默认跟随系统代理）。
+获取数据（在线榜单）、下载封面、解析直链都要访问所启用的源（`pektino.com`、`hsex.icu`、`qise100.com`；hsex 通常需要代理，qise 默认跟随系统代理）。
 
 需要代理时，在界面右上角 **⚙ 设置 → 代理** 里填，例如 `http://127.0.0.1:7890`；
 留空表示跟随系统代理。设置会存进 `项目\data\config.json`。

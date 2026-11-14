@@ -955,7 +955,7 @@ function Step-Download {
     Remove-Item $DlPause -Force -ErrorAction SilentlyContinue
     Remove-Item $DlPauseItems -Force -ErrorAction SilentlyContinue
     [void](Apply-DeadFromProgress -RunStarted $runStarted)
-    try { [void](Repair-PartFiles) } catch { }
+    try { [void](Repair-PartFiles -Quick) } catch { }
     try { [void](Invoke-Scan -Silent -KeepStatus) } catch { }
     try { Update-Thumbs -CoverDir $CoverDir -ThumbDir $ThumbDir } catch { }
     Touch-State
@@ -969,8 +969,11 @@ function Repair-PartFiles {
         - 大小 == 远端 Content-Length → 改名成 .mp4（这就是"下载好了还有多余后缀"的情况）
         - 两者都不满足 → 留作续传
       跳过最近 2 分钟还在写的文件，避免和正在跑的下载打架。
+
+      -Quick：只做本地判断，不发网络请求。启动时和下载结束后都走这个模式，
+      否则代理挂掉/网络不通时 curl --max-time 会把控制台启动拖到几分钟。
     #>
-    param([int]$Limit = 20)
+    param([int]$Limit = 20, [switch]$Quick)
 
     $dir = $Config.contentDir
     if (-not $dir -or -not (Test-Path $dir)) { return [pscustomobject]@{ ok = $true; renamed = 0; deleted = 0; kept = 0 } }
@@ -1003,9 +1006,10 @@ function Repair-PartFiles {
         }
         $row = $State.Ledger | Where-Object { $_.token -eq $tk } | Select-Object -First 1
         if (-not $row -or -not $row.url) { $kept++; continue }
+        if ($Quick) { $kept++; continue }
         $expected = [int64]0
         try {
-            $a = @('-sS', '-I', '-L', '--max-time', '15')
+            $a = @('-sS', '-I', '-L', '--max-time', '5')
             if ($proxy) { $a += @('-x', $proxy) }
             $a += $row.url
             foreach ($line in (& $curl @a 2>$null)) {

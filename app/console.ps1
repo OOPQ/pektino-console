@@ -681,7 +681,7 @@ try {
 # 启动先扫一遍内容目录，把“已经下完的”标成 done
 # 顺手整理上次中断留下的 .part（已下完的改名，写坏的删掉）
 try {
-    $pr = Repair-PartFiles
+    $pr = Repair-PartFiles -Quick
     if ($pr.renamed -gt 0 -or $pr.deleted -gt 0) { Write-FileLog "part repair: renamed=$($pr.renamed) deleted=$($pr.deleted) kept=$($pr.kept)" }
 } catch { Write-FileLog "part repair failed: $($_.Exception.Message)" }
 

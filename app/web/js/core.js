@@ -7,12 +7,12 @@ export const STATUS_LABEL = { new: '待下载', done: '已完成', recycled: '�
 /* ---------- 偏好（localStorage） ---------- */
 export const PREFS = Object.assign({
   sortKey: 'rank', sortDir: 'asc', per: 50, covers: true, compact: false, pageCount: 3,
-  page: 1, status: 'all', res: 'all', minDur: '', q: '',
+  page: 1, status: 'all', source: 'all', res: 'all', minDur: '', q: '',
   sound: true, view: 'table',
   views: [],
   cols: {
     cover: true, rank: true, duration: true, res: true, views: true, likes: true,
-    plays: true, rating: true, token: true, status: true, disk: true, first_seen: true
+    plays: true, rating: true, token: true, title: true, source: true, status: true, disk: true, first_seen: true
   }
 }, JSON.parse(localStorage.getItem(KEY) || '{}'));
 if (!PREFS.cols) PREFS.cols = {};
@@ -27,11 +27,11 @@ export const savePrefs = () => localStorage.setItem(KEY, JSON.stringify(PREFS));
 
 /* ---------- 全局状态 ---------- */
 export const state = {
-  ROWS: [], STATS: {},
+  ROWS: [], STATS: {}, SOURCES: [],
   SEL: new Set(),
   BUSY: false,
   SORT: { key: PREFS.sortKey, dir: PREFS.sortDir },
-  FILTER: { status: PREFS.status || 'all', flag: PREFS.flag || 'none', res: PREFS.res, minDur: PREFS.minDur, q: PREFS.q },
+  FILTER: { status: PREFS.status || 'all', source: PREFS.source || 'all', flag: PREFS.flag || 'none', res: PREFS.res, minDur: PREFS.minDur, q: PREFS.q },
   PAGE: PREFS.page,
   PER: PREFS.per,
   SHOW_COVERS: PREFS.covers,

@@ -82,6 +82,9 @@ if ($Restart) {
 $script:StartedAt = Get-Date
 . (Join-Path $Root 'lib\ledger.ps1')
 . (Join-Path $Root 'lib\project.ps1')
+. (Join-Path $Root 'lib\sources.ps1')
+foreach ($srcFile in @(Get-SourceAdapterFiles -Root $Root)) { . $srcFile }
+$null = Initialize-Sources -Root $Root
 
 function Test-ConsoleAlive {
     <#  判断端口上跑的是不是「我们」：只回 {"ok":true} 的别的服务不能算，
@@ -115,6 +118,7 @@ $migrated = Import-CsvIntoStore -CsvPath $WS.LedgerCsv
 try { Invoke-DbMaintenance -Backup -Checkpoint } catch { }
 
 $Pektino = Join-Path $Root 'cli\pektino.ps1'
+$ScrapeScript = Join-Path $Root 'cli\scrape.ps1'
 $LedgerPath = $WS.LedgerCsv
 $WebDir = Join-Path $Root 'web'
 $HtmlPath = Join-Path $WebDir 'index.html'
@@ -159,6 +163,7 @@ $State = @{
 try { $fixedSec = Repair-Durations -LedgerPath $LedgerPath; if ($fixedSec -gt 0) { Write-Host "  修正时长 $fixedSec 条" -ForegroundColor DarkGray } } catch { Write-Host "  （时长修正跳过：$($_.Exception.Message)）" -ForegroundColor DarkYellow }
 # 旧状态（sent 已投递 / downloading 下载中）合并回 new / done
 try { $moved = Repair-Statuses; if ($moved -gt 0) { Write-Host "  状态迁移 $moved 条（已投递/下载中 → 待下载）" -ForegroundColor DarkGray } } catch { Write-Host "  （状态迁移跳过：$($_.Exception.Message)）" -ForegroundColor DarkYellow }
+try { $sf = Repair-SourceFields; if ($sf -gt 0) { Write-Host "  来源字段补齐 $sf 条（→ pektino）" -ForegroundColor DarkGray } } catch { Write-Host "  （来源字段补齐跳过：$($_.Exception.Message)）" -ForegroundColor DarkYellow }
 $script:SseClients = New-Object System.Collections.ArrayList
 
 # ---------- 分层加载 ----------
@@ -301,6 +306,7 @@ function Handle-Request {
             download = (Get-DownloadInfo)
             project  = (Get-ProjectSummary -Paths $WS)
             settings = [pscustomobject]@{ proxy = [string]$Config.proxy; concurrent = $(if ($Config.concurrent) { [int]$Config.concurrent } else { 3 }) }
+            sources  = @(Get-Sources | ForEach-Object { [pscustomobject]@{ key = $_.key; name = $_.name; capabilities = @($_.capabilities) } })
             # 浏览器内播放用的媒体服务地址（前端拼成 <base>/<token>.mp4?k=<key>）
             media    = $(if ($State.Media) { [pscustomobject]@{ base = [string]$State.Media.Base; key = [string]$State.Media.Key } } else { $null })
             # 上次退出时没下完的条目（重启后前端提示「继续下载」）
@@ -512,7 +518,12 @@ function Handle-Request {
                 if ($null -ne $body.incremental) { $inc = [bool]$body.incremental }
                 $fresh = 3
                 if ($body.freshDays) { try { $fresh = [Math]::Max(0, [Math]::Min(30, [int]$body.freshDays)) } catch { $fresh = 3 } }
-                Send-Json -Stream $Stream -Object (Start-Scrape -Rank $rank -Pages $pages -Limit $limit -Threads $threads -Incremental $inc -FreshDays $fresh)
+                $srcKey = if ($body.source) { [string]$body.source } else { 'pektino' }
+                if (-not (Get-SourceInfo $srcKey)) {
+                    Send-Json -Stream $Stream -Object @{ ok = $false; error = "未知源: $srcKey" }
+                    return
+                }
+                Send-Json -Stream $Stream -Object (Start-Scrape -Source $srcKey -Rank $rank -Pages $pages -Limit $limit -Threads $threads -Incremental $inc -FreshDays $fresh)
                 return
             }
             '/api/job/cancel' {

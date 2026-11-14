@@ -233,6 +233,7 @@ function Invoke-Scan {
 
 function Start-Scrape {
     param(
+        [string]$Source = 'pektino',
         [string]$Rank = 'daily',
         [int[]]$Pages = @(1, 2, 3),
         [int]$Limit = 0,
@@ -242,6 +243,9 @@ function Start-Scrape {
     )
 
     if ($State.Job) { return @{ ok = $false; error = '已有抓取任务在跑，等它结束' } }
+    $src = Get-SourceInfo $Source
+    if (-not $src) { return @{ ok = $false; error = "未知源: $Source" } }
+    if ($src.capabilities -notcontains 'scrape') { return @{ ok = $false; error = "源 $($src.name) 不支持抓取" } }
     $dir = Split-Path $TmpCsv -Parent
     if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
     Remove-Item $ProgressFile -Force -ErrorAction SilentlyContinue
@@ -253,7 +257,8 @@ function Start-Scrape {
         $fresh = New-Object System.Collections.ArrayList
         foreach ($r in @($State.Ledger)) {
             if (-not $r.url) { continue }
-            $ls = '' 
+            if ((Get-ItemSource $r) -ne $src.key) { continue }
+            $ls = ''
             try { if ($r.last_seen) { $ls = [datetime]::ParseExact($r.last_seen, 'yyyy-MM-dd HH:mm:ss', $null) } } catch { }
             if ($ls -and $ls -gt $cutoff) { [void]$fresh.Add($r.token) }
         }
@@ -261,28 +266,31 @@ function Start-Scrape {
         $skipped = $fresh.Count
     }
 
-    $ps = $Pektino; $out = $TmpCsv; $prog = $ProgressFile; $cov = $CoverDir
+    $ps = $ScrapeScript; $out = $TmpCsv; $prog = $ProgressFile; $cov = $CoverDir
     $thm = $ThumbDir; $kn = $KnownFile
+    $proxy = if ($Config -and $Config.proxy) { [string]$Config.proxy } else { '' }
     $job = Start-Job -ScriptBlock {
-        param($ps, $rank, $pages, $limit, $out, $prog, $cov, $thm, $kn, $threads)
-        $p = @{ Rank = $rank; Page = $pages; Out = $out; ProgressFile = $prog; CoverDir = $cov; ThumbDir = $thm; Threads = $threads }
+        param($ps, $source, $rank, $pages, $limit, $out, $prog, $cov, $thm, $kn, $threads, $proxy)
+        $p = @{ Source = $source; Rank = $rank; Page = $pages; Out = $out; ProgressFile = $prog; CoverDir = $cov; ThumbDir = $thm; Threads = $threads }
         if ($limit -gt 0) { $p['Limit'] = $limit }
+        if ($proxy) { $p['Proxy'] = $proxy }
         if ($kn -and (Test-Path -LiteralPath $kn)) { $p['KnownFile'] = $kn }
         & $ps @p *> $null
-    } -ArgumentList $ps, $Rank, $Pages, $Limit, $out, $prog, $cov, $thm, $kn, $Threads
+    } -ArgumentList $ps, $src.key, $Rank, $Pages, $Limit, $out, $prog, $cov, $thm, $kn, $Threads, $proxy
 
     $State.Job = [pscustomobject]@{
         handle  = $job
         kind    = 'scrape'
+        source  = $src.key
         started = Get-Date
         rank    = $Rank
         pages   = $Pages
         threads = $Threads
     }
     $ic = if ($Incremental) { "增量（跳过 $skipped 条 $FreshDays 天内已抓取的）" } else { '全量' }
-    Write-Log 'scrape' "开始抓取 $Rank p$($Pages -join ',')：$ic，并发 $Threads，封面+缩略图，SQLite"
+    Write-Log 'scrape' "开始抓取 [$($src.name)] $Rank p$($Pages -join ',')：$ic，并发 $Threads，封面+缩略图，SQLite"
     Touch-State
-    return @{ ok = $true; started = $true; incremental = $Incremental; skipped = $skipped }
+    return @{ ok = $true; started = $true; source = $src.key; incremental = $Incremental; skipped = $skipped }
 }
 
 # ---------- 业务动作 ----------
@@ -296,12 +304,14 @@ function Start-Import {
 
     $script = Join-Path $Root 'cli\import.ps1'
     $dl = $Config.contentDir; $out = $TmpCsv; $prog = $ProgressFile; $cov = $CoverDir; $thm = $ThumbDir
+    $proxy = if ($Config -and $Config.proxy) { [string]$Config.proxy } else { '' }
     $job = Start-Job -ScriptBlock {
-        param($script, $dl, $tokens, $out, $prog, $cov, $thm, $threads)
+        param($script, $dl, $tokens, $out, $prog, $cov, $thm, $threads, $proxy)
         $p = @{ Dir = $dl; Out = $out; CoverDir = $cov; ThumbDir = $thm; Threads = $threads; ProgressFile = $prog }
+        if ($proxy) { $p['Proxy'] = $proxy }
         if ($tokens -and $tokens.Count -gt 0) { $p['Tokens'] = $tokens }
         & $script @p *> $null
-    } -ArgumentList $script, $dl, $Tokens, $out, $prog, $cov, $thm, $Threads
+    } -ArgumentList $script, $dl, $Tokens, $out, $prog, $cov, $thm, $Threads, $proxy
 
     $State.Job = [pscustomobject]@{
         handle  = $job
@@ -805,7 +815,16 @@ function Start-Download {
         return @{ ok = $false; error = '没有可下载的条目' }
     }
 
-    $queue = @($targets | ForEach-Object { [pscustomobject]@{ token = $_.token; url = $_.url } })
+    $ctx = New-SourceContext -Config $Config -Root $Root
+    $queue = @($targets | ForEach-Object {
+            $dl = Resolve-SourceDownload -Key (Get-ItemSource $_) -Context $ctx -Row $_
+            [pscustomobject]@{
+                token   = $_.token
+                url     = $(if ($dl.url) { [string]$dl.url } else { [string]$_.url })
+                mode    = $(if ($dl.mode) { [string]$dl.mode } else { 'http' })
+                headers = $dl.headers
+            }
+        })
 
     # 已有下载器在跑 → 把新条目追加进它的队列（下载器每轮 poll 追加文件），不另起进程
     if ($running) {
@@ -1234,35 +1253,17 @@ function Test-UrlDeadNow {
 # ---------------- 源地址刷新 ----------------
 
 function Get-DetailVideoInfo {
-    <#  抓详情页的 JSON-LD。返回 @{url;cover} 或 $null（页面在但没有 VideoObject = 已下架） #>
+    <#  通过源适配器拉详情；返回规范化 item / @{error} / $null（下架）  #>
     param([string]$Token)
-    try { Add-Type -AssemblyName System.Net.Http -ErrorAction SilentlyContinue } catch { }
-    $handler = New-Object System.Net.Http.HttpClientHandler
-    $handler.AutomaticDecompression = [System.Net.DecompressionMethods]::GZip -bor [System.Net.DecompressionMethods]::Deflate
-    if ($Config.proxy) {
-        $handler.Proxy = New-Object System.Net.WebProxy([string]$Config.proxy)
-        $handler.UseProxy = $true
-    }
-    $client = New-Object System.Net.Http.HttpClient($handler)
-    $client.Timeout = [TimeSpan]::FromSeconds(25)
-    $client.DefaultRequestHeaders.UserAgent.ParseAdd('Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0')
+    $row = @($State.Ledger | Where-Object { $_.token -eq $Token }) | Select-Object -First 1
+    $source = if ($row) { Get-ItemSource $row } else { (Split-ItemToken $Token).source }
+    $id = if ($row) { Get-ItemNativeId $row } else { (Split-ItemToken $Token).id }
+    $ctx = New-SourceContext -Config $Config -Root $Root
     try {
-        $html = $client.GetStringAsync("https://pektino.com/zh-CN/movie/$Token").GetAwaiter().GetResult()
+        return (Get-SourceDetail -Key $source -Context $ctx -Id $id)
     } catch {
-        $client.Dispose()
         return @{ error = $_.Exception.Message }
-    } finally {
-        try { $client.Dispose() } catch { }
     }
-    foreach ($m in [regex]::Matches($html, '<script type="application/ld\+json">(.*?)</script>', 'Singleline')) {
-        try {
-            $j = $m.Groups[1].Value | ConvertFrom-Json
-            if ($j.'@type' -eq 'VideoObject') {
-                return @{ url = [string]$j.contentUrl; cover = [string]$j.thumbnailUrl; duration = [string]$j.duration }
-            }
-        } catch { }
-    }
-    return $null
 }
 
 function Refresh-ItemUrls {
@@ -1289,6 +1290,12 @@ function Refresh-ItemUrls {
 
         $newUrl = [string]$info.url
         if (-not $newUrl) { $row.note = 'removed:site'; $removed++; continue }
+
+        if ($info.title) { $row.title = [string]$info.title }
+        if ($info.duration) { $row.duration = [string]$info.duration }
+        if ($null -ne $info.seconds -and [string]$info.seconds -ne '') { $row.seconds = [string]$info.seconds }
+        if ($info.res) { $row.res = [string]$info.res }
+        if ($info.cover_url) { $row.cover_url = [string]$info.cover_url }
 
         if ($newUrl -ne [string]$row.url) {
             $row.url = $newUrl

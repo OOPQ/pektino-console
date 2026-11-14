@@ -2,9 +2,9 @@
 import { $, PREFS, savePrefs, state, onEvent, toast, stTag, fmtMB, starsHtml, starsInner } from './core.js';
 
 export const COLS = [
-  { key: 'cover', label: '封面' }, { key: 'rank', label: '排名' }, { key: 'duration', label: '时长' },
+  { key: 'cover', label: '封面' }, { key: 'title', label: '标题' }, { key: 'rank', label: '排名' }, { key: 'duration', label: '时长' },
   { key: 'res', label: '分辨率' }, { key: 'views', label: '站点观看' }, { key: 'likes', label: '点赞' },
-  { key: 'plays', label: '本地播放' }, { key: 'rating', label: '评分' }, { key: 'token', label: 'token' },
+  { key: 'plays', label: '本地播放' }, { key: 'rating', label: '评分' }, { key: 'source', label: '来源' }, { key: 'token', label: 'token' },
   { key: 'status', label: '状态' }, { key: 'disk', label: '磁盘' }, { key: 'first_seen', label: '入库时间' }
 ];
 
@@ -22,6 +22,8 @@ function passFilter(r) {
   if (r.status === 'recycled' || r.status === 'ignored') return false;
   /* 「本次新增」临时筛选：只看新增，不再叠加其他筛选（否则容易筛成空列表） */
   if (state.SHOW_ADDED && state.ADDED && state.ADDED.size) return state.ADDED.has(r.token);
+  /* 来源筛选 */
+  if (state.FILTER.source && state.FILTER.source !== 'all' && (r.source || 'pektino') !== state.FILTER.source) return false;
   /* 合集筛选（可与其他筛选叠加） */
   if (state.COL_FILTER && state.COL_TOKENS && !state.COL_TOKENS.has(r.token)) return false;
   /* 状态：任务生命周期（单选） */
@@ -133,8 +135,8 @@ export function cardHtml(r, active) {
       ${hasFile ? `<span class="playbtn" data-play="${r.token}">▶</span>` : ''}
     </div>
     <div class="body">
-      <div class="name mono" title="${r.token}">${r.token}</div>
-      <div class="meta">${r.duration || '—'} · ${r.res || '—'}${(+r.play_count) ? ' · ▶' + r.play_count : ''}</div>
+      <div class="name mono" title="${r.token}">${r.title || r.token}</div>
+      <div class="meta">${r.duration || '—'} · ${r.res || '—'}${(+r.play_count) ? ' · ▶' + r.play_count : ''}${r.source && r.source !== 'pektino' ? ' · ' + r.source : ''}</div>
       <div class="stars">
         <button class="star ${fav ? 'on' : ''}" data-fav="${r.token}" title="收藏">${fav ? '★' : '☆'}</button>
         <span class="rt" data-rate="${r.token}">${starsInner(r.rating)}</span>
@@ -173,6 +175,7 @@ export function render() {
         <td><input type="checkbox" data-tk="${r.token}" data-idx="${start + i}" ${state.SEL.has(r.token) ? 'checked' : ''}></td>
         <td><button class="star ${r.fav === '1' ? 'on' : ''}" data-fav="${r.token}" title="收藏/取消">${r.fav === '1' ? '★' : '☆'}</button></td>
         <td class="col-cover">${coverCell(r)}</td>
+        <td class="col-title" title="${r.token}">${r.title || r.token}</td>
         <td class="num col-rank">${r.rank || ''}</td>
         <td class="num col-duration">${r.duration || '—'}</td>
         <td class="mono col-res">${r.res || ''}</td>
@@ -180,6 +183,7 @@ export function render() {
         <td class="num col-likes">${r.likes || ''}</td>
         <td class="num col-plays" title="${r.last_play ? '上次播放 ' + r.last_play : '还没播过'}">${(+r.play_count || 0) > 0 ? '▶' + r.play_count : ''}</td>
         <td class="col-rating">${rateCell(r)}</td>
+        <td class="mono col-source">${r.source || 'pektino'}</td>
         <td class="mono playable col-token" data-play="${r.token}" title="${r.file_name || '点击播放'}">${r.token}</td>
         <td class="col-status"${r.note ? ` title="${r.note}"` : ''}>${stTag(r.status)}${active.has(r.token) ? '<span class="dl-dot" title="下载中"></span>' : ''}</td>
         <td class="mono col-disk">${r.file_name ? '✓ ' + fmtMB(r.file_size) : '<span style="color:#5b6773">—</span>'}</td>
@@ -336,6 +340,10 @@ export function initTable() {
     state.FILTER.status = e.target.value; state.PAGE = 1;
     PREFS.status = state.FILTER.status; savePrefs(); render(); markActiveKpi();
   });
+  $('#fSource').addEventListener('change', e => {
+    state.FILTER.source = e.target.value; state.PAGE = 1;
+    PREFS.source = state.FILTER.source; savePrefs(); render();
+  });
   $('#fFlag').addEventListener('change', e => {
     state.FILTER.flag = e.target.value; state.PAGE = 1;
     PREFS.flag = state.FILTER.flag; savePrefs(); render(); markActiveKpi();
@@ -355,10 +363,10 @@ export function initTable() {
     e.target.value = ''; render();
   });
   $('#btnReset').onclick = () => {
-    state.FILTER = { status: 'all', flag: 'none', res: 'all', minDur: '', q: '' };
+    state.FILTER = { status: 'all', source: 'all', flag: 'none', res: 'all', minDur: '', q: '' };
     state.SORT = { key: 'rank', dir: 'asc' };
     state.PAGE = 1; state.PER = 50; state.SEL.clear();
-    Object.assign(PREFS, { status: 'all', flag: 'none', res: 'all', minDur: '', q: '', sortKey: 'rank', sortDir: 'asc', per: 50 });
+    Object.assign(PREFS, { status: 'all', source: 'all', flag: 'none', res: 'all', minDur: '', q: '', sortKey: 'rank', sortDir: 'asc', per: 50 });
     savePrefs();
     $('#q').value = ''; $('#fStatus').value = 'all'; $('#fFlag').value = 'none'; $('#fRes').value = 'all';
     $('#fMinDur').value = ''; $('#pgSize').value = '50';

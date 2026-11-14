@@ -150,16 +150,22 @@ function Quote-Arg {
 }
 
 function Build-Args($item, $outFile) {
+    $headers = @()
+    if ($item.headers) {
+        foreach ($p in @($item.headers.PSObject.Properties)) { $headers += "$($p.Name): $($p.Value)" }
+    }
     if ($aria) {
         $a = @('-c', '--auto-file-renaming=false', '--allow-overwrite=true', '-x', '8', '-s', '8',
             '-d', (Quote-Arg (Split-Path $outFile -Parent)), '-o', (Quote-Arg (Split-Path $outFile -Leaf)))
         if ($proxyArg) { $a += @('--all-proxy', (Quote-Arg $proxyArg)) }
+        foreach ($h in $headers) { $a += @('--header', (Quote-Arg $h)) }
         $a += (Quote-Arg $item.url)
         return @{ exe = $aria; args = $a }
     }
     $a = @('-sS', '-L', '-C', '-', '--fail', '--retry', "$Retries", '--retry-delay', '2',
         '--connect-timeout', '20', '-o', (Quote-Arg $outFile))
     if ($proxyArg) { $a += @('-x', (Quote-Arg $proxyArg)) }
+    foreach ($h in $headers) { $a += @('-H', (Quote-Arg $h)) }
     $a += (Quote-Arg $item.url)
     return @{ exe = $curl; args = $a }
 }

@@ -42,6 +42,9 @@
     <option value="done">已完成</option>
     <option value="failed">下载失败</option>
   </select>
+  <select id="fSource" title="按来源筛选">
+    <option value="all">全部来源</option>
+  </select>
   <select id="fFlag" title="按标记筛选（可叠加在上面的状态之上）">
     <option value="none">不限标记</option>
     <option value="fav">★ 收藏</option>
@@ -140,6 +143,10 @@
   <div class="modal-box">
     <h3>抓取榜单</h3>
     <div class="field">
+      <label>来源</label>
+      <select id="scrapeSource"></select>
+    </div>
+    <div class="field">
       <label>榜单</label>
       <select id="rank">
         <option value="daily">日榜</option>
@@ -187,6 +194,7 @@
           <th style="width:30px"><input type="checkbox" id="chkAll"></th>
           <th style="width:38px" title="收藏">★</th>
           <th style="width:92px" class="col-cover">封面</th>
+          <th class="sortable col-title" data-key="title" style="width:220px">标题<span class="ar">▲</span></th>
           <th class="sortable col-rank" data-key="rank" style="width:64px">排名<span class="ar">▲</span></th>
           <th class="sortable col-duration" data-key="duration" style="width:72px">时长<span class="ar">▲</span></th>
           <th class="sortable col-res" data-key="res" style="width:92px">分辨率<span class="ar">▲</span></th>
@@ -194,6 +202,7 @@
           <th class="sortable col-likes" data-key="likes" style="width:64px">点赞<span class="ar">▲</span></th>
           <th class="sortable col-plays" data-key="plays" style="width:64px" title="本地播放次数">播放<span class="ar">▲</span></th>
           <th class="sortable col-rating" data-key="rating" style="width:92px" title="点击星星打分，再点同一颗清除">评分<span class="ar">▲</span></th>
+          <th class="sortable col-source" data-key="source" style="width:88px">来源<span class="ar">▲</span></th>
           <th class="sortable col-token" data-key="token" style="width:150px">token<span class="ar">▲</span></th>
           <th class="sortable col-status" data-key="status" style="width:78px">状态<span class="ar">▲</span></th>
           <th class="sortable col-disk" data-key="disk" style="width:92px">磁盘<span class="ar">▲</span></th>
@@ -201,7 +210,7 @@
           <th style="width:180px">操作</th>
         </tr>
       </thead>
-      <tbody id="tbody"><tr><td colspan="15" class="empty">加载中…</td></tr></tbody>
+      <tbody id="tbody"><tr><td colspan="17" class="empty">加载中…</td></tr></tbody>
     </table>
   </div>
 

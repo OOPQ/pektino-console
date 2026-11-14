@@ -2,7 +2,12 @@
    所有写操作走这里，避免「表格里改一处、右键菜单改一处、灯箱再改一处」各自为政 */
 import { api, state, toast, emit } from './core.js';
 
-export const siteUrl = tk => `https://pektino.com/zh-CN/movie/${tk}`;
+export const siteUrl = x => {
+  const row = (x && typeof x === 'object') ? x : state.ROWS.find(r => r.token === x);
+  if (row && row.page_url) return row.page_url;
+  const tk = row ? row.token : x;
+  return `https://pektino.com/zh-CN/movie/${encodeURIComponent(tk || '')}`;
+};
 
 /* 复制到剪贴板（失败给出提示，不抛异常） */
 export async function copyText(text, okMsg = '已复制') {

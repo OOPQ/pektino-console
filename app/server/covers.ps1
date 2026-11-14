@@ -167,54 +167,35 @@ function Repair-Covers {
     $client.DefaultRequestHeaders.UserAgent.ParseAdd('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36')
 
     $fixed = 0; $failed = 0; $dead = 0
-    $Threads = 8
+    $ctx = New-SourceContext -Config $Config -Root $Root
 
     try {
-        for ($i = 0; $i -lt $candidates.Count; $i += $Threads) {
-            $end = [Math]::Min($i + $Threads - 1, $candidates.Count - 1)
-            $batch = @($candidates[$i..$end])
-            $tasks = @{}
-            foreach ($r in $batch) {
-                $tk = [string]$r.token
-                $url = if ($r.page_url) { [string]$r.page_url } else { "https://pektino.com/zh-CN/movie/$tk" }
-                try {
-                    $tasks[$tk] = @{ page = $client.GetStringAsync($url); token = $tk; dest = (Join-Path $CoverDir ($tk + '.jpg')) }
-                } catch { $failed++ }
-            }
-            foreach ($tk in @($tasks.Keys)) {
-                $t = $tasks[$tk]
-                try {
-                    $html = $t.page.GetAwaiter().GetResult()
-                    $coverUrl = ''
-                    foreach ($m in [regex]::Matches($html, '<script type="application/ld\+json">(.*?)</script>', 'Singleline')) {
-                        try {
-                            $ld = $m.Groups[1].Value | ConvertFrom-Json
-                            if ($ld.'@type' -eq 'VideoObject' -and $ld.thumbnailUrl) { $coverUrl = [string]$ld.thumbnailUrl; break }
-                        } catch { }
-                    }
-                    if (-not $coverUrl) {
-                        # 详情页里没有封面信息 —— 标记为无封面，别再重试
-                        Set-Content -Path (Join-Path $CoverDir ($tk + '.missing')) -Value '' -Encoding UTF8 -Force
-                        $dead++
-                        continue
-                    }
-                    $bytes = $client.GetByteArrayAsync($coverUrl).GetAwaiter().GetResult()
-                    if ($bytes.Length -gt 1024) {
-                        [System.IO.File]::WriteAllBytes($t.dest, $bytes)
-                        $fixed++
-                    } else {
-                        Set-Content -Path (Join-Path $CoverDir ($tk + '.missing')) -Value '' -Encoding UTF8 -Force
-                        $dead++
-                    }
-                } catch {
-                    $is404 = $false
-                    try { $is404 = ($_.Exception.Message -match '404') } catch { }
-                    if ($is404) {
-                        Set-Content -Path (Join-Path $CoverDir ($tk + '.missing')) -Value '' -Encoding UTF8 -Force
-                        $dead++
-                    } else {
-                        $failed++
-                    }
+        foreach ($r in $candidates) {
+            $tk = [string]$r.token
+            $dest = Join-Path $CoverDir ($tk + '.jpg')
+            try {
+                $coverUrl = Get-SourceCoverUrl -Key (Get-ItemSource $r) -Context $ctx -Row $r
+                if (-not $coverUrl) {
+                    Set-Content -Path (Join-Path $CoverDir ($tk + '.missing')) -Value '' -Encoding UTF8 -Force
+                    $dead++
+                    continue
+                }
+                $bytes = $client.GetByteArrayAsync($coverUrl).GetAwaiter().GetResult()
+                if ($bytes -and $bytes.Length -gt 1024) {
+                    [System.IO.File]::WriteAllBytes($dest, $bytes)
+                    $fixed++
+                } else {
+                    Set-Content -Path (Join-Path $CoverDir ($tk + '.missing')) -Value '' -Encoding UTF8 -Force
+                    $dead++
+                }
+            } catch {
+                $is404 = $false
+                try { $is404 = ($_.Exception.Message -match '404') } catch { }
+                if ($is404) {
+                    Set-Content -Path (Join-Path $CoverDir ($tk + '.missing')) -Value '' -Encoding UTF8 -Force
+                    $dead++
+                } else {
+                    $failed++
                 }
             }
         }

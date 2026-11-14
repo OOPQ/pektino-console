@@ -105,7 +105,8 @@ function Merge-Ledger {
 
         if ($byToken.ContainsKey($s.token)) {
             $t = $byToken[$s.token]
-            foreach ($f in @('rank', 'page', 'duration', 'seconds', 'res', 'views', 'likes', 'uploaded', 'url', 'page_url')) {
+            foreach ($f in @('rank', 'page', 'duration', 'seconds', 'res', 'views', 'likes', 'uploaded', 'url', 'page_url',
+                    'title', 'cover_url', 'source', 'source_id', 'download_kind', 'download_headers', 'extra')) {
                 $v = $s.$f
                 if ($v) { $t.$f = $v }
             }
@@ -119,6 +120,13 @@ function Merge-Ledger {
                 duration = $s.duration; seconds = $s.seconds
                 res = $s.res; views = $s.views; likes = $s.likes
                 uploaded = $s.uploaded; url = $s.url; page_url = $s.page_url
+                source = $(if ($s.source) { [string]$s.source } else { 'pektino' })
+                source_id = $(if ($s.source_id) { [string]$s.source_id } else { [string]$s.token })
+                title = $(if ($s.title) { [string]$s.title } else { [string]$s.token })
+                cover_url = [string]$s.cover_url
+                download_kind = $(if ($s.download_kind) { [string]$s.download_kind } else { 'http' })
+                download_headers = [string]$s.download_headers
+                extra = [string]$s.extra
                 first_seen = $Stamp; last_seen = $Stamp; sent_at = ''; note = ''
                 file_name = ''; file_size = ''; file_date = ''
                 # 这三列后面会被评分/观看/播放直接赋值，缺了会抛"属性不存在"
@@ -234,6 +242,17 @@ function ConvertTo-Seconds {
     if ($v -match '^(\d+):(\d+(?:\.\d+)?)$') { return [int]([int]$Matches[1] * 60 + [double]$Matches[2]) }
     if ($v -match '^\d+(?:\.\d+)?$') { return [int][double]$v }
     return 0
+}
+
+function Repair-SourceFields {
+    <#  旧库没有 source/source_id：补成默认源，保证多源逻辑有值可用  #>
+    $changed = 0
+    foreach ($r in @($State.Ledger)) {
+        if (-not $r.source) { $r.source = 'pektino'; $changed++ }
+        if (-not $r.source_id) { $r.source_id = [string]$r.token; $changed++ }
+    }
+    if ($changed -gt 0) { Save-Ledger -Rows @($State.Ledger) -NoSnapshot; Touch-State }
+    return $changed
 }
 
 function Repair-Statuses {

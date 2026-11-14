@@ -27,6 +27,8 @@ app\
     actions.ps1        业务：统计、扫描、抓取/导入 Job、收藏/评分/观看、播放、删除、下载器、源地址刷新
     media.ps1          浏览器内播放的独立媒体服务（Range 流式、单次 8MB、只服务 media\ 下的 mp4，token 允许中文）
     covers.ps1         封面补齐：本地视频取帧（Shell 缩略图）+ 站点抓取，含主循环里的自动补封面
+sources/              源适配器（sources.json 清单 + <key>.ps1），契约见 docs/SOURCES.md
+lib/sources.ps1       源注册表 / 分发 / token 命名（<source>@<id>）
   lib\
     project.ps1        项目（数据单元）解析、初始化、媒体识别
     ledger.ps1         台账业务语义：合并去重、状态机、配置读写、内容目录扫描

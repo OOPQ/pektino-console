@@ -1,0 +1,10 @@
+[
+  {
+    "key": "pektino",
+    "name": "Pektino",
+    "file": "pektino.ps1",
+    "enabled": true,
+    "order": 10,
+    "capabilities": ["scrape", "detail", "cover", "download"]
+  }
+]

@@ -483,6 +483,21 @@ function paintAddedChip() {  const chip = $('#addedChip');
   if (cnt) cnt.textContent = String(n);
 }
 
+function paintSources() {
+  const sel = $('#fSource');
+  if (!sel) return;
+  const cur = state.FILTER.source || 'all';
+  sel.innerHTML = '<option value="all">全部来源</option>'
+    + (state.SOURCES || []).map(s => `<option value="${escHtml(s.key)}">${escHtml(s.name || s.key)}</option>`).join('');
+  sel.value = (cur === 'all' || (state.SOURCES || []).some(s => s.key === cur)) ? cur : 'all';
+  const sc = $('#scrapeSource');
+  if (sc) {
+    const prev = sc.value;
+    sc.innerHTML = (state.SOURCES || []).map(s => `<option value="${escHtml(s.key)}">${escHtml(s.name || s.key)}</option>`).join('');
+    if (prev && (state.SOURCES || []).some(s => s.key === prev)) sc.value = prev;
+  }
+}
+
 function escHtml(s) {
   return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
@@ -500,13 +515,14 @@ function paintViewsMenu() {
 function applyView(v) {
   const f = v.filter || {};
   state.FILTER.status = f.status || 'all';
+  state.FILTER.source = f.source || 'all';
   state.FILTER.flag = f.flag || 'none';
   state.FILTER.res = f.res || 'all';
   state.FILTER.minDur = f.minDur || '';
   state.FILTER.q = f.q || '';
   if (v.sortKey) state.SORT = { key: v.sortKey, dir: v.sortDir === 'desc' ? 'desc' : 'asc' };
   Object.assign(PREFS, {
-    status: state.FILTER.status, flag: state.FILTER.flag, res: state.FILTER.res,
+    status: state.FILTER.status, source: state.FILTER.source, flag: state.FILTER.flag, res: state.FILTER.res,
     minDur: state.FILTER.minDur, q: state.FILTER.q,
     sortKey: state.SORT.key, sortDir: state.SORT.dir
   });
@@ -514,6 +530,7 @@ function applyView(v) {
   PREFS.page = 1;
   savePrefs();
   if ($('#fStatus')) $('#fStatus').value = state.FILTER.status;
+  if ($('#fSource')) $('#fSource').value = state.FILTER.source || 'all';
   if ($('#fFlag')) $('#fFlag').value = state.FILTER.flag;
   if ($('#fRes')) $('#fRes').value = state.FILTER.res;
   if ($('#fMinDur')) $('#fMinDur').value = state.FILTER.minDur || '';
@@ -528,7 +545,7 @@ function saveCurrentView() {
   const v = {
     name,
     filter: {
-      status: state.FILTER.status, flag: state.FILTER.flag, res: state.FILTER.res,
+      status: state.FILTER.status, source: state.FILTER.source, flag: state.FILTER.flag, res: state.FILTER.res,
       minDur: state.FILTER.minDur, q: state.FILTER.q
     },
     sortKey: state.SORT.key, sortDir: state.SORT.dir
@@ -589,6 +606,8 @@ async function load() {
       toast('后台是旧版本：新按钮会 404，请运行 start.cmd -Restart', 10000);
     }
     state.STATS = s.stats || {};
+    state.SOURCES = s.sources || [];
+    paintSources();
     let rowsChanged = false;
     let forceRender = false;
     if (Array.isArray(s.rows)) {
@@ -702,7 +721,7 @@ async function doScrape() {
     // 记录抓取前的 token，任务结束后用来算「本次新增」
     state.SCRAPE_BASE = new Set(state.ROWS.map(r => r.token));
     state.ADDED = null; state.SHOW_ADDED = false; paintAddedChip(); render();
-    const r = await api('/api/scrape', { rank, pages, limit, incremental: $('#chkInc').checked });
+    const r = await api('/api/scrape', { source: $('#scrapeSource').value || 'pektino', rank, pages, limit, incremental: $('#chkInc').checked });
     if (!r.ok) return toast('失败：' + r.error, 5000);
     toast(r.incremental
       ? `已开始：前 ${pages.length} 页（增量，跳过 ${r.skipped} 条）`
@@ -1115,6 +1134,8 @@ function initControls() {
   $('#q').value = state.FILTER.q;
   $('#fStatus').value = state.FILTER.status;
   $('#fFlag').value = state.FILTER.flag || 'none';
+  if ($('#fSource')) $('#fSource').value = state.FILTER.source || 'all';
+  if ($('#fSource')) $('#fSource').value = state.FILTER.source || 'all';
   $('#fRes').value = state.FILTER.res;
   $('#fMinDur').value = state.FILTER.minDur;
   $('#pgSize').value = String(state.PER);

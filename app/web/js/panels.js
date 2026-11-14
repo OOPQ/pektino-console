@@ -124,6 +124,26 @@ function endSpaceHold() {
   }
 }
 
+/* ←/→ 快退/快进 15 秒（不需要视频聚焦） */
+function showSeekBadge(key, text) {
+  const el = key === 'g' ? $('#gSeek') : $('#lbSeek');
+  if (!el) return;
+  el.textContent = text;
+  el.hidden = false;
+  if (el._t) clearTimeout(el._t);
+  el._t = setTimeout(() => { el.hidden = true; }, 700);
+}
+function seekBy(key, delta) {
+  const v = $(PLAYERS[key].video);
+  if (!v || v.hidden) return;
+  let t = v.currentTime + delta;
+  const dur = (isFinite(v.duration) && v.duration > 0) ? v.duration : 0;
+  if (t < 0) t = 0;
+  if (dur && t > dur - 0.05) t = Math.max(0, dur - 0.05);
+  try { v.currentTime = t; } catch { }
+  showSeekBadge(key, delta < 0 ? '−15s' : '+15s');
+}
+
 function stopPlayer(key) {
   const ctx = PLAYERS[key];
   const v = $(ctx.video);
@@ -463,6 +483,13 @@ export function initPanels() {
       navLightbox(e.key === 'ArrowLeft' ? -1 : 1);
       return;
     }
+    // 单按 ←/→：快退/快进 15 秒（不需要先点视频）
+    if ((lbOpen || gachaOpen) && !typing && !e.ctrlKey && !e.altKey && !e.metaKey &&
+        (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
+      e.preventDefault(); e.stopPropagation();
+      seekBy(gachaOpen ? 'g' : 'lb', e.key === 'ArrowLeft' ? -15 : 15);
+      return;
+    }
     if (lbOpen && !typing && /^[1-5]$/.test(e.key)) { e.preventDefault(); e.stopPropagation(); rateLightbox(parseInt(e.key)); return; }
     if (gachaOpen && /^[1-5]$/.test(e.key) && !typing) { e.preventDefault(); e.stopPropagation(); rateGacha(parseInt(e.key)); return; }
     // 播放快捷键：空格 播放/暂停（长按 2×），F 全屏，M 静音（灯箱和抽卡都生效）
@@ -511,11 +538,13 @@ export function initPanels() {
   window.addEventListener('blur', () => { if (spaceHold) endSpaceHold(); });
 
   /* 点视频后浏览器会把焦点留在 video 上（控件出现各种外框），
-     播放/暂停、全屏等快捷键我们已经接管 → 点完直接 blur 掉 */
+     播放/暂停、快进、全屏等快捷键我们已经接管 → 任何时候都不让 video 保持焦点 */
   ['#lbVideo', '#gVideo'].forEach(sel => {
     const v = $(sel);
     if (!v) return;
+    v.tabIndex = -1;
     const dropFocus = () => { try { v.blur(); } catch { } };
+    v.addEventListener('focus', () => { setTimeout(dropFocus, 0); });
     v.addEventListener('pointerup', dropFocus);
     v.addEventListener('click', dropFocus);
   });

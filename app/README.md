@@ -292,11 +292,11 @@ clientErrors[] / clientWarns / uptime`。单请求 ≥800ms 会进 `slow` 列表
   （`data-lb` / `data-play` / `data-fav` / `data-rate` / `data-dl`），选择存 `PREFS.view`；
   宽屏一行 10 张、窄屏自动减列
 - **播放器**：灯箱和抽卡共用 `PLAYERS`（img/video/overlay/pip 四件套），
-  空格播放/暂停、长按空格 2× 倍速（260ms 后生效，松开恢复）、F 全屏、M 静音；
-  画中画按钮走 `video.requestPictureInPicture()`，
+  空格播放/暂停、长按空格 2× 倍速（260ms 后生效，松开恢复）、**←/→ 快退/快进 15 秒**、
+  F 全屏、M 静音；画中画按钮走 `video.requestPictureInPicture()`，
   关灯箱时若画中画在播则保留视频继续播放
 - 播放快捷键用 **capture 阶段**监听并 `stopPropagation`，视频控件聚焦时也不会吞掉
-  Ctrl+←/→；点视频后主动 `blur()`，避免控件焦点框
+  Ctrl+←/→；`video.tabIndex=-1` + focus 立即 blur，避免控件焦点框
 - **封面清晰度**：表格和画廊都用原图（`/api/cover?...&full=1`，失败回退缩略图）；
   下载队列卡片和灯箱的降级路径仍用 120px 缩略图（省流量）
 - **本地视频封面**：没有封面但有本地视频的条目，用 Shell 缩略图抽一帧存成

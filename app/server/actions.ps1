@@ -867,8 +867,11 @@ function Start-Download {
                 token   = $t.token
                 url     = $(if ($dl.url) { [string]$dl.url } else { [string]$t.url })
                 mode    = $(if ($dl.mode) { [string]$dl.mode } else { 'http' })
-                headers = $dl.headers
-                subdir  = (Get-ItemSource $t)
+                headers   = $dl.headers
+                subdir    = (Get-ItemSource $t)
+                source    = $(if ($dl.source) { [string]$dl.source } else { (Get-ItemSource $t) })
+                source_id = $(if ($dl.source_id) { [string]$dl.source_id } else { [string]$t.source_id })
+                sd        = [bool]$dl.sd
             })
     }
     if ($vipCount -gt 0) {

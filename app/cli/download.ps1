@@ -41,6 +41,51 @@ if (-not $curl) { $curl = 'C:\Windows\System32\curl.exe' }
 $aria = (Get-Command aria2c.exe -ErrorAction SilentlyContinue).Source
 $workDir = Split-Path $ProgressFile -Parent
 
+function Get-QiseSdM3u8 {
+    <# 下载时强制取 qise 标清（/video/view）的 m3u8，不碰 viewhd 高清 #>
+    param($Item)
+    $id = [string]$Item.source_id
+    if (-not $id) { return '' }
+    $base = 'https://rfdjzz.qise100.com'
+    $cookie = ''
+    if ($Item.headers) {
+        foreach ($p in @($Item.headers.PSObject.Properties)) {
+            if ($p.Name -eq 'Cookie') { $cookie = [string]$p.Value }
+        }
+    }
+    Add-Type -AssemblyName System.Net.Http -ErrorAction SilentlyContinue
+    $handler = New-Object System.Net.Http.HttpClientHandler
+    $handler.UseProxy = $false
+    $client = New-Object System.Net.Http.HttpClient($handler)
+    $client.Timeout = [TimeSpan]::FromSeconds(20)
+    $client.DefaultRequestHeaders.UserAgent.ParseAdd('Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/157.0.0.0')
+    if ($cookie) { $client.DefaultRequestHeaders.Add('Cookie', $cookie) }
+    try {
+        foreach ($path in @('view', 'embed')) {
+            try {
+                $resp = $client.GetAsync("$base/video/$path/$id", [System.Net.Http.HttpCompletionOption]::ResponseHeadersRead).GetAwaiter().GetResult()
+                $stream = $resp.Content.ReadAsStreamAsync().GetAwaiter().GetResult()
+                $ms = New-Object System.IO.MemoryStream
+                $buf = New-Object byte[] 8192
+                $sw = [Diagnostics.Stopwatch]::StartNew()
+                while ($sw.Elapsed.TotalSeconds -lt 15) {
+                    $task = $stream.ReadAsync($buf, 0, $buf.Length)
+                    if (-not $task.Wait(2500)) { break }
+                    $n = $task.Result
+                    if ($n -le 0) { break }
+                    $ms.Write($buf, 0, $n)
+                    if ($ms.Length -gt 2000 -and ([Text.Encoding]::UTF8.GetString($ms.ToArray())).Contains('</html>')) { break }
+                }
+                $html = [Text.Encoding]::UTF8.GetString($ms.ToArray())
+                $m = [regex]::Match($html, 'data-src="(https?://[^"]+\.m3u8[^"]*)"')
+                if ($m.Success) { return $m.Groups[1].Value }
+            } catch { }
+        }
+    } finally { try { $client.Dispose() } catch { } }
+    return ''
+}
+
+
 function Write-ProgressFile($obj) {
     $tmp = "$ProgressFile.tmp"
     try {
@@ -180,6 +225,13 @@ function Start-Curl($item, $part, $log) {
     if ($item.mode -eq 'hls') {
         if (-not $Ffmpeg -or -not (Test-Path -LiteralPath $Ffmpeg -PathType Leaf)) {
             throw 'HLS 下载需要 ffmpeg：请在「设置 → FFmpeg 路径」填写 ffmpeg.exe，或加入 PATH'
+        }
+        # qise：下载时统一改走 /video/view 标清，避免拿到 viewhd 高清/付费地址
+        if ($item.source -eq 'qise' -and $item.source_id) {
+            $sdUrl = Get-QiseSdM3u8 $item
+            if (-not $sdUrl) { throw 'qise 标清地址获取失败（可能需要登录 Cookie 或页面结构变化）' }
+            $item.url = $sdUrl
+            try { Add-Content -LiteralPath $log -Value "qise SD: $sdUrl" -Encoding UTF8 } catch { }
         }
         $headers = @()
         if ($item.headers) {

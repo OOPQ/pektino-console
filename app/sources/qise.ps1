@@ -195,9 +195,12 @@ function Resolve-QiseDownload {
     $h = @{ Referer = "$script:QiseBase/" }
     if ($Context -and $Context.qiseCookie) { $h['Cookie'] = [string]$Context.qiseCookie }
     return @{
-        url     = [string]$Row.url
-        mode    = 'hls'
-        headers = $h
+        url       = [string]$Row.url
+        mode      = 'hls'
+        headers   = $h
+        source    = 'qise'
+        source_id = [string]$Row.source_id
+        sd        = $true
     }
 }
 function Invoke-QiseScrape {

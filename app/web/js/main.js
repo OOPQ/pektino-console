@@ -28,7 +28,9 @@ function renderJob(job, download) {
   if (!job || !job.running) { el.classList.remove('on'); return; }
   const p = job.progress || {};
   const total = p.total || 0, done = p.done || 0;
-  const pages = job.pages || [];
+  // PowerShell 的 ConvertTo-Json 会把单元素数组压成标量（pages:[1] -> 1）
+  const rawPages = job.pages;
+  const pages = Array.isArray(rawPages) ? rawPages : (rawPages == null ? [] : [rawPages]);
   const contiguous = pages.length > 1 && pages.every((n, i) => n === i + 1);
   el.classList.add('on');
   $('#progLabel').textContent = job.rank === 'import'

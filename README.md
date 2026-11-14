@@ -4,7 +4,7 @@
 
 全程在你自己的电脑上运行，服务只监听 `127.0.0.1`，数据不上传。
 
-当前版本：**v1.0.0** · [更新日志](CHANGELOG.md) · [发版与维护流程](docs/RELEASING.md)
+当前版本：**v2.0.0** · [更新日志](CHANGELOG.md) · [发版与维护流程](docs/RELEASING.md)
 
 - 程序的界面是中文
 - 数据来源通过**源适配器**接入：当前内置 `pektino`（HTTP）和 `hsex`（HLS 解析），新增源只需在 `app/sources/` 加一个文件，见 [多源与适配器](app/docs/SOURCES.md)

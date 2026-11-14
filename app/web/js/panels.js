@@ -88,12 +88,51 @@ const PLAYERS = {
 
 const isPip = v => !!v && document.pictureInPictureElement === v;
 
+/* 长按空格临时 2×：按住生效，松开恢复；短按仍然是 播放/暂停 */
+let spaceHold = null;
+function showSpeed(key, on) {
+  const el = key === 'g' ? $('#gSpeed') : $('#lbSpeed');
+  if (el) el.hidden = !on;
+}
+function startSpaceHold(key, forceHold) {
+  if (spaceHold) return;
+  const v = $(PLAYERS[key].video);
+  if (!v || v.hidden) return;
+  const wasPaused = forceHold ? true : v.paused;
+  if (wasPaused) { const p = v.play(); if (p && p.catch) p.catch(() => { }); }
+  const st = { key, video: v, wasPaused, boosted: false, baseRate: 1, timer: null };
+  try { st.baseRate = v.playbackRate || 1; } catch { }
+  st.timer = setTimeout(() => {
+    if (spaceHold !== st) return;
+    st.boosted = true;
+    try { st.video.playbackRate = Math.min(16, st.baseRate * 2); } catch { }
+    showSpeed(key, true);
+  }, 260);
+  spaceHold = st;
+}
+function endSpaceHold() {
+  const st = spaceHold;
+  if (!st) return;
+  spaceHold = null;
+  clearTimeout(st.timer);
+  if (st.boosted) {
+    try { st.video.playbackRate = st.baseRate || 1; } catch { }
+    showSpeed(st.key, false);
+  } else if (!st.wasPaused && !st.video.hidden) {
+    // 短按（一直按着不到 260ms）→ 当作 暂停
+    try { st.video.pause(); } catch { }
+  }
+}
+
 function stopPlayer(key) {
   const ctx = PLAYERS[key];
   const v = $(ctx.video);
   if (key === 'lb') lbPlaying = false; else gPlaying = false;
   if (!v) return;
+  if (spaceHold && spaceHold.key === key) { clearTimeout(spaceHold.timer); spaceHold = null; }
+  showSpeed(key, false);
   if (isPip(v)) { try { document.exitPictureInPicture(); } catch { } }
+  try { v.playbackRate = 1; } catch { }
   try { v.pause(); } catch { }
   v.hidden = true;
   v.removeAttribute('src');
@@ -131,6 +170,7 @@ function playToken(key, tk, opts = {}) {
     if (key === 'lb') lbPlaying = false; else gPlaying = false;
   };
   v.src = `${m.base}/${encodeURIComponent(tk)}.mp4?k=${encodeURIComponent(m.key)}`;
+  try { v.playbackRate = 1; } catch { }
   const p = v.play();
   if (p && p.catch) p.catch(() => { });
   if (key === 'lb') lbPlaying = true; else gPlaying = true;
@@ -412,27 +452,36 @@ export function initPanels() {
   $('#btnLog').onclick = () => $('#drawer').classList.add('on');
   $('#drawer').onclick = e => { if (e.target.id === 'drawer') $('#drawer').classList.remove('on'); };
 
-  /* 键盘 */
+  /* 键盘：capture 阶段拦截，避免视频控件先吃掉方向键/空格 */
   document.addEventListener('keydown', e => {
     const typing = ['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement.tagName);
     const gachaOpen = $('#gacha').classList.contains('on');
     const lbOpen = $('#lightbox').classList.contains('on');
     // 预览里用 Ctrl+←/→ 切换上一项/下一项（不用单按方向键，避免和视频/页面快捷键冲突）
     if (lbOpen && !typing && e.ctrlKey && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
-      e.preventDefault();
+      e.preventDefault(); e.stopPropagation();
       navLightbox(e.key === 'ArrowLeft' ? -1 : 1);
       return;
     }
-    if (lbOpen && !typing && /^[1-5]$/.test(e.key)) { e.preventDefault(); rateLightbox(parseInt(e.key)); return; }
-    if (gachaOpen && /^[1-5]$/.test(e.key) && !typing) { e.preventDefault(); rateGacha(parseInt(e.key)); return; }
-    // 播放快捷键：空格 播放/暂停，F 全屏，M 静音（灯箱和抽卡都生效）
+    if (lbOpen && !typing && /^[1-5]$/.test(e.key)) { e.preventDefault(); e.stopPropagation(); rateLightbox(parseInt(e.key)); return; }
+    if (gachaOpen && /^[1-5]$/.test(e.key) && !typing) { e.preventDefault(); e.stopPropagation(); rateGacha(parseInt(e.key)); return; }
+    // 播放快捷键：空格 播放/暂停（长按 2×），F 全屏，M 静音（灯箱和抽卡都生效）
     if ((lbOpen || gachaOpen) && !typing) {
       const pkey = gachaOpen ? 'g' : 'lb';
       const ptoken = gachaOpen ? state.GACHA_TOKEN : state.LB_TOKEN;
-      if (e.code === 'Space' || e.key === ' ') { e.preventDefault(); togglePlay(pkey, ptoken); return; }
-      if (e.key === 'f' || e.key === 'F') { e.preventDefault(); toggleFullscreen($(PLAYERS[pkey].video)); return; }
+      if (e.code === 'Space' || e.key === ' ') {
+        e.preventDefault(); e.stopPropagation();
+        if (e.repeat) return;
+        const v = $(PLAYERS[pkey].video);
+        if (!v) return;
+        let started = false;
+        if (v.hidden) { togglePlay(pkey, ptoken); started = true; }
+        if (!v.hidden) startSpaceHold(pkey, started);
+        return;
+      }
+      if (e.key === 'f' || e.key === 'F') { e.preventDefault(); e.stopPropagation(); toggleFullscreen($(PLAYERS[pkey].video)); return; }
       if (e.key === 'm' || e.key === 'M') {
-        e.preventDefault();
+        e.preventDefault(); e.stopPropagation();
         const v = $(PLAYERS[pkey].video);
         if (v && !v.hidden) { v.muted = !v.muted; toast(v.muted ? '已静音' : '已取消静音', 1500); }
         return;
@@ -450,6 +499,25 @@ export function initPanels() {
       else if ($('#ctxmenu').classList.contains('on')) emit('close-ctx');
       else if (document.activeElement === $('#q')) emit('clear-query');
     }
+  }, true);
+
+  /* 松开空格：结束长按加速；短按的播放/暂停在 endSpaceHold 里处理 */
+  document.addEventListener('keyup', e => {
+    if ((e.code === 'Space' || e.key === ' ') && spaceHold) {
+      e.preventDefault(); e.stopPropagation();
+      endSpaceHold();
+    }
+  }, true);
+  window.addEventListener('blur', () => { if (spaceHold) endSpaceHold(); });
+
+  /* 点视频后浏览器会把焦点留在 video 上（控件出现各种外框），
+     播放/暂停、全屏等快捷键我们已经接管 → 点完直接 blur 掉 */
+  ['#lbVideo', '#gVideo'].forEach(sel => {
+    const v = $(sel);
+    if (!v) return;
+    const dropFocus = () => { try { v.blur(); } catch { } };
+    v.addEventListener('pointerup', dropFocus);
+    v.addEventListener('click', dropFocus);
   });
 
   onEvent('open-lightbox', payload => {

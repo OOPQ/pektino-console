@@ -174,7 +174,9 @@ td.playable:hover{color:#cfe6ff}
 /* 预览里的视频播放：封面点击后原地切换，视频叠在封面同一格里，左右箭头切换上一项/下一项 */
 .lbMedia{position:relative;display:inline-block;vertical-align:top;min-width:160px;min-height:260px}
 .lbMedia img{display:block;max-width:100%;max-height:86vh;border-radius:10px;background:#0b0f14}
-.lbMedia video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;border-radius:10px;background:#000;display:block}
+.lbMedia video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;border-radius:10px;background:#000;display:block;outline:none}
+.lbMedia video:focus,.lbMedia video:focus-visible{outline:none}
+.speed-badge{position:absolute;left:8px;bottom:8px;padding:2px 8px;border-radius:999px;background:rgba(31,79,134,.9);color:#eaf4ff;font-size:12px;font-weight:600;z-index:4;pointer-events:none}
 .lightbox .box.nocover .lbMedia::after{content:'无封面';position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--faint);font-size:12px;pointer-events:none}
 .lbMedia img{cursor:pointer}
 .lbMedia img:not(.canplay){cursor:default}

@@ -430,3 +430,27 @@ body.multi .card .selcard.on { background: var(--accent, #2f81f7); border-color:
 body.multi .card.sel { outline: 2px solid var(--accent, #2f81f7); outline-offset: -2px; }
 body.multi .card .playbtn { display: none; }
 body.multi .card .foot .dlbtn { display: none; }
+
+/* ===== 表格列宽 / 标题截断 / 冻结操作列 ===== */
+#tablewrap table { table-layout: fixed; width: max-content; min-width: 100%; }
+#tablewrap td.col-title { white-space: normal; overflow: hidden; }
+#tablewrap td.col-token { overflow: hidden; text-overflow: ellipsis; }
+#tablewrap td.col-title .ttl {
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2;
+  overflow: hidden; line-height: 1.35; max-height: 2.7em; word-break: break-word;
+}
+#tablewrap thead th.col-actions,
+#tablewrap tbody td.col-actions {
+  position: sticky; right: 0; z-index: 6;
+  background: var(--panel); box-shadow: -8px 0 12px -10px #000, -1px 0 0 var(--line);
+}
+#tablewrap thead th.col-actions { z-index: 7; background: var(--panel3); }
+#tablewrap tbody tr:hover td.col-actions { background: #1a2230; }
+#tablewrap tbody tr.sel td.col-actions { background: #162234; }
+#tablewrap thead th { position: sticky; }
+.colresize {
+  position: absolute; right: 0; top: 0; bottom: 0; width: 6px;
+  cursor: col-resize; z-index: 9; user-select: none;
+}
+.colresize:hover, .colresize.dragging { background: var(--acc, #2f81f7); opacity: .55; }
+body.resizing-col { cursor: col-resize !important; user-select: none; }

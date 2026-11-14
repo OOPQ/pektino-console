@@ -8,7 +8,7 @@ export const STATUS_LABEL = { new: '待下载', done: '已完成', recycled: '�
 export const PREFS = Object.assign({
   sortKey: 'rank', sortDir: 'asc', per: 50, covers: true, compact: false, pageCount: 3,
   page: 1, status: 'all', source: 'all', res: 'all', minDur: '', q: '',
-  sound: true, view: 'table',
+  sound: true, view: 'table', colWidths: {},
   views: [],
   cols: {
     cover: true, rank: true, duration: true, res: true, views: true, likes: true,

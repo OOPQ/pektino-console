@@ -103,6 +103,55 @@ export function visible() {
   });
 }
 
+/* ================= 表格列宽 ================= */
+function colKey(th, i) {
+  const m = (th.className || '').match(/col-([\w-]+)/);
+  return th.dataset.key || (m ? m[1] : ('c' + i));
+}
+function applyColWidths() {
+  const widths = PREFS.colWidths || {};
+  document.querySelectorAll('#tablewrap thead th').forEach((th, i) => {
+    const w = widths[colKey(th, i)];
+    if (w) th.style.width = w + 'px';
+  });
+}
+function initColResize() {
+  const ths = [...document.querySelectorAll('#tablewrap thead th')];
+  ths.forEach((th, i) => {
+    if (i === 0) return; // 勾选列固定
+    if (!th.querySelector('.colresize')) {
+      const h = document.createElement('span');
+      h.className = 'colresize';
+      th.appendChild(h);
+    }
+    const h = th.querySelector('.colresize');
+    if (!h || h._bound) return;
+    h._bound = true;
+    h.addEventListener('click', e => e.stopPropagation());
+    h.addEventListener('mousedown', e => {
+      e.preventDefault(); e.stopPropagation();
+      const key = colKey(th, i);
+      const startX = e.clientX, startW = th.getBoundingClientRect().width;
+      const move = ev => {
+        const w = Math.max(48, Math.round(startW + ev.clientX - startX));
+        th.style.width = w + 'px';
+        PREFS.colWidths = PREFS.colWidths || {};
+        PREFS.colWidths[key] = w;
+      };
+      const up = () => {
+        document.removeEventListener('mousemove', move);
+        document.removeEventListener('mouseup', up);
+        document.body.classList.remove('resizing-col');
+        h.classList.remove('dragging');
+        savePrefs();
+      };
+      document.body.classList.add('resizing-col');
+      h.classList.add('dragging');
+      document.addEventListener('mousemove', move);
+      document.addEventListener('mouseup', up);
+    });
+  });
+}
 /* ---------- 单元格 ---------- */
 function coverCell(r) {
   if (!state.SHOW_COVERS) return '<div class="covbox"><div class="ph"></div></div>';
@@ -157,6 +206,7 @@ function renderGallery(rows, active) {
 
 /* ---------- 渲染 ---------- */
 export function render() {
+  applyColWidths();
   const all = visible();
   const per = state.PER > 0 ? state.PER : all.length || 1;
   const pages = Math.max(1, Math.ceil(all.length / per));
@@ -177,7 +227,7 @@ export function render() {
         <td><input type="checkbox" data-tk="${r.token}" data-idx="${start + i}" ${state.SEL.has(r.token) ? 'checked' : ''}></td>
         <td><button class="star ${r.fav === '1' ? 'on' : ''}" data-fav="${r.token}" title="收藏/取消">${r.fav === '1' ? '★' : '☆'}</button></td>
         <td class="col-cover">${coverCell(r)}</td>
-        <td class="col-title" title="${r.token}">${r.title || r.token}</td>
+        <td class="col-title" title="${r.title || r.token}"><span class="ttl">${r.title || r.token}</span></td>
         <td class="num col-rank">${r.rank || ''}</td>
         <td class="num col-duration">${r.duration || '—'}</td>
         <td class="mono col-res">${r.res || ''}</td>
@@ -190,7 +240,7 @@ export function render() {
         <td class="col-status"${r.note ? ` title="${r.note}"` : ''}>${stTag(r.status)}${active.has(r.token) ? '<span class="dl-dot" title="下载中"></span>' : ''}</td>
         <td class="mono col-disk">${r.file_name ? '✓ ' + fmtMB(r.file_size) : '<span style="color:#5b6773">—</span>'}</td>
         <td class="mono col-first_seen">${(r.first_seen || '').slice(5, 16)}</td>
-        <td>
+        <td class="col-actions">
           ${r.file_name
             ? `<button class="ghost rowbtn" data-play="${r.token}">播放</button>`
             : (active.has(r.token)
@@ -297,6 +347,7 @@ export function applyKpiFilter(entry) {
 }
 
 export function initTable() {
+  initColResize();
   /* 表格 / 画廊切换 */
   document.querySelectorAll('#viewSeg button').forEach(b => {
     b.classList.toggle('on', b.dataset.view === state.VIEW);

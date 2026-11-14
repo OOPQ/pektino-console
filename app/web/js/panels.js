@@ -4,6 +4,7 @@ import { $, state, api, toast, fmtMB, fmtNum, stTag, starsInner, emit, onEvent }
 import { render, visible } from './table.js';
 import { doPlay } from './rows.js';
 import { siteUrl, copyText, setRating, setFav } from './actions.js';
+import { openCollectionPickerForToken } from './collections.js';
 
 const META_W = 280, GAP = 18;
 const boxOf = sel => document.querySelector(sel + ' .box');
@@ -436,6 +437,7 @@ export function initPanels() {
   $('#lbCopyToken').onclick = () => copyText(state.LB_TOKEN, 'token 已复制');
   $('#lbOpen').onclick = () => { if (state.LB_TOKEN) window.open(siteUrl(state.LB_TOKEN), '_blank'); };
   $('#lbFav').onclick = () => togglePreviewFav(state.LB_TOKEN, 'lb');
+  $('#lbCollection').onclick = () => { if (state.LB_TOKEN) openCollectionPickerForToken(state.LB_TOKEN); };
 
   /* 抽卡 */
   $('#btnGacha').onclick = drawCard;
@@ -463,6 +465,7 @@ export function initPanels() {
   };
   $('#gOpen').onclick = () => { if (state.GACHA_TOKEN) window.open(siteUrl(state.GACHA_TOKEN), '_blank'); };
   $('#gFav').onclick = () => togglePreviewFav(state.GACHA_TOKEN, 'g');
+  $('#gCollection').onclick = () => { if (state.GACHA_TOKEN) openCollectionPickerForToken(state.GACHA_TOKEN); };
 
   /* 星星是动态生成的 → 事件委托 */
   document.addEventListener('click', e => {

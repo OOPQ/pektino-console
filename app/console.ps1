@@ -345,7 +345,8 @@ function Handle-Request {
     }
 
     if ($method -eq 'GET' -and $path -eq '/api/collections') {
-        Send-Json -Stream $Stream -Object ([pscustomobject]@{ ok = $true; items = @(Get-Collections) })
+        $ctk = [string]$Req.Query['token']
+        Send-Json -Stream $Stream -Object ([pscustomobject]@{ ok = $true; items = @(Get-Collections -Token $ctk) })
         return
     }
 

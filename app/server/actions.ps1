@@ -267,7 +267,7 @@ function Start-Scrape {
         param($ps, $rank, $pages, $limit, $out, $prog, $cov, $thm, $kn, $threads)
         $p = @{ Rank = $rank; Page = $pages; Out = $out; ProgressFile = $prog; CoverDir = $cov; ThumbDir = $thm; Threads = $threads }
         if ($limit -gt 0) { $p['Limit'] = $limit }
-        if ($kn -and (Test-Path $kn)) { $p['KnownFile'] = $kn }
+        if ($kn -and (Test-Path -LiteralPath $kn)) { $p['KnownFile'] = $kn }
         & $ps @p *> $null
     } -ArgumentList $ps, $Rank, $Pages, $Limit, $out, $prog, $cov, $thm, $kn, $Threads
 
@@ -465,7 +465,7 @@ function Invoke-DeleteFiles {
 
     foreach ($r in $rows) {
         $file = Resolve-RowFile $r
-        if (-not $file -or -not (Test-Path $file)) {
+        if (-not $file -or -not (Test-Path -LiteralPath $file -PathType Leaf)) {
             # 文件不在：如果台账也没记录过文件，就当作"无文件可删"，可以清状态；
             # 记录过文件但找不到，先不动，避免目录不可达时误清
             if (-not $r.file_name) { $missingTokens += $r.token }
@@ -545,6 +545,13 @@ function Format-Size {
 function Resolve-RowFile {
     param($Row)
     if (-not $Row) { return $null }
+    # 优先按台账里记录的文件名直连（索引可能是旧的，且 [ ] 在 Test-Path 里会被当通配符）
+    if ($Row.file_name) {
+        try {
+            $p = Join-Path $Config.contentDir $Row.file_name
+            if (Test-Path -LiteralPath $p -PathType Leaf) { return $p }
+        } catch { }
+    }
     $key = ([string]$Row.token).ToLower()
     try {
         if ($State.Files -and $State.Files.Files -and $State.Files.Files.ContainsKey($key)) {
@@ -559,7 +566,7 @@ function Invoke-Play {
     $row = @($State.Ledger | Where-Object { $_.token -eq $Token }) | Select-Object -First 1
     if (-not $row) { return @{ ok = $false; error = '台账里没有这个条目' } }
     $file = Resolve-RowFile $row
-    if (-not $file -or -not (Test-Path $file)) { return @{ ok = $false; error = '本地还没有这个文件（先下载）' } }
+    if (-not $file -or -not (Test-Path -LiteralPath $file -PathType Leaf)) { return @{ ok = $false; error = '本地还没有这个文件（先下载）' } }
 
     # 浏览器内播放：不打开系统播放器，只记一次播放
     if ($CountOnly) {
@@ -1097,7 +1104,7 @@ function Repair-PartFiles {
         $checked++
         $tk = $p.Name -replace '\.mp4\.part$', ''
         $final = Join-Path $dir ($tk + '.mp4')
-        if (Test-Path $final) {
+        if (Test-Path -LiteralPath $final) {
             Remove-Item $p.FullName -Force -ErrorAction SilentlyContinue
             $deleted++
             continue

@@ -250,7 +250,7 @@ POST /api/download/reset                                             强制解�
 POST /api/download/clear-done                                        清理队列里的完成记录（不动文件/台账）
 POST /api/download/repair                                            整理 .part
 POST /api/mark      {tokens,status}                                  改状态（new/done/recycled/failed）
-GET  /api/collections                                                合集列表（含条目数）
+GET  /api/collections?token=T                                     合集列表（带 has：该 token 是否已在合集里）
 GET  /api/collections/items?id=N                                     合集内 token
 GET  /api/download/preview                                           下载前预估（条数/平均体积/磁盘剩余）
 POST /api/collections {action,id,name,tokens}                        合集 create/rename/delete/add/remove

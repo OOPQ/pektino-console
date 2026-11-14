@@ -240,14 +240,19 @@ function Get-StoreCount {
 # ---------------- 合集 ----------------
 
 function Get-Collections {
+    param([string]$Token = '')
     $conn = Get-StoreConnection
     $cmd = $conn.CreateCommand()
     $cmd.CommandText = @'
 SELECT c.id, c.name, c.created_at, c.updated_at,
-       (SELECT COUNT(*) FROM collection_items ci WHERE ci.collection_id = c.id) AS cnt
+       (SELECT COUNT(*) FROM collection_items ci WHERE ci.collection_id = c.id) AS cnt,
+       CASE WHEN @tk <> '' AND EXISTS (
+           SELECT 1 FROM collection_items x WHERE x.collection_id = c.id AND x.token = @tk
+       ) THEN 1 ELSE 0 END AS has
 FROM collections c
 ORDER BY c.name COLLATE NOCASE ASC
 '@
+    [void]$cmd.Parameters.AddWithValue('@tk', [string]$Token)
     $r = $cmd.ExecuteReader()
     $out = New-Object System.Collections.ArrayList
     while ($r.Read()) {
@@ -257,6 +262,7 @@ ORDER BY c.name COLLATE NOCASE ASC
                 createdAt = [string]$r.GetString(2)
                 updatedAt = [string]$r.GetString(3)
                 count     = [int]$r.GetInt64(4)
+                has       = [bool]([int]$r.GetInt64(5))
             })
     }
     $r.Close(); $cmd.Dispose()

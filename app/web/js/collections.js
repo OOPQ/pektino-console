@@ -4,6 +4,7 @@ import { render, cardHtml } from './table.js';
 import { onRowClick } from './rows.js';
 
 let pickTokens = [];
+let pickMode = 'add';   // add = 批量加入；toggle = 单条加入/移出
 let browserCol = null;
 let browserRows = [];
 let browserQuery = '';
@@ -220,8 +221,9 @@ export async function createCollectionAndAdd(name, tokens) {
   } catch { toast('新建失败', 3500); }
 }
 
-/* ---------- 选择弹窗（批量 / 右键加入） ---------- */
+/* ---------- 选择弹窗（批量 / 右键加入 / 预览单条切换） ---------- */
 export function openCollectionPicker(tokens) {
+  pickMode = 'add';
   pickTokens = (tokens || []).filter(Boolean);
   if (!pickTokens.length) { toast('先选中条目'); return; }
   $('#colPickCount').textContent = `(${pickTokens.length} 条)`;
@@ -231,12 +233,42 @@ export function openCollectionPicker(tokens) {
   loadCollections();
 }
 
+export async function openCollectionPickerForToken(token) {
+  if (!token) return;
+  pickMode = 'toggle';
+  pickTokens = [token];
+  $('#colPickCount').textContent = '（点「加入 / 移出」切换）';
+  $('#colPickNew').value = '';
+  $('#colPick').classList.add('on');
+  await fetchCollectionsForToken(token);
+  renderPickList();
+}
+
+async function fetchCollectionsForToken(token) {
+  try {
+    const r = await api(`/api/collections?token=${encodeURIComponent(token)}`);
+    if (r && r.ok) {
+      state.COLLECTIONS = r.items || [];
+      paintCount();
+      renderTabs();
+    }
+  } catch { }
+}
+
 function renderPickList() {
   const el = $('#colPickList');
   if (!el) return;
   const cols = state.COLLECTIONS || [];
   if (!cols.length) {
     el.innerHTML = '<div class="sub" style="padding:8px 0">还没有合集，下面直接新建</div>';
+    return;
+  }
+  if (pickMode === 'toggle') {
+    el.innerHTML = cols.map(c => `<div class="col-row">
+        <span class="name">${safe(c.name)}</span>
+        <span class="cnt">${c.count} 条</span>
+        <button class="${c.has ? '' : 'ghost'}" data-pick-toggle="${c.id}">${c.has ? '✓ 已在 · 移出' : '加入'}</button>
+      </div>`).join('');
     return;
   }
   el.innerHTML = cols.map(c => `<div class="col-row">
@@ -248,6 +280,7 @@ function renderPickList() {
 
 function closePick() {
   pickTokens = [];
+  pickMode = 'add';
   $('#colPick').classList.remove('on');
 }
 
@@ -292,6 +325,17 @@ export function initCollections() {
   $('#colPickCancel').onclick = closePick;
   $('#colPick').onclick = e => { if (e.target.id === 'colPick') closePick(); };
   $('#colPickList').addEventListener('click', async e => {
+    const tg = e.target.closest('[data-pick-toggle]');
+    if (tg) {
+      const id = +tg.dataset.pickToggle;
+      const col = (state.COLLECTIONS || []).find(c => c.id === id);
+      const action = col && col.has ? 'remove' : 'add';
+      const r = await api('/api/collections', { action, id, tokens: pickTokens });
+      if (!r || !r.ok) return toast((r && r.error) || '操作失败', 3500);
+      await fetchCollectionsForToken(pickTokens[0]);
+      renderPickList();
+      return;
+    }
     const btn = e.target.closest('[data-pick]');
     if (!btn) return;
     const id = +btn.dataset.pick;

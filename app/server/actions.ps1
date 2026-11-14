@@ -162,6 +162,7 @@ function Invoke-Scan {
                 if (-not $r.PSObject.Properties[$prop]) { $r | Add-Member -NotePropertyName $prop -NotePropertyValue '''' -Force }
             }
             $f = $idx.Files[$key]
+            if ([string]$r.file_path -ne [string]$f.file -or [string]$r.file_name -ne [string]$f.name -or [string]$r.file_size -ne [string]$f.size) { $changed++ }
             $r.file_name = $f.name
             $r.file_path = $f.file
             $r.file_size = $f.size

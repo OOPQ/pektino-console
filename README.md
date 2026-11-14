@@ -160,6 +160,10 @@ powershell -ExecutionPolicy Bypass -File .\app\console.ps1 -Project D:\my-data
 - 右键条目 → **📚 加入合集 ▸** 二级菜单，选已有合集或「新建合集…」
 - 多选后点浮条上的 **📚 合集**，批量加入
 
+## 媒体目录布局
+
+新下载的视频按来源放在 `media\<source>\`（例如 `media\pektino\`、`media\qise\`）。旧项目如果视频还平铺在 `media\` 根目录，启动时会自动迁移到 `media\pektino\`，并更新台账里的文件路径。
+
 ## 播放优化
 
 如果导入的视频打开很慢，通常是 mp4 的 moov 索引在文件尾部。运行：

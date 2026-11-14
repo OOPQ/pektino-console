@@ -282,3 +282,39 @@ function Import-ProjectFiles {
     }
     return [pscustomobject]@{ added = $added; skipped = $skipped; rows = @($list) }
 }
+
+function Move-LegacyMediaFiles {
+    <#
+      旧版本把 pektino 视频直接放在 media\ 根目录。新布局是 media\<source>\。
+      启动时把根目录的 mp4/.part 移到 media\pektino\；已存在同名文件时不覆盖。
+    #>
+    param([string]$MediaDir)
+    $result = [pscustomobject]@{ moved = 0; skipped = 0; failed = 0; dest = '' }
+    if (-not $MediaDir -or -not (Test-Path -LiteralPath $MediaDir)) { return $result }
+    $dest = Join-Path $MediaDir 'pektino'
+    if (-not (Test-Path -LiteralPath $dest)) { New-Item -ItemType Directory -Path $dest -Force | Out-Null }
+    $result.dest = $dest
+    $files = @(Get-ChildItem -LiteralPath $MediaDir -File -ErrorAction SilentlyContinue | Where-Object {
+            $_.Extension -eq '.mp4' -or $_.Name -like '*.mp4.part'
+        })
+    foreach ($f in $files) {
+        $target = Join-Path $dest $f.Name
+        try {
+            if (Test-Path -LiteralPath $target) {
+                $old = Get-Item -LiteralPath $target
+                if ($old.Length -eq $f.Length) {
+                    Remove-Item -LiteralPath $f.FullName -Force
+                    $result.moved++
+                } else {
+                    $result.skipped++
+                }
+                continue
+            }
+            Move-Item -LiteralPath $f.FullName -Destination $target -Force
+            $result.moved++
+        } catch {
+            $result.failed++
+        }
+    }
+    return $result
+}

@@ -764,6 +764,15 @@ try {
     }
 } catch { Write-FileLog "project import failed: $($_.Exception.Message)" }
 
+# 旧项目兼容：media 根目录的 pektino 视频迁到 media\pektino\
+try {
+    $mv = Move-LegacyMediaFiles -MediaDir $Config.contentDir
+    if ($mv.moved -gt 0 -or $mv.skipped -gt 0 -or $mv.failed -gt 0) {
+        Write-FileLog "media layout migrate: moved=$($mv.moved) skipped=$($mv.skipped) failed=$($mv.failed) dest=$($mv.dest)"
+        Write-Log 'scan' "媒体布局迁移：根目录 -> pektino，移动 $($mv.moved) 个（跳过 $($mv.skipped)）"
+    }
+} catch { Write-FileLog "media layout migrate failed: $($_.Exception.Message)" }
+
 # 启动先扫一遍内容目录，把“已经下完的”标成 done
 # 顺手整理上次中断留下的 .part（已下完的改名，写坏的删掉）
 try {

@@ -16,7 +16,7 @@ param(
     [string]$Key = '',
     [int]$ParentPid = 0,
     [string]$LogFile = '',
-    [int]$MaxChunkMB = 8,
+    [int]$MaxChunkMB = 2,
     [int]$IdleMinutes = 30
 )
 
@@ -101,7 +101,7 @@ try {
         try {
             $client = $listener.AcceptTcpClient()
             $client.ReceiveTimeout = 8000
-            try { $client.Client.SendTimeout = 20000 } catch { }
+            try { $client.Client.SendTimeout = 5000 } catch { }
             $stream = $client.GetStream()
             $raw = Read-RequestText $stream
             if (-not $raw) { continue }

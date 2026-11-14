@@ -8,6 +8,17 @@ import { siteUrl, copyText, setRating, setFav } from './actions.js';
 const META_W = 280, GAP = 18;
 const boxOf = sel => document.querySelector(sel + ' .box');
 
+/* 预览里点“空白”是否应该关闭：避开视频/图片/按钮/星级/标签等可交互元素 */
+function isBlankPreviewTarget(t) {
+  if (!t || !t.closest) return false;
+  if (t.closest('button, video, img, a, input, select, textarea, .rt, .star, .tag')) return false;
+  if (t.id === 'lightbox' || t.id === 'gacha') return true;
+  if (t.classList && (t.classList.contains('box') || t.classList.contains('meta') ||
+      t.classList.contains('mstats') || t.classList.contains('actions'))) return true;
+  if (t.id === 'lbMedia' || t.id === 'gMedia') return true;
+  return false;
+}
+
 /* ================= 信息行（灯箱 / 抽卡共用） ================= */
 function metaRows(r, opts = {}) {
   const { withRating = true, ratingHtml = null, extraTop = '' } = opts;
@@ -395,7 +406,7 @@ export function connectSse() {
 export function initPanels() {
   /* 灯箱 */
   $('#lbClose').onclick = closeLightbox;
-  $('#lightbox').onclick = e => { if (e.target.id === 'lightbox') closeLightbox(); };
+  $('#lightbox').onclick = e => { if (isBlankPreviewTarget(e.target)) closeLightbox(); };
   // 点封面/播放浮层/空白处：原地切到浏览器内播放（没下载的条目直接忽略；视频控件区域除外）
   $('#lbImg').onclick = e => {
     e.stopPropagation();
@@ -430,7 +441,7 @@ export function initPanels() {
   $('#btnGacha').onclick = drawCard;
   $('#gAgain').onclick = drawCard;
   $('#gClose').onclick = closeGacha;
-  $('#gacha').onclick = e => { if (e.target.id === 'gacha') closeGacha(); };
+  $('#gacha').onclick = e => { if (isBlankPreviewTarget(e.target)) closeGacha(); };
   $('#gImg').onclick = e => { e.stopPropagation(); if (state.GACHA_TOKEN) playToken('g', state.GACHA_TOKEN); };
   $('#gPlayOverlay').onclick = e => { e.stopPropagation(); if (state.GACHA_TOKEN) playToken('g', state.GACHA_TOKEN); };
   $('#gMedia').onclick = e => {

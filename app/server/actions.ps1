@@ -871,6 +871,7 @@ function Start-Download {
                 subdir    = (Get-ItemSource $t)
                 source    = $(if ($dl.source) { [string]$dl.source } else { (Get-ItemSource $t) })
                 source_id = $(if ($dl.source_id) { [string]$dl.source_id } else { [string]$t.source_id })
+                section   = [string]$dl.section
                 sd        = [bool]$dl.sd
             })
     }

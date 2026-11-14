@@ -246,6 +246,11 @@ function Start-Scrape {
     $src = Get-SourceInfo $Source
     if (-not $src) { return @{ ok = $false; error = "未知源: $Source" } }
     if ($src.capabilities -notcontains 'scrape') { return @{ ok = $false; error = "源 $($src.name) 不支持抓取" } }
+    $ranks = @($src.ranks | ForEach-Object { $_.key })
+    if (-not $ranks.Count) { $ranks = @('default') }
+    if (-not $Rank) { $Rank = $ranks[0] }
+    if ($ranks -notcontains $Rank) { return @{ ok = $false; error = "源 $($src.name) 没有榜单: $Rank" } }
+    if ($src.supportsPages -eq $false) { $Pages = @(1) }
     $dir = Split-Path $TmpCsv -Parent
     if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
     Remove-Item $ProgressFile -Force -ErrorAction SilentlyContinue

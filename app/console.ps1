@@ -306,7 +306,14 @@ function Handle-Request {
             download = (Get-DownloadInfo)
             project  = (Get-ProjectSummary -Paths $WS)
             settings = [pscustomobject]@{ proxy = [string]$Config.proxy; concurrent = $(if ($Config.concurrent) { [int]$Config.concurrent } else { 3 }); ffmpegPath = [string]$Config.ffmpegPath }
-            sources  = @(Get-Sources | ForEach-Object { [pscustomobject]@{ key = $_.key; name = $_.name; capabilities = @($_.capabilities) } })
+            sources  = @(Get-Sources | ForEach-Object {
+                    [pscustomobject]@{
+                        key = $_.key; name = $_.name; capabilities = @($_.capabilities)
+                        siteUrl = $_.siteUrl; pageSize = $_.pageSize
+                        supportsPages = [bool]$_.supportsPages; incremental = [bool]$_.incremental
+                        ranks = @($_.ranks | ForEach-Object { [pscustomobject]@{ key = $_.key; label = $_.label } })
+                    }
+                })
             # 浏览器内播放用的媒体服务地址（前端拼成 <base>/<token>.mp4?k=<key>）
             media    = $(if ($State.Media) { [pscustomobject]@{ base = [string]$State.Media.Base; key = [string]$State.Media.Key } } else { $null })
             # 上次退出时没下完的条目（重启后前端提示「继续下载」）
@@ -491,9 +498,21 @@ function Handle-Request {
                 return
             }
             '/api/scrape' {
-                $rank = if ($body.rank) { [string]$body.rank } else { 'daily' }
-                if (@('daily', 'weekly', 'monthly', 'all') -notcontains $rank) {
-                    Send-Json -Stream $Stream -Object @{ ok = $false; error = "不认识的榜单: $rank" }
+                $srcKey = if ($body.source) { [string]$body.source } else { 'pektino' }
+                $srcInfo = Get-SourceInfo $srcKey
+                if (-not $srcInfo) {
+                    Send-Json -Stream $Stream -Object @{ ok = $false; error = "未知源: $srcKey" }
+                    return
+                }
+                if ($srcInfo.capabilities -notcontains 'scrape') {
+                    Send-Json -Stream $Stream -Object @{ ok = $false; error = "源 $($srcInfo.name) 不支持抓取" }
+                    return
+                }
+                $allowedRanks = @($srcInfo.ranks | ForEach-Object { $_.key })
+                if (-not $allowedRanks.Count) { $allowedRanks = @('default') }
+                $rank = if ($body.rank) { [string]$body.rank } else { $allowedRanks[0] }
+                if ($allowedRanks -notcontains $rank) {
+                    Send-Json -Stream $Stream -Object @{ ok = $false; error = "源 $($srcInfo.name) 没有榜单: $rank" }
                     return
                 }
                 $pages = @(1)
@@ -516,13 +535,9 @@ function Handle-Request {
                 if ($body.threads) { try { $threads = [Math]::Max(2, [Math]::Min(24, [int]$body.threads)) } catch { $threads = 8 } }
                 $inc = $true
                 if ($null -ne $body.incremental) { $inc = [bool]$body.incremental }
+                if ($srcInfo.incremental -eq $false) { $inc = $false }
                 $fresh = 3
                 if ($body.freshDays) { try { $fresh = [Math]::Max(0, [Math]::Min(30, [int]$body.freshDays)) } catch { $fresh = 3 } }
-                $srcKey = if ($body.source) { [string]$body.source } else { 'pektino' }
-                if (-not (Get-SourceInfo $srcKey)) {
-                    Send-Json -Stream $Stream -Object @{ ok = $false; error = "未知源: $srcKey" }
-                    return
-                }
                 Send-Json -Stream $Stream -Object (Start-Scrape -Source $srcKey -Rank $rank -Pages $pages -Limit $limit -Threads $threads -Incremental $inc -FreshDays $fresh)
                 return
             }

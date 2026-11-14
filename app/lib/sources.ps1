@@ -32,6 +32,14 @@ function Get-SourceManifest {
         if ($null -eq $m.key) { continue }
         $key = ([string]$m.key).ToLowerInvariant()
         if ($key -notmatch '^[a-z][a-z0-9]*$') { throw "源 key 不合法（只允许小写字母/数字）: $key" }
+        $ranks = New-Object System.Collections.ArrayList
+        foreach ($r in @($m.ranks)) {
+            if (-not $r.key) { continue }
+            [void]$ranks.Add([pscustomobject]@{
+                    key   = [string]$r.key
+                    label = $(if ($r.label) { [string]$r.label } else { [string]$r.key })
+                })
+        }
         [void]$out.Add([pscustomobject]@{
                 key          = $key
                 name         = $(if ($m.name) { [string]$m.name } else { $key })
@@ -40,6 +48,11 @@ function Get-SourceManifest {
                 order        = $(if ($null -ne $m.order) { [int]$m.order } else { 100 })
                 capabilities = @($m.capabilities | ForEach-Object { [string]$_ })
                 pascal       = (Get-Culture).TextInfo.ToTitleCase($key)
+                siteUrl      = [string]$m.siteUrl
+                pageSize     = $(if ($m.pageSize) { [int]$m.pageSize } else { 50 })
+                supportsPages = ($m.supportsPages -ne $false)
+                incremental  = ($m.incremental -ne $false)
+                ranks        = @($ranks)
             })
     }
     return @($out | Sort-Object order, key)
@@ -49,6 +62,7 @@ function Get-SourceAdapterFiles {
     param([string]$Root)
     foreach ($s in @(Get-SourceManifest -Root $Root)) {
         if (-not $s.enabled) { continue }
+        if (-not $s.file) { continue }
         Join-Path $Root ('sources\' + $s.file)
     }
 }

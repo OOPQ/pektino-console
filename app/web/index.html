@@ -148,15 +148,10 @@
     </div>
     <div class="field">
       <label>榜单</label>
-      <select id="rank">
-        <option value="daily">日榜</option>
-        <option value="weekly">周榜</option>
-        <option value="monthly">月榜</option>
-        <option value="all">总榜</option>
-      </select>
+      <select id="rank"></select>
     </div>
     <div class="field">
-      <label>页数（从第 1 页抓到第 N 页，每页 50 条）</label>
+      <label>页数（从第 1 页抓到第 N 页，每页 <span id="pageSizeHint">50</span> 条）</label>
       <input type="number" id="pageCount" value="3" min="1" max="20" step="1">
     </div>
     <div class="field">

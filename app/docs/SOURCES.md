@@ -45,6 +45,22 @@ app/cli/import.ps1            通用本地入库（按 token 找源 → 详情�
 |---|---|---|---|---|
 | `pektino` | 榜单 | JSON-LD | JSON-LD | HTTP（Referer） |
 | `hsex` | 首页 / `index-N.htm` | `<source>` 的 m3u8 | thumb 图 | HLS（ffmpeg，需配置路径） |
+| `local` | 本地文件（无抓取能力） | - | 本地取帧 | - |
+
+### 源清单里的 UI/行为字段
+
+`sources.json` 不只决定加载哪个文件，还驱动 UI 和校验：
+
+| 字段 | 作用 |
+|---|---|
+| `siteUrl` | 详情页模板（`{id}`），前端「站点」按钮的回退地址 |
+| `ranks` | 该源支持的榜单；抓取弹窗的榜单下拉、后端校验都来自这里 |
+| `pageSize` | 每页条数，弹窗提示用 |
+| `supportsPages` | 是否支持翻页；false 时 UI 隐藏页数 |
+| `incremental` | 是否支持增量；false 时 UI 禁用「增量」 |
+| `capabilities` | `scrape/detail/cover/download`；抓取源下拉只显示有 `scrape` 的源 |
+
+新增源时只改清单和适配器，不需要再改 `console.ps1` 的榜单枚举或前端下拉。
 
 ## 适配器契约
 

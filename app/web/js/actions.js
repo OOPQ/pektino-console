@@ -5,8 +5,11 @@ import { api, state, toast, emit } from './core.js';
 export const siteUrl = x => {
   const row = (x && typeof x === 'object') ? x : state.ROWS.find(r => r.token === x);
   if (row && row.page_url) return row.page_url;
-  const tk = row ? row.token : x;
-  return `https://pektino.com/zh-CN/movie/${encodeURIComponent(tk || '')}`;
+  const tk = row ? row.token : String(x || '');
+  const srcKey = (row && row.source) || (tk.includes('@') ? tk.split('@')[0] : '');
+  const src = (state.SOURCES || []).find(s => s.key === srcKey);
+  const id = tk.includes('@') ? tk.split('@').slice(1).join('@') : tk;
+  return (src && src.siteUrl) ? src.siteUrl.replace('{id}', encodeURIComponent(id)) : '';
 };
 
 /* 复制到剪贴板（失败给出提示，不抛异常） */

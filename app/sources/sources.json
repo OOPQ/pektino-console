@@ -5,7 +5,17 @@
     "file": "pektino.ps1",
     "enabled": true,
     "order": 10,
-    "capabilities": ["scrape", "detail", "cover", "download"]
+    "capabilities": ["scrape", "detail", "cover", "download"],
+    "siteUrl": "https://pektino.com/zh-CN/movie/{id}",
+    "pageSize": 50,
+    "supportsPages": true,
+    "incremental": true,
+    "ranks": [
+      { "key": "daily", "label": "日榜" },
+      { "key": "weekly", "label": "周榜" },
+      { "key": "monthly", "label": "月榜" },
+      { "key": "all", "label": "总榜" }
+    ]
   },
   {
     "key": "hsex",
@@ -13,6 +23,26 @@
     "file": "hsex.ps1",
     "enabled": true,
     "order": 20,
-    "capabilities": ["scrape", "detail", "cover", "download"]
+    "capabilities": ["scrape", "detail", "cover", "download"],
+    "siteUrl": "https://hsex.icu/video-{id}.htm",
+    "pageSize": 48,
+    "supportsPages": true,
+    "incremental": true,
+    "ranks": [
+      { "key": "latest", "label": "最新" }
+    ]
+  },
+  {
+    "key": "local",
+    "name": "本地",
+    "file": "",
+    "enabled": true,
+    "order": 90,
+    "capabilities": [],
+    "siteUrl": "",
+    "pageSize": 0,
+    "supportsPages": false,
+    "incremental": false,
+    "ranks": []
   }
 ]

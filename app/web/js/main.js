@@ -491,10 +491,11 @@ function paintSources() {
     + (state.SOURCES || []).map(s => `<option value="${escHtml(s.key)}">${escHtml(s.name || s.key)}</option>`).join('');
   sel.value = (cur === 'all' || (state.SOURCES || []).some(s => s.key === cur)) ? cur : 'all';
   const sc = $('#scrapeSource');
-  if (sc) {
-    const prev = sc.value;
-    sc.innerHTML = (state.SOURCES || []).map(s => `<option value="${escHtml(s.key)}">${escHtml(s.name || s.key)}</option>`).join('');
-    if (prev && (state.SOURCES || []).some(s => s.key === prev)) sc.value = prev;
+  if (sc && !sc.options.length) {
+    sc.innerHTML = (state.SOURCES || [])
+      .filter(s => (s.capabilities || []).includes('scrape'))
+      .map(s => `<option value="${escHtml(s.key)}">${escHtml(s.name || s.key)}</option>`).join('');
+    if ($('#scrapeModal').classList.contains('on')) paintScrapeOptions();
   }
 }
 
@@ -885,7 +886,40 @@ async function repairCovers() {
   load();
 }
 
-function openScrapeModal() { $('#scrapeModal').classList.add('on'); }
+function sourceByKey(k) {
+  return (state.SOURCES || []).find(s => s.key === k) || null;
+}
+
+function paintScrapeOptions() {
+  const sel = $('#scrapeSource');
+  if (!sel) return;
+  const src = sourceByKey(sel.value) || (state.SOURCES || [])[0] || null;
+  const rankSel = $('#rank');
+  if (rankSel) {
+    const prev = rankSel.value;
+    const ranks = (src && src.ranks) || [];
+    rankSel.innerHTML = ranks.length
+      ? ranks.map(r => `<option value="${escHtml(r.key)}">${escHtml(r.label)}</option>`).join('')
+      : '<option value="default">默认</option>';
+    if (prev && ranks.some(r => r.key === prev)) rankSel.value = prev;
+    const field = rankSel.closest('.field');
+    if (field) field.style.display = ranks.length ? '' : 'none';
+  }
+  const sizeEl = $('#pageSizeHint');
+  if (sizeEl) sizeEl.textContent = String((src && src.pageSize) || 50);
+  const pc = $('#pageCount');
+  if (pc) {
+    const field = pc.closest('.field');
+    if (field) field.style.display = (src && src.supportsPages === false) ? 'none' : '';
+  }
+  const inc = $('#chkInc');
+  if (inc) {
+    inc.disabled = !!(src && src.incremental === false);
+    if (inc.disabled) inc.checked = false;
+  }
+}
+
+function openScrapeModal() { paintScrapeOptions(); $('#scrapeModal').classList.add('on'); }
 function closeScrapeModal() { $('#scrapeModal').classList.remove('on'); }
 
 function initToolbar() {
@@ -893,6 +927,7 @@ function initToolbar() {
   $('#btnScrapeGo').onclick = () => { closeScrapeModal(); doScrape(); };
   $('#btnScrapeCancel').onclick = closeScrapeModal;
   $('#scrapeModal').onclick = e => { if (e.target.id === 'scrapeModal') closeScrapeModal(); };
+  if ($('#scrapeSource')) $('#scrapeSource').addEventListener('change', paintScrapeOptions);
   // 「本次新增」临时筛选
   if ($('#addedToggle')) {
     $('#addedToggle').onclick = () => {

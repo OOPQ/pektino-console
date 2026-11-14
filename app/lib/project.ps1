@@ -255,12 +255,16 @@ function Import-ProjectFiles {
         if (Get-Command Get-LocalMediaMeta -ErrorAction SilentlyContinue) {
             try { $meta = Get-LocalMediaMeta -File $f.FullName } catch { }
         }
+        $sp = if (Get-Command Split-ItemToken -ErrorAction SilentlyContinue) { Split-ItemToken $tk } else { @{ source = 'local'; id = $tk } }
+        $srcKey = if ($sp.source -and $sp.source -ne 'pektino') { $sp.source } else { 'local' }
         $row = [pscustomobject]@{
             token = $tk; status = 'done'; fav = ''; rank = ''; page = ''
             duration = $(if ($meta) { $meta.duration } else { '' })
             seconds = $(if ($meta) { $meta.seconds } else { '' })
             res = $(if ($meta) { $meta.res } else { '' })
             views = ''; likes = ''; uploaded = ''; url = ''; page_url = ''; site = 'local'
+            source = $srcKey; source_id = $sp.id; title = $tk
+            cover_url = ''; download_kind = 'http'; download_headers = ''; extra = ''
             first_seen = $now; last_seen = $now; sent_at = ''; note = 'scan:init'
             file_name = $f.Name; file_size = $f.Length; file_date = $f.LastWriteTime.ToString('yyyy-MM-dd HH:mm:ss')
             play_count = ''; last_play = ''; rating = ''

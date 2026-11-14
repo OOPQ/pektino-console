@@ -7,7 +7,7 @@
 [CmdletBinding()]
 param(
     [string]$Source = 'pektino',
-    [ValidateSet('daily', 'weekly', 'monthly', 'all')][string]$Rank = 'daily',
+    [string]$Rank = '',
     [int[]]$Page = @(1),
     [int]$Limit = 0,
     [int]$Threads = 8,

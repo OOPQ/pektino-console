@@ -547,6 +547,7 @@ export function initPanels() {
   /* 键盘：capture 阶段拦截，避免视频控件先吃掉方向键/空格 */
   document.addEventListener('keydown', e => {
     const typing = ['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement.tagName);
+    if ($('#confirmModal').classList.contains('on')) return;
     const gachaOpen = $('#gacha').classList.contains('on');
     const lbOpen = $('#lightbox').classList.contains('on');
     // 预览里用 Ctrl+←/→ 切换上一项/下一项（不用单按方向键，避免和视频/页面快捷键冲突）
@@ -605,6 +606,7 @@ export function initPanels() {
     if (e.key === '/' && !typing) { e.preventDefault(); $('#q').focus(); return; }
     if ((e.key === 'r' || e.key === 'R') && !typing) { e.preventDefault(); drawCard(); return; }
     if (e.key === 'Escape') {
+      if ($('#confirmModal').classList.contains('on')) return;
       if ($('#scrapeModal').classList.contains('on')) $('#scrapeModal').classList.remove('on');
       else if ($('#gacha').classList.contains('on')) closeGacha();
       else if ($('#lightbox').classList.contains('on')) closeLightbox();

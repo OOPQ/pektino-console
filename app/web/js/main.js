@@ -1,5 +1,5 @@
 /* main.js — 数据加载、工具条、批量操作、初始化 */
-import { $, state, PREFS, savePrefs, api, toast, onEvent } from './core.js';
+import { $, state, PREFS, savePrefs, api, toast, onEvent, confirmDialog } from './core.js';
 import { render, markActiveKpi, initTable } from './table.js';
 import { initRows, delFiles } from './rows.js';
 import { initPanels, connectSse, openLightbox } from './panels.js';
@@ -455,7 +455,7 @@ async function binRestore(tokens) {
 
 async function binDelete(tokens) {
   if (!tokens.length) return;
-  if (!confirm(`彻底删除 ${tokens.length} 条？会同时删除本地文件，无法撤销。`)) return;
+  if (!(await confirmDialog(`彻底删除 ${tokens.length} 条？会同时删除本地文件，无法撤销。`, { title: '彻底删除', danger: true, okText: '彻底删除' }))) return;
   const r = await api('/api/delete', { tokens, purge: true, permanent: true });
   if (!r || !r.ok) { toast((r && r.error) || '删除失败', 5000); return; }
   const bad = (r.failed || []).length;
@@ -814,7 +814,7 @@ async function doUrlScrape() {
 
 async function doImport() {
   const media = (_WS && _WS.media) || '';
-  if (!confirm(`扫描项目里的媒体目录并入库？\n${media}\n\n会逐个用文件名(token)去站点查证，能查到的才入库并标记为已完成。`)) return;
+  if (!(await confirmDialog(`扫描项目里的媒体目录并入库？\n${media}\n\n会逐个用文件名(token)去站点查证，能查到的才入库并标记为已完成。`, { title: '本地入库' }))) return;
   try {
     state.SCRAPE_BASE = new Set(state.ROWS.map(x => x.token));
     state.ADDED = null; state.SHOW_ADDED = false; paintAddedChip(); render();
@@ -830,7 +830,7 @@ async function doCancelJob() {
   const dl = state.DOWNLOAD;
   try {
     if (dl && dl.running) {
-      if (!confirm('取消正在进行的下载？已下载的部分会保留，可续传。')) return;
+      if (!(await confirmDialog('取消正在进行的下载？已下载的部分会保留，可续传。', { title: '取消下载' }))) return;
       const r = await api('/api/download/cancel', {});
       toast(r.ok ? `已取消下载（结束 ${r.killed || 0} 个进程）` : (r.error || '取消失败'), 4000);
     } else {
@@ -926,7 +926,7 @@ async function saveNet() {
 }
 
 async function cancelAllDownloads() {
-  if (!confirm('取消全部下载？已下载的部分会保留，下次可续传。')) return;
+  if (!(await confirmDialog('取消全部下载？已下载的部分会保留，下次可续传。', { title: '取消全部下载' }))) return;
   try {
     const r = await api('/api/download/cancel', {});
     toast(r.ok ? '已取消全部下载' : (r.error || '取消失败'), 3500);
@@ -1159,7 +1159,7 @@ function initToolbar() {
       if (act === 'export') { window.location.href = '/api/export'; return; }
       if (act === 'recycle-bin') return openBinDrawer();
       if (act === 'reset-download') {
-        if (!confirm('结束残留下载进程并解除「已有任务在跑」？已下载的 .part 会保留。')) return;
+        if (!(await confirmDialog('结束残留下载进程并解除「已有任务在跑」？已下载的 .part 会保留。', { title: '解除下载占用' }))) return;
         try {
           const r = await api('/api/download/reset', {});
           toast(r.ok ? `已解除（进程 ${r.killed || 0} 个）` : (r.error || '失败'), 3500);
@@ -1190,7 +1190,7 @@ function initBulk() {
   $('#selRecycle').onclick = async () => {
     if (!state.SEL.size) return;
     const count = state.SEL.size;
-    if (!confirm(`把选中的 ${count} 条移入回收站？`)) return;
+    if (!(await confirmDialog(`把选中的 ${count} 条移入回收站？`, { title: '移入回收站' }))) return;
     const r = await setStatus([...state.SEL], 'recycled');
     if (!r || !r.ok) return toast((r && r.error) || '操作失败', 3500);
     state.SEL.clear();

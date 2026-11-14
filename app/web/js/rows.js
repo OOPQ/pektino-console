@@ -1,6 +1,6 @@
 /* rows.js — 行选择、行内操作、右键菜单、播放、删除、批量操作 */
 import {
-  $, state, STATUS_LABEL, api, toast, starsHtml, emit, onEvent
+  $, state, STATUS_LABEL, api, toast, starsHtml, emit, onEvent, confirmDialog
 } from './core.js';
 import { visible, render, renderSel } from './table.js';
 import {
@@ -138,7 +138,7 @@ export async function delFiles(tokens, purge) {
   if (!rows.length) return toast(purge ? '选中条目不在列表里' : '选中的条目本地没有文件');
   const size = rows.reduce((sum, r) => sum + (+r.file_size || 0), 0);
   const extra = purge ? '，并从台账中移除这些条目' : '（进回收站，可从回收站还原）';
-  if (!confirm(`删除 ${rows.length} 个本地文件，共 ${(size / 1048576).toFixed(1)} MB${extra}？`)) return;
+  if (!(await confirmDialog(`删除 ${rows.length} 个本地文件，共 ${(size / 1048576).toFixed(1)} MB${extra}？`, { title: purge ? '删除并移除台账' : '删除文件', danger: true, okText: '删除' }))) return;
   try {
     const r = await api('/api/delete', { tokens, purge });
     if (!r.ok) return toast('失败：' + r.error, 5000);

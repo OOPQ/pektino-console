@@ -1,5 +1,5 @@
 /* collections.js — 合集：弹窗内浏览（卡片墙）+ 维护 */
-import { $, state, api, toast } from './core.js';
+import { $, state, api, toast, confirmDialog } from './core.js';
 import { render, cardHtml } from './table.js';
 import { onRowClick } from './rows.js';
 
@@ -151,7 +151,7 @@ async function renameCurrent() {
 async function deleteCurrent() {
   if (!browserCol) return;
   const col = browserCol;
-  if (!confirm(`删除合集「${col.name}」？只会删合集，不会删条目。`)) return;
+  if (!(await confirmDialog(`删除合集「${col.name}」？只会删合集，不会删条目。`, { title: '删除合集', danger: true, okText: '删除' }))) return;
   const r = await api('/api/collections', { action: 'delete', id: col.id });
   if (!r || !r.ok) return toast((r && r.error) || '删除失败', 3500);
   if (state.COL_FILTER && state.COL_FILTER.id === col.id) clearColFilter();

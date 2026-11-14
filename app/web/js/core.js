@@ -139,3 +139,38 @@ export function starsHtml(value, opts = {}) {
   const attr = opts.token ? ` data-rate="${opts.token}"` : '';
   return `<span class="${cls}"${attr}>${starsInner(value)}</span>`;
 }
+/* ---------- 通用确认弹窗（替代原生 confirm） ---------- */
+export function confirmDialog(message, opts = {}) {
+  const modal = $('#confirmModal');
+  if (!modal) return Promise.resolve(window.confirm(message));
+  return new Promise(resolve => {
+    const title = $('#confirmTitle'), msg = $('#confirmMsg'), ok = $('#confirmOk'), cancel = $('#confirmCancel');
+    title.textContent = opts.title || '请确认';
+    msg.textContent = message;
+    ok.textContent = opts.okText || '确认';
+    ok.className = opts.danger ? 'danger' : 'primary';
+    const prev = document.activeElement;
+    let done = false;
+    const finish = val => {
+      if (done) return;
+      done = true;
+      document.removeEventListener('keydown', onKey, true);
+      modal.removeEventListener('click', onBackdrop);
+      ok.onclick = null; cancel.onclick = null;
+      modal.classList.remove('on');
+      try { if (prev && prev.focus) prev.focus(); } catch { }
+      resolve(val);
+    };
+    const onKey = e => {
+      if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); finish(false); }
+      else if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); finish(true); }
+    };
+    const onBackdrop = e => { if (e.target === modal) finish(false); };
+    document.addEventListener('keydown', onKey, true);
+    modal.addEventListener('click', onBackdrop);
+    ok.onclick = () => finish(true);
+    cancel.onclick = () => finish(false);
+    modal.classList.add('on');
+    setTimeout(() => { try { (opts.danger ? cancel : ok).focus(); } catch { } }, 30);
+  });
+}

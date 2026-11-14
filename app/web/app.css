@@ -455,3 +455,7 @@ body.multi .card .foot .dlbtn { display: none; }
 }
 .colresize:hover, .colresize.dragging { background: var(--acc, #2f81f7); opacity: .55; }
 body.resizing-col { cursor: col-resize !important; user-select: none; }
+/* ===== 通用确认弹窗 ===== */
+#confirmModal { z-index: 80; }
+#confirmModal .confirm-box { width: min(440px, 94vw); }
+#confirmModal .confirm-msg { white-space: pre-line; color: var(--text); line-height: 1.55; max-height: 45vh; overflow: auto; margin-bottom: 16px; word-break: break-word; }

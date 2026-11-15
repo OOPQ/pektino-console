@@ -72,9 +72,13 @@ export function toast(msg, ms = 2500) {
   clearTimeout(toast._t);
   toast._t = setTimeout(() => t.classList.remove('on'), ms);
 }
-export const stTag = s => `<span class="tag ${s}">${STATUS_LABEL[s] || s}</span>`;
+export const stTag = s => `<span class="tag ${escHtml(s)}">${escHtml(STATUS_LABEL[s] || s)}</span>`;
 export const fmtMB = n => n ? (n / 1048576).toFixed(1) + ' MB' : '';
 export const fmtNum = n => (n === '' || n == null) ? '–' : Number(n).toLocaleString('en-US');
+/* 统一 HTML 转义：所有拼进 innerHTML 或属性值的外部字段（标题/token/备注/日志）都要过一遍 */
+export function escHtml(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
 
 /* ---------- 前端上报 ---------- */
 const REPORT_LAST = {};
@@ -136,7 +140,7 @@ export function starsInner(value) {
 }
 export function starsHtml(value, opts = {}) {
   const cls = ['rt', opts.cls || ''].filter(Boolean).join(' ');
-  const attr = opts.token ? ` data-rate="${opts.token}"` : '';
+  const attr = opts.token ? ` data-rate="${escHtml(opts.token)}"` : '';
   return `<span class="${cls}"${attr}>${starsInner(value)}</span>`;
 }
 /* ---------- 通用确认弹窗（替代原生 confirm） ---------- */

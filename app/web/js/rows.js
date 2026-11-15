@@ -1,6 +1,6 @@
 /* rows.js — 行选择、行内操作、右键菜单、播放、删除、批量操作 */
 import {
-  $, state, STATUS_LABEL, api, toast, starsHtml, emit, onEvent
+  $, state, STATUS_LABEL, api, toast, starsHtml, emit, onEvent, escHtml
 } from './core.js';
 import { visible, render, renderSel } from './table.js';
 import {
@@ -133,9 +133,6 @@ export async function doPlay(tk) {
 }
 
 /* ================= 右键菜单 ================= */
-function escapeHtml(s) {
-  return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-}
 
 function ctxItemsFor(row) {
   const favOn = !!row && row.fav === '1';
@@ -383,7 +380,7 @@ export function initRows() {
       const showSub = () => {
         const cols = state.COLLECTIONS || [];
         sub.innerHTML = (cols.length
-          ? cols.map(c => `<button data-col="${c.id}">${escapeHtml(c.name)}</button>`).join('')
+          ? cols.map(c => `<button data-col="${c.id}">${escHtml(c.name)}</button>`).join('')
           : '<div class="sub" style="padding:6px 10px">还没有合集</div>')
           + '<button data-col-new="1">＋ 新建合集…</button>';
         const r = subBtn.getBoundingClientRect();

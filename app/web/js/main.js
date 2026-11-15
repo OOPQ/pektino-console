@@ -1,5 +1,5 @@
 /* main.js — 数据加载、工具条、批量操作、初始化 */
-import { $, state, PREFS, savePrefs, api, toast, onEvent, confirmDialog } from './core.js';
+import { $, state, PREFS, savePrefs, api, toast, onEvent, confirmDialog, escHtml } from './core.js';
 import { render, markActiveKpi, initTable, visible } from './table.js';
 import { initRows } from './rows.js';
 import { initPanels, connectSse, openLightbox } from './panels.js';
@@ -42,7 +42,9 @@ function renderJob(job, download) {
 
 /* ================= 数据加载 ================= */
 let _WS = null;
-function paintKpis(S) {
+// single-flight：SSE 和管理动作会同时触发 load，重叠请求会互相覆盖状态
+let _loadBusy = false, _loadAgain = false;
+function paintKpis(S, vis) {
   $('#kTotal').textContent = S.total;
   $('#kNew').textContent = S.new;
   $('#kDone').textContent = S.done;
@@ -55,7 +57,7 @@ function paintKpis(S) {
   // 主按钮上直接显示待下载数量，点之前就知道要下多少
   const dlBtn = $('#btnDownload');
   if (dlBtn) {
-    const pending = visible().filter(r => r.url && !r.file_name && r.status === 'new').length;
+    const pending = (vis || visible()).filter(r => r.url && !r.file_name && r.status === 'new').length;
     dlBtn.textContent = `下载待下载 (${pending})`;
   }
   // 「更多 → 回收站」上的数量角标
@@ -76,10 +78,10 @@ function paintMetrics(m) {
     `请求 ${m.total} 次 · 平均 ${m.avgMs}ms · 最慢 ${m.maxMs}ms（${m.maxPath || '–'}）` +
     ` · 运行 ${m.uptime} 分钟 · 前端告警 ${m.clientWarns || 0} 条`;
   $('#slowList').innerHTML = (m.slow || []).length
-    ? m.slow.map(x => `<div><span class="t">${x.t}</span> ${x.path} · ${x.ms}ms</div>`).join('')
+    ? m.slow.map(x => `<div><span class="t">${escHtml(x.t)}</span> ${escHtml(x.path)} · ${escHtml(x.ms)}ms</div>`).join('')
     : '<div>没有慢请求（≥800ms）</div>';
   $('#errList').innerHTML = (m.clientErrors || []).length
-    ? m.clientErrors.map(x => `<div><span class="t">${x.t}</span> ${x.msg}${x.url ? ' · ' + x.url : ''}</div>`).join('')
+    ? m.clientErrors.map(x => `<div><span class="t">${escHtml(x.t)}</span> ${escHtml(x.msg)}${x.url ? ' · ' + escHtml(x.url) : ''}</div>`).join('')
     : '<div>没有前端错误</div>';
 }
 
@@ -105,9 +107,9 @@ function paintDownload(dl) {
       ? `${mb(i.bytes)} MB（${pct}%） · ${i.speed || 0} MB/s`
       : i.state === 'failed' ? (i.error || '失败') : '排队中';
     return `<div style="display:flex;gap:8px;align-items:center">
-      <span class="mono" style="flex:1;overflow:hidden;text-overflow:ellipsis">${i.token}</span>
-      <span class="sub">${right}</span>
-      ${i.state !== 'failed' ? `<button class="ghost rowbtn" data-dl-cancel="${i.token}" title="取消这一条">取消</button>` : ''}
+      <span class="mono" style="flex:1;overflow:hidden;text-overflow:ellipsis">${escHtml(i.token)}</span>
+      <span class="sub">${escHtml(right)}</span>
+      ${i.state !== 'failed' ? `<button class="ghost rowbtn" data-dl-cancel="${escHtml(i.token)}" title="取消这一条">取消</button>` : ''}
     </div>`;
   }).join('');
 }
@@ -174,8 +176,8 @@ function pulseDlQueue(n) {
   } catch (e) { }
 }
 
-function dlItemHtml(i) {
-  const row = rowOf(i.token) || {};
+function dlItemHtml(i, rowMap) {
+  const row = (rowMap && rowMap.get(i.token)) || {};
   const fav = row.fav === '1';
   const hasFile = !!row.file_name;
   const bytes = +i.bytes || 0;
@@ -191,37 +193,38 @@ function dlItemHtml(i) {
   const cls = i.state === 'paused' ? 'paused' : i.state === 'done' ? 'done'
     : i.state === 'cancelled' ? 'cancelled'
     : (i.state === 'failed' || i.state === 'dead') ? 'failed' : '';
+  const etk = escHtml(i.token);
   return `<div class="dq-item ${cls}">
-    <div class="dq-thumb" ${hasFile ? `data-dq-play="${i.token}" title="播放"` : 'title="本地还没有这个文件"'}>
+    <div class="dq-thumb" ${hasFile ? `data-dq-play="${etk}" title="播放"` : 'title="本地还没有这个文件"'}>
       <img src="/api/cover?token=${encodeURIComponent(i.token)}" loading="lazy" alt=""
            onerror="this.parentNode.classList.add('nocover');this.remove()">
       ${hasFile ? '<span class="dq-playbtn">▶</span>' : ''}
     </div>
     <div class="dq-body">
       <div class="dq-top">
-        <span class="tk mono" title="${i.token}">${i.token}</span>
+        <span class="tk mono" title="${etk}">${etk}</span>
         <span class="sub">${size}</span>
         <span class="sub">${right}</span>
       </div>
       <div class="dq-bar"><i style="width:${pct}%"></i></div>
       <div class="dq-actions">
-        ${canPause ? `<button class="ghost" data-dq-pause="${i.token}">⏸ 暂停</button>` : ''}
-        ${canResume ? `<button class="ghost accent" data-dq-resume="${i.token}">▶ 继续</button>` : ''}
-        ${canCancel ? `<button class="ghost danger" data-dq-cancel="${i.token}">取消</button>` : ''}
-        <button class="ghost" data-dq-fav="${i.token}">${fav ? '★ 已收藏' : '☆ 收藏'}</button>
-        ${hasFile ? `<button class="ghost" data-dq-play="${i.token}">▶ 播放</button>` : ''}
-        ${hasFile ? `<button class="ghost" data-dq-reveal="${i.token}">定位</button>` : ''}
+        ${canPause ? `<button class="ghost" data-dq-pause="${etk}">⏸ 暂停</button>` : ''}
+        ${canResume ? `<button class="ghost accent" data-dq-resume="${etk}">▶ 继续</button>` : ''}
+        ${canCancel ? `<button class="ghost danger" data-dq-cancel="${etk}">取消</button>` : ''}
+        <button class="ghost" data-dq-fav="${etk}">${fav ? '★ 已收藏' : '☆ 收藏'}</button>
+        ${hasFile ? `<button class="ghost" data-dq-play="${etk}">▶ 播放</button>` : ''}
+        ${hasFile ? `<button class="ghost" data-dq-reveal="${etk}">定位</button>` : ''}
       </div>
     </div>
   </div>`;
 }
 
-function dlList(el, items, emptyText) {
+function dlList(el, items, emptyText, rowMap) {
   if (!el) return;
-  el.innerHTML = items.length ? items.map(dlItemHtml).join('') : `<div class="dq-empty">${emptyText}</div>`;
+  el.innerHTML = items.length ? items.map(i => dlItemHtml(i, rowMap)).join('') : `<div class="dq-empty">${emptyText}</div>`;
 }
 
-function renderDownloadQueue(dl) {
+function renderDownloadQueue(dl, opts = {}) {
   dl = dl || {};
   // 反馈：新条目入队时脉冲 + 浮出 “+N”；整批完成时提示音
   const prevRunning = state.DL_RUNNING;
@@ -260,23 +263,38 @@ function renderDownloadQueue(dl) {
     ? '没有下载任务'
     : `${dl.running ? (dl.paused ? '已全部暂停' : '进行中') : '已结束'} · ${dl.done || 0}/${dl.total || 0} 完成` +
       (dl.speed ? ` · ${dl.speed} MB/s` : '');
+  // 抽屉关着时只需要角标/头部：五个列表里的几十张封面 <img> 等打开抽屉时再建
+  const drawer = $('#dlDrawer');
+  const drawerOpen = !!(drawer && drawer.classList.contains('on'));
+  if (!drawerOpen && !opts.force) return;
+  // 队列项 -> 台账行只建一次 Map，避免每条队列项都做一次 O(行数) 的 find
+  const rowMap = new Map(state.ROWS.map(r => [r.token, r]));
+
   $('#dlActiveInfo').textContent = active.length
     ? `下载中 ${downloading} · 排队 ${queued}`
     : '当前没有排队或下载中的条目';
-  dlList($('#dlActiveList'), active, '当前没有排队或下载中的条目');
+  dlList($('#dlActiveList'), active, '当前没有排队或下载中的条目', rowMap);
 
   const pausedHead = $('#dlPausedHead');
   if (pausedHead) pausedHead.hidden = paused.length === 0;
   $('#dlPausedInfo').textContent = paused.length ? `（${paused.length} 条）` : '';
-  dlList($('#dlPausedList'), paused, '没有暂停的条目');
+  dlList($('#dlPausedList'), paused, '没有暂停的条目', rowMap);
 
+  // 已完成列表可能有两百条：token/收藏/文件状态没变时跳过重建
   $('#dlDoneInfo').textContent = done.length ? `（${done.length} 条）` : '';
-  dlList($('#dlDoneList'), done, '还没有完成的条目');
+  const doneSig = done.map(i => {
+    const r = rowMap.get(i.token) || {};
+    return i.token + ':' + (r.fav || '') + ':' + (r.file_name ? '1' : '0');
+  }).join('|');
+  if (opts.force || doneSig !== state.DL_DONE_SIG) {
+    dlList($('#dlDoneList'), done, '还没有完成的条目', rowMap);
+    state.DL_DONE_SIG = doneSig;
+  }
 
   const failHead = $('#dlFailHead');
   if (failHead) failHead.hidden = failed.length === 0;
   $('#dlFailInfo').textContent = failed.length ? `（${failed.length} 条）` : '';
-  dlList($('#dlFailList'), failed, '没有失败条目');
+  dlList($('#dlFailList'), failed, '没有失败条目', rowMap);
   const retryBtn = $('#dlRetry');
   if (retryBtn) {
     retryBtn.hidden = failed.length === 0;
@@ -286,7 +304,7 @@ function renderDownloadQueue(dl) {
   const cancelHead = $('#dlCancelHead');
   if (cancelHead) cancelHead.hidden = cancelled.length === 0;
   $('#dlCancelInfo').textContent = cancelled.length ? `（${cancelled.length} 条）` : '';
-  dlList($('#dlCancelList'), cancelled, '没有取消的条目');
+  dlList($('#dlCancelList'), cancelled, '没有取消的条目', rowMap);
 }
 
 async function toggleDownloadPause() {
@@ -360,8 +378,9 @@ function updateConcSelect() {
 function initDownloadQueue() {
   const openDrawer = () => {
     updateConcSelect();
-    renderDownloadQueue(state.DOWNLOAD || {});
     $('#dlDrawer').classList.add('on');
+    // 打开时强制重建一次：关闭期间列表没有跟着刷新
+    renderDownloadQueue(state.DOWNLOAD || {}, { force: true });
   };
   $('#dlConc').innerHTML = Array.from({ length: 16 }, (_, i) => `<option value="${i + 1}">${i + 1}</option>`).join('');
   $('#btnDlQueue').onclick = openDrawer;
@@ -430,14 +449,15 @@ function renderBin() {
   // 回收站只列文本信息，不显示封面
   el.innerHTML = rows.map(r => {
     const meta = [r.duration, r.res, r.first_seen ? String(r.first_seen).slice(0, 10) : ''].filter(Boolean).join(' · ');
-    return `<div class="bin-row" data-bin="${r.token}">
+    const etk = escHtml(r.token);
+    return `<div class="bin-row" data-bin="${etk}">
       <div class="bin-main">
-        <span class="mono">${r.token}</span>
-        <span class="sub">${meta || '—'}</span>
+        <span class="mono">${etk}</span>
+        <span class="sub">${escHtml(meta) || '—'}</span>
       </div>
       <div class="bin-actions">
-        <button class="ghost" data-bin-restore="${r.token}">恢复</button>
-        <button class="ghost danger" data-bin-del="${r.token}">彻底删除</button>
+        <button class="ghost" data-bin-restore="${etk}">恢复</button>
+        <button class="ghost danger" data-bin-del="${etk}">彻底删除</button>
       </div>
     </div>`;
   }).join('');
@@ -504,9 +524,6 @@ function paintSources() {
   }
 }
 
-function escHtml(s) {
-  return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-}
 
 function paintViewsMenu() {
   const m = $('#viewsMenu');
@@ -580,9 +597,9 @@ function paintProject(ws) {
   const el = $('#wsInfo');
   if (!el) return;
   if (!ws) { el.textContent = '–'; return; }
-  el.innerHTML = `项目 <span class="mono">${ws.root}</span><br>
+  el.innerHTML = `项目 <span class="mono">${escHtml(ws.root)}</span><br>
     媒体 media\\ · 数据 data\\ · 缓存 cache\\<br>
-    ${ws.videoCount} 个视频 / ${ws.videoGB} GB · 封面 ${ws.coverCount} 张 · 库 ${ws.dbMB} MB`;
+    ${escHtml(ws.videoCount)} 个视频 / ${escHtml(ws.videoGB)} GB · 封面 ${escHtml(ws.coverCount)} 张 · 库 ${escHtml(ws.dbMB)} MB`;
 }
 
 function paintCovers(S) {
@@ -597,12 +614,14 @@ function paintOrphans(S) {
   const orph = S.orphans || [];
   $('#orphanInfo').textContent = orph.length ? `共 ${S.orphanCount} 个（目录里有、台账里没有）` : '没有孤立文件';
   $('#orphanList').innerHTML = orph.slice(0, 20)
-    .map(o => `<div><span class="mono">${o.name}</span> · ${(o.size / 1048576).toFixed(1)} MB</div>`).join('');
+    .map(o => `<div><span class="mono">${escHtml(o.name)}</span> · ${(o.size / 1048576).toFixed(1)} MB</div>`).join('');
 }
 
 async function load() {
-  if (location.protocol === 'file:') $('#banner').style.display = 'block';
+  if (_loadBusy) { _loadAgain = true; return; }
+  _loadBusy = true;
   try {
+    if (location.protocol === 'file:') $('#banner').style.display = 'block';
     // 带上已知的行版本：台账没变时服务端只回统计/进度，不回几千行数据。
     // 下载进度那种每 2 秒一次的变化走 SSE，但 rows 不会跟着重传。
     const s = await api(state.HAVE_ROWS ? `/api/state?rowsRev=${state.ROWS_REV}` : '/api/state');
@@ -662,7 +681,9 @@ async function load() {
 
     $('#dot').classList.remove('off');
     $('#sub').textContent = `在线 · ${S.total} 条 · 待下载 ${S.new}`;
-    paintKpis(S);
+    // 同一轮里只过滤/排序一次：KPI 的待下载数和表格渲染共用这份结果
+    const visRows = visible();
+    paintKpis(S, visRows);
     paintDir(S);
     paintMetrics(s.metrics || {});
     paintOrphans(S);
@@ -672,7 +693,7 @@ async function load() {
     renderDownloadQueue(s.download || {});
 
     $('#logbox').innerHTML = (s.log || []).slice().reverse()
-      .map(l => `<div><span class="t">${l.time}</span> [${l.kind}] ${l.message}</div>`).join('')
+      .map(l => `<div><span class="t">${escHtml(l.time)}</span> [${escHtml(l.kind)}] ${escHtml(l.message)}</div>`).join('')
       || '<div>暂无日志</div>';
     $('#diag').textContent = `自检：前端 OK · API OK · 渲染 ${state.ROWS.length} 行 · 磁盘命中 ${S.downloaded}`;
 
@@ -694,19 +715,25 @@ async function load() {
     // 首次 load 之前 DOM 还没回填过设置，这里补一次，否则点「保存」会把配置清空
     if (state.SETTINGS) {
       const px = document.querySelector('#proxyInput'), cc = document.querySelector('#concInput'), ff = document.querySelector('#ffmpegInput');
+      const qc = document.querySelector('#qiseCookieInput');
       if (px && document.activeElement !== px) px.value = state.SETTINGS.proxy || '';
       if (cc && document.activeElement !== cc) cc.value = String(state.SETTINGS.concurrent || 3);
       if (ff && document.activeElement !== ff) ff.value = state.SETTINGS.ffmpegPath || '';
+      // 不回填的话，点一次「保存下载设置」就会把已存的 qise Cookie 用空串覆盖掉
+      if (qc && document.activeElement !== qc) qc.value = state.SETTINGS.qiseCookie || '';
     }
     renderJob(s.job || {}, s.download);
     // 行或下载活跃集变了就重绘：避免进度推送时无意义重建 DOM，又保证按钮/蓝点即时更新
-    if (rowsChanged || dlChanged || forceRender) render();
+    if (rowsChanged || dlChanged || forceRender) render(visRows);
     markActiveKpi();
-    if ((s.job && s.job.running) || (s.download && s.download.running)) { clearTimeout(load._t); load._t = setTimeout(load, 1200); }
+    if ((s.job && s.job.running) || (s.download && s.download.running)) { clearTimeout(load._t); load._t = setTimeout(load, 2000); }
   } catch (e) {
     $('#dot').classList.add('off');
     $('#sub').textContent = '服务未连接 —— 先运行 启动控制台.cmd';
     $('#diag').textContent = `自检：前端 OK · API 失败（${e.message}）`;
+  } finally {
+    _loadBusy = false;
+    if (_loadAgain) { _loadAgain = false; setTimeout(load, 0); }
   }
 }
 
@@ -883,7 +910,7 @@ async function openDownloadConfirm() {
   const estAll = (p.avgBytes || 0) * (p.count || 0);
   $('#dlcInfo').innerHTML = `待下载 <b>${p.count}</b> 条 · 已完成平均 <b>${fmtBytes(p.avgBytes)}</b>/条<br>`
     + `全部预计 <b>${fmtBytes(estAll)}</b> · 磁盘剩余 <b>${fmtBytes(p.freeBytes)}</b><br>`
-    + `<span class="sub">保存到 ${p.dir || ''}</span>`;
+    + `<span class="sub">保存到 ${escHtml(p.dir)}</span>`;
   $('#dlcLimit').max = String(p.count);
   $('#dlcLimit').value = String(Math.min(p.count, 20));
   updateDlcHint();
@@ -1297,7 +1324,9 @@ initDownloadQueue();
 initBin();
 initCollections();
 
-onEvent('reload', load);
+// reload 事件做短防抖：一次动作/SSE 连续触发时只发一轮 /api/state
+let _reloadTimer = 0;
+onEvent('reload', () => { clearTimeout(_reloadTimer); _reloadTimer = setTimeout(load, 200); });
 
 onEvent('clear-query', () => {
   $('#q').value = '';

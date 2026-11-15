@@ -1,6 +1,6 @@
 /* panels.js — 灯箱、抽卡、设置抽屉、SSE、键盘
    灯箱与抽卡共用同一套布局：img + .meta 网格、同一个 fitMedia()、同一份 info 行 */
-import { $, state, api, toast, fmtMB, fmtNum, stTag, starsInner, emit, onEvent } from './core.js';
+import { $, state, api, toast, fmtMB, fmtNum, stTag, starsInner, emit, onEvent, escHtml } from './core.js';
 import { render, visible } from './table.js';
 import { doPlay, toggleMulti } from './rows.js';
 import { siteUrl, copyText, setRating, setFav } from './actions.js';
@@ -25,14 +25,14 @@ function metaRows(r, opts = {}) {
   const { withRating = true, ratingHtml = null, extraTop = '' } = opts;
   const rating = ratingHtml || [1, 2, 3, 4, 5].map(n => n <= (+r.rating || 0) ? '★' : '☆').join('');
   return `${extraTop}
-    <div class="mhead"><b>${r.duration || '–'}</b><i>${r.res || '–'}</i></div>
+    <div class="mhead"><b>${escHtml(r.duration) || '–'}</b><i>${escHtml(r.res) || '–'}</i></div>
     <div class="mrow"><span>站点观看</span><em>${fmtNum(r.views)}</em></div>
     <div class="mrow"><span>点赞</span><em>${fmtNum(r.likes)}</em></div>
     <div class="mrow"><span>状态</span><em>${stTag(r.status)}</em></div>
     <div class="mrow"><span>本地文件</span><em>${r.file_name ? '✓ ' + fmtMB(r.file_size) : '<span style="color:#7f8ea1">未下载</span>'}</em></div>
     ${withRating ? `<div class="mrow"><span>评分</span><em class="gold">${rating}</em></div>` : ''}
-    <div class="mrow"><span>本地播放</span><em>${(+r.play_count || 0) ? '▶ ' + r.play_count + ' 次' : '无记录'}</em></div>
-    ${r.file_name ? `<div class="mfile">${r.file_name}</div>` : ''}`;
+    <div class="mrow"><span>本地播放</span><em>${(+r.play_count || 0) ? '▶ ' + escHtml(r.play_count) + ' 次' : '无记录'}</em></div>
+    ${r.file_name ? `<div class="mfile">${escHtml(r.file_name)}</div>` : ''}`;
 }
 
 /* ================= 图片自适应（灯箱 / 抽卡共用） ================= */

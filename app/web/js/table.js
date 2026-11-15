@@ -1,5 +1,5 @@
 /* table.js — 过滤 / 排序 / 分页 / 表格渲染 / 列显隐 / KPI 快捷筛选 */
-import { $, PREFS, savePrefs, state, onEvent, toast, stTag, fmtMB, starsHtml, starsInner } from './core.js';
+import { $, PREFS, savePrefs, state, onEvent, toast, stTag, fmtMB, starsHtml, starsInner, escHtml } from './core.js';
 
 export const COLS = [
   { key: 'cover', label: '封面' }, { key: 'title', label: '标题' }, { key: 'rank', label: '排名' }, { key: 'duration', label: '时长' },
@@ -158,7 +158,7 @@ function coverCell(r) {
   if (!state.SHOW_COVERS) return '<div class="covbox"><div class="ph"></div></div>';
   // 列表也用高清原图；加载失败回退缩略图（120px），再失败才显示占位
   const u = '/api/cover?token=' + encodeURIComponent(r.token) + '&full=1';
-  return `<div class="covbox" data-lb="${r.token}" title="点击放大">
+  return `<div class="covbox" data-lb="${escHtml(r.token)}" title="点击放大">
       <img src="${u}" loading="lazy" alt=""
            onerror="if(!this.dataset.f){this.dataset.f=1;this.src=this.src.replace('&full=1','');}else{this.parentNode.classList.add('nocover');this.remove();}">
     </div>`;
@@ -173,25 +173,26 @@ export function cardHtml(r, active) {
   const hasFile = !!r.file_name;
   const isActive = active && active.has(r.token);
   const selected = state.SEL.has(r.token);
+  const etk = escHtml(r.token);
   const dlBtn = hasFile
     ? ''
     : (isActive
-      ? `<button class="dlbtn danger" data-dl-cancel="${r.token}">取消</button>`
-      : `<button class="dlbtn" data-dl="${r.token}">下载</button>`);
-  return `<div class="card ${selected ? 'sel' : ''}" data-row="${r.token}">
-    <button class="selcard ${selected ? 'on' : ''}" data-sel="${r.token}" title="选择"><svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path d="M3 8.5l3.2 3.2L13 4.8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
-    <div class="cover" data-lb="${r.token}" title="点击放大">
+      ? `<button class="dlbtn danger" data-dl-cancel="${etk}">取消</button>`
+      : `<button class="dlbtn" data-dl="${etk}">下载</button>`);
+  return `<div class="card ${selected ? 'sel' : ''}" data-row="${etk}">
+    <button class="selcard ${selected ? 'on' : ''}" data-sel="${etk}" title="选择"><svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path d="M3 8.5l3.2 3.2L13 4.8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+    <div class="cover" data-lb="${etk}" title="点击放大">
       <img src="/api/cover?token=${encodeURIComponent(r.token)}&full=1" loading="lazy" alt=""
            onerror="if(!this.dataset.f){this.dataset.f=1;this.src=this.src.replace('&full=1','');}else{this.parentNode.classList.add('nocover');this.remove();}">
       <span class="st">${stTag(r.status)}</span>
-      ${hasFile ? `<span class="playbtn" data-play="${r.token}">▶</span>` : ''}
+      ${hasFile ? `<span class="playbtn" data-play="${etk}">▶</span>` : ''}
     </div>
     <div class="body">
-      <div class="name mono" title="${r.token}">${r.title || r.token}</div>
-      <div class="meta">${r.duration || '—'} · ${r.res || '—'}${(+r.play_count) ? ' · ▶' + r.play_count : ''}${r.source && r.source !== 'pektino' ? ' · ' + r.source : ''}</div>
+      <div class="name mono" title="${etk}">${escHtml(r.title || r.token)}</div>
+      <div class="meta">${escHtml(r.duration) || '—'} · ${escHtml(r.res) || '—'}${(+r.play_count) ? ' · ▶' + escHtml(r.play_count) : ''}${r.source && r.source !== 'pektino' ? ' · ' + escHtml(r.source) : ''}</div>
       <div class="stars">
-        <button class="star ${fav ? 'on' : ''}" data-fav="${r.token}" title="收藏">${fav ? '★' : '☆'}</button>
-        <span class="rt" data-rate="${r.token}">${starsInner(r.rating)}</span>
+        <button class="star ${fav ? 'on' : ''}" data-fav="${etk}" title="收藏">${fav ? '★' : '☆'}</button>
+        <span class="rt" data-rate="${etk}">${starsInner(r.rating)}</span>
       </div>
       ${dlBtn ? `<div class="foot">${dlBtn}</div>` : ''}
     </div>
@@ -206,9 +207,10 @@ function renderGallery(rows, active) {
 }
 
 /* ---------- 渲染 ---------- */
-export function render() {
+export function render(allRows) {
   applyColWidths();
-  const all = visible();
+  // load() 已经算过一次筛选/排序，这里接收结果避免同一轮轮询重复全表排序
+  const all = allRows || visible();
   const pendingCount = all.filter(r => r.url && !r.file_name && r.status === 'new').length;
   const dlBtn = $('#btnDownload'); if (dlBtn) dlBtn.textContent = `下载待下载 (${pendingCount})`;
   const per = state.PER > 0 ? state.PER : all.length || 1;
@@ -225,34 +227,38 @@ export function render() {
   if (!all.length) {
     tb.innerHTML = '<tr><td colspan="15" class="empty">没有匹配的条目 —— 换个筛选条件，或点「抓取并入库」</td></tr>';
   } else {
-    tb.innerHTML = rows.map((r, i) => `
-      <tr data-row="${r.token}" class="${state.SEL.has(r.token) ? 'sel' : ''}">
-        <td><input type="checkbox" data-tk="${r.token}" data-idx="${start + i}" ${state.SEL.has(r.token) ? 'checked' : ''}></td>
-        <td><button class="star ${r.fav === '1' ? 'on' : ''}" data-fav="${r.token}" title="收藏/取消">${r.fav === '1' ? '★' : '☆'}</button></td>
+    tb.innerHTML = rows.map((r, i) => {
+      const etk = escHtml(r.token);
+      const etitle = escHtml(r.title || r.token);
+      return `
+      <tr data-row="${etk}" class="${state.SEL.has(r.token) ? 'sel' : ''}">
+        <td><input type="checkbox" data-tk="${etk}" data-idx="${start + i}" ${state.SEL.has(r.token) ? 'checked' : ''}></td>
+        <td><button class="star ${r.fav === '1' ? 'on' : ''}" data-fav="${etk}" title="收藏/取消">${r.fav === '1' ? '★' : '☆'}</button></td>
         <td class="col-cover">${coverCell(r)}</td>
-        <td class="col-title" title="${r.title || r.token}"><span class="ttl">${r.title || r.token}</span></td>
-        <td class="num col-rank">${r.rank || ''}</td>
-        <td class="num col-duration">${r.duration || '—'}</td>
-        <td class="mono col-res">${r.res || ''}</td>
-        <td class="num col-views">${r.views || ''}</td>
-        <td class="num col-likes">${r.likes || ''}</td>
-        <td class="num col-plays" title="${r.last_play ? '上次播放 ' + r.last_play : '还没播过'}">${(+r.play_count || 0) > 0 ? '▶' + r.play_count : ''}</td>
+        <td class="col-title" title="${etitle}"><span class="ttl">${etitle}</span></td>
+        <td class="num col-rank">${escHtml(r.rank)}</td>
+        <td class="num col-duration">${escHtml(r.duration) || '—'}</td>
+        <td class="mono col-res">${escHtml(r.res)}</td>
+        <td class="num col-views">${escHtml(r.views)}</td>
+        <td class="num col-likes">${escHtml(r.likes)}</td>
+        <td class="num col-plays" title="${r.last_play ? '上次播放 ' + escHtml(r.last_play) : '还没播过'}">${(+r.play_count || 0) > 0 ? '▶' + escHtml(r.play_count) : ''}</td>
         <td class="col-rating">${rateCell(r)}</td>
-        <td class="mono col-source">${r.source || 'pektino'}</td>
-        <td class="mono playable col-token" data-play="${r.token}" title="${r.token}${r.file_name ? ' · 点击播放' : ''}">${r.token}</td>
-        <td class="col-status"${r.note ? ` title="${r.note}"` : ''}>${stTag(r.status)}${active.has(r.token) ? '<span class="dl-dot" title="下载中"></span>' : ''}</td>
+        <td class="mono col-source">${escHtml(r.source || 'pektino')}</td>
+        <td class="mono playable col-token" data-play="${etk}" title="${etk}${r.file_name ? ' · 点击播放' : ''}">${etk}</td>
+        <td class="col-status"${r.note ? ` title="${escHtml(r.note)}"` : ''}>${stTag(r.status)}${active.has(r.token) ? '<span class="dl-dot" title="下载中"></span>' : ''}</td>
         <td class="mono col-disk">${r.file_name ? '✓ ' + fmtMB(r.file_size) : '<span style="color:#5b6773">—</span>'}</td>
-        <td class="mono col-first_seen">${(r.first_seen || '').slice(5, 16)}</td>
+        <td class="mono col-first_seen">${escHtml((r.first_seen || '').slice(5, 16))}</td>
         <td class="col-actions">
           ${r.file_name
-            ? `<button class="ghost rowbtn" data-play="${r.token}">播放</button>`
+            ? `<button class="ghost rowbtn" data-play="${etk}">播放</button>`
             : (active.has(r.token)
-              ? `<button class="ghost rowbtn danger" data-dl-cancel="${r.token}" title="取消这一条下载">取消</button>`
-              : `<button class="ghost rowbtn accent" data-dl="${r.token}" title="用内置下载器下载这一条">下载</button>`)}
-          <button class="ghost rowbtn" data-reveal="${r.token}">定位</button>
-          <button class="ghost rowbtn" data-copy="${r.url || ''}">复制</button>
+              ? `<button class="ghost rowbtn danger" data-dl-cancel="${etk}" title="取消这一条下载">取消</button>`
+              : `<button class="ghost rowbtn accent" data-dl="${etk}" title="用内置下载器下载这一条">下载</button>`)}
+          <button class="ghost rowbtn" data-reveal="${etk}">定位</button>
+          <button class="ghost rowbtn" data-copy="${escHtml(r.url)}">复制</button>
         </td>
-      </tr>`).join('');
+      </tr>`;
+    }).join('');
   }
 
   document.querySelectorAll('th.sortable').forEach(th => {
@@ -285,8 +291,8 @@ export function render() {
 
   applyCols();
   renderSel();
-  PREFS.page = state.PAGE;
-  savePrefs();
+  // 只在页码真的变化时写 localStorage；render 会被 SSE 频繁触发，不该每次都同步写盘
+  if (PREFS.page !== state.PAGE) { PREFS.page = state.PAGE; savePrefs(); }
 }
 
 export function renderSel() {
@@ -388,9 +394,13 @@ export function initTable() {
   });
 
   /* 筛选 */
+  let qTimer = 0;
   $('#q').addEventListener('input', e => {
     state.FILTER.q = e.target.value.trim(); state.PAGE = 1;
-    PREFS.q = state.FILTER.q; savePrefs(); render();
+    PREFS.q = state.FILTER.q;
+    // 输入时先更新筛选条件，渲染防抖 150ms：几千行时不必每敲一个字符重建一次表格
+    clearTimeout(qTimer);
+    qTimer = setTimeout(() => { savePrefs(); render(); }, 150);
   });
   $('#fStatus').addEventListener('change', e => {
     state.FILTER.status = e.target.value; state.PAGE = 1;

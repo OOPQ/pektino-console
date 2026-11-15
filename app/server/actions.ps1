@@ -34,8 +34,14 @@ function Get-Stats {
     foreach ($r in $rows) {
         $st = [string]$r.status
         if ($counts.ContainsKey($st)) { $counts[$st]++ }
-        if ($r.seconds) { $secs += [int]$r.seconds }
-        if ($r.file_size) { $bytes += [double]$r.file_size }
+        # 旧数据/第三方导入可能是 "6:20" 这类非数字：TryParse 失败按 0 处理，
+        # 否则一行脏数据就会让 /api/state 500，整个界面显示「服务未连接」。
+        $secVal = 0
+        if ($r.seconds) { [void][int]::TryParse([string]$r.seconds, [ref]$secVal) }
+        if ($secVal -gt 0) { $secs += $secVal }
+        $sizeVal = 0.0
+        if ($r.file_size) { [void][double]::TryParse([string]$r.file_size, [ref]$sizeVal) }
+        if ($sizeVal -gt 0) { $bytes += $sizeVal }
         if ($r.file_name) {
             $onDisk++
             if (-not $r.last_play) { $toWatch++ }
@@ -126,6 +132,7 @@ function Repair-MediaMeta {
     <#  给「有本地文件但缺时长/分辨率」的历史条目补元数据（Shell 属性），最多 Limit 条  #>
     param([int]$Limit = 300)
     $checked = 0; $fixed = 0
+    $dirty = New-Object System.Collections.ArrayList
     foreach ($r in @($State.Ledger)) {
         if ($checked -ge $Limit) { break }
         if (-not $r.file_name) { continue }
@@ -137,9 +144,9 @@ function Repair-MediaMeta {
         $changed = $false
         if ($meta.duration -and -not $r.duration) { $r.duration = $meta.duration; $r.seconds = $meta.seconds; $changed = $true }
         if ($meta.res -and -not $r.res) { $r.res = $meta.res; $changed = $true }
-        if ($changed) { $fixed++ }
+        if ($changed) { $fixed++; [void]$dirty.Add($r) }
     }
-    if ($fixed -gt 0) { Save-Ledger -Rows @($State.Ledger) -NoSnapshot; Touch-State }
+    if ($dirty.Count -gt 0) { Save-Ledger -Rows @($dirty) -NoSnapshot; Touch-State }
     return $fixed
 }
 
@@ -155,6 +162,14 @@ function Invoke-Scan {
     $State.Files = $idx
     $changed = 0
     $found = 0
+    # 只落库真正变化的行：扫描可能每 5 秒触发一次，整表 upsert 在几千行时是主要卡顿源
+    $dirty = New-Object System.Collections.ArrayList
+    $dirtyKeys = @{}
+    $markDirty = {
+        param($row)
+        $k = [string]$row.token
+        if ($k -and -not $dirtyKeys.ContainsKey($k)) { $dirtyKeys[$k] = $true; [void]$dirty.Add($row) }
+    }
     foreach ($r in @($State.Ledger)) {
         $key = ([string]$r.token).ToLower()
         if ($key -and $idx.Files.ContainsKey($key)) {
@@ -162,7 +177,11 @@ function Invoke-Scan {
                 if (-not $r.PSObject.Properties[$prop]) { $r | Add-Member -NotePropertyName $prop -NotePropertyValue '''' -Force }
             }
             $f = $idx.Files[$key]
-            if ([string]$r.file_path -ne [string]$f.file -or [string]$r.file_name -ne [string]$f.name -or [string]$r.file_size -ne [string]$f.size) { $changed++ }
+            if ([string]$r.file_path -ne [string]$f.file -or [string]$r.file_name -ne [string]$f.name -or
+                [string]$r.file_size -ne [string]$f.size -or [string]$r.file_date -ne [string]$f.date) {
+                $changed++
+                & $markDirty $r
+            }
             $r.file_name = $f.name
             $r.file_path = $f.file
             $r.file_size = $f.size
@@ -173,13 +192,19 @@ function Invoke-Scan {
                 $r.status = 'done'
                 $r.note = 'auto:file'
                 $changed++
+                & $markDirty $r
             }
         } else {
-            if ($r.file_name) { $r.file_name = ''; $r.file_path = ''; $r.file_size = ''; $r.file_date = ''; $changed++ }
+            if ($r.file_name) {
+                $r.file_name = ''; $r.file_path = ''; $r.file_size = ''; $r.file_date = ''
+                $changed++
+                & $markDirty $r
+            }
             if (-not $KeepStatus -and $r.status -eq 'done' -and ($r.note -eq 'auto:file' -or $r.note -eq 'scan:init')) {
                 $r.status = 'new'
                 $r.note = ''
                 $changed++
+                & $markDirty $r
             }
         }
     }
@@ -195,15 +220,18 @@ function Invoke-Scan {
     # 其余 ignored 一律并入回收站 recycled
     foreach ($r in @($State.Ledger)) {
         if ($r.status -eq 'ignored' -and ($r.note -like 'dead:*' -or $r.note -like 'unreachable*' -or $r.note -like 'removed*')) {
-            $r.status = 'failed'; $changed++
+            $r.status = 'failed'; $changed++; & $markDirty $r
         } elseif ($r.status -eq 'ignored') {
-            $r.status = 'recycled'; $changed++
+            $r.status = 'recycled'; $changed++; & $markDirty $r
         }
         # 旧措辞迁移：dead:http:x → unreachable:http:x；removed → removed:site
-        if ($r.note -like 'dead:http:*') { $r.note = 'unreachable' + $r.note.Substring(4); $changed++ }
-        elseif ($r.note -eq 'removed') { $r.note = 'removed:site'; $changed++ }
+        if ($r.note -like 'dead:http:*') { $r.note = 'unreachable' + $r.note.Substring(4); $changed++; & $markDirty $r }
+        elseif ($r.note -eq 'removed') { $r.note = 'removed:site'; $changed++; & $markDirty $r }
     }
-    if ($changed -gt 0) { Save-Ledger -Rows $State.Ledger -Path $LedgerPath; Touch-State }
+    if ($changed -gt 0) {
+        if ($dirty.Count -gt 0) { Save-Ledger -Rows @($dirty) -SnapshotRows $State.Ledger -Path $LedgerPath }
+        Touch-State
+    }
 
     # 缺封面统计要遍历全表逐条 Test-Path；扫描本身 10 秒一次，这里 30 秒算一次就够
     $prev = $State.Scan
@@ -286,16 +314,18 @@ function Start-Scrape {
     $thm = $ThumbDir; $kn = $KnownFile
     try { Write-SourceProgress -Path $ProgressFile -Phase 'starting' -Done 0 -Total 0 -Started (Get-Date) } catch { }
     $proxy = if ($Config -and $Config.proxy) { [string]$Config.proxy } else { '' }
+    $qiseCookie = if ($Config -and $Config.qiseCookie) { [string]$Config.qiseCookie } else { '' }
     $job = Start-Job -ScriptBlock {
-        param($ps, $source, $rank, $pages, $limit, $out, $prog, $cov, $thm, $kn, $threads, $proxy, $url, $hd)
+        param($ps, $source, $rank, $pages, $limit, $out, $prog, $cov, $thm, $kn, $threads, $proxy, $qiseCookie, $url, $hd)
         $p = @{ Source = $source; Rank = $rank; Page = $pages; Out = $out; ProgressFile = $prog; CoverDir = $cov; ThumbDir = $thm; Threads = $threads }
         if ($limit -gt 0) { $p['Limit'] = $limit }
         if ($proxy) { $p['Proxy'] = $proxy }
+        if ($qiseCookie) { $p['QiseCookie'] = $qiseCookie }
         if ($kn -and (Test-Path -LiteralPath $kn)) { $p['KnownFile'] = $kn }
         if ($url) { $p['Url'] = $url }
         $p['Hd'] = $hd
         & $ps @p *>&1 | Out-File -LiteralPath ($out + ".log") -Encoding UTF8 -Append
-    } -ArgumentList $ps, $src.key, $Rank, $Pages, $Limit, $out, $prog, $cov, $thm, $kn, $Threads, $proxy, $Url, $Hd
+    } -ArgumentList $ps, $src.key, $Rank, $Pages, $Limit, $out, $prog, $cov, $thm, $kn, $Threads, $proxy, $qiseCookie, $Url, $Hd
 
     $State.Job = [pscustomobject]@{
         handle  = $job
@@ -325,13 +355,15 @@ function Start-Import {
     $script = Join-Path $Root 'cli\import.ps1'
     $dl = $Config.contentDir; $out = $TmpCsv; $prog = $ProgressFile; $cov = $CoverDir; $thm = $ThumbDir
     $proxy = if ($Config -and $Config.proxy) { [string]$Config.proxy } else { '' }
+    $qiseCookie = if ($Config -and $Config.qiseCookie) { [string]$Config.qiseCookie } else { '' }
     $job = Start-Job -ScriptBlock {
-        param($script, $dl, $tokens, $out, $prog, $cov, $thm, $threads, $proxy)
+        param($script, $dl, $tokens, $out, $prog, $cov, $thm, $threads, $proxy, $qiseCookie)
         $p = @{ Dir = $dl; Out = $out; CoverDir = $cov; ThumbDir = $thm; Threads = $threads; ProgressFile = $prog }
         if ($proxy) { $p['Proxy'] = $proxy }
+        if ($qiseCookie) { $p['QiseCookie'] = $qiseCookie }
         if ($tokens -and $tokens.Count -gt 0) { $p['Tokens'] = $tokens }
         & $script @p *> $null
-    } -ArgumentList $script, $dl, $Tokens, $out, $prog, $cov, $thm, $Threads, $proxy
+    } -ArgumentList $script, $dl, $Tokens, $out, $prog, $cov, $thm, $Threads, $proxy, $qiseCookie
 
     $State.Job = [pscustomobject]@{
         handle  = $job
@@ -369,7 +401,9 @@ function Update-Job {
                 }
                 $merged = Merge-Ledger -Existing $State.Ledger -Scraped $scraped
                 $State.Ledger = @($merged.Rows)
-                Save-Ledger -Rows $State.Ledger -Path $LedgerPath
+                if (@($merged.Changed).Count -gt 0) {
+                    Save-Ledger -Rows @($merged.Changed) -SnapshotRows $State.Ledger -Path $LedgerPath
+                }
                 [void](Invoke-Scan -Silent)
                 $mergeOk = $true
                 if ($kind -eq 'import') {
@@ -479,7 +513,9 @@ function Invoke-Watched {
         if ($Tokens -notcontains $r.token) { continue }
         if ($On) {
             if (-not $r.last_play) { $r.last_play = $stamp }
-            if (-not $r.play_count -or [int]$r.play_count -lt 1) { $r.play_count = '1' }
+            $pcVal = 0
+            if ($r.play_count) { [void][int]::TryParse([string]$r.play_count, [ref]$pcVal) }
+            if ($pcVal -lt 1) { $r.play_count = '1' }
         } else {
             $r.last_play = ''
             $r.play_count = '0'
@@ -875,10 +911,11 @@ function Start-Download {
     $ctx = New-SourceContext -Config $Config -Root $Root
     $queue = New-Object System.Collections.ArrayList
     $vipCount = 0
+    $vipRows = New-Object System.Collections.ArrayList
     foreach ($t in $targets) {
         $dl = Resolve-SourceDownload -Key (Get-ItemSource $t) -Context $ctx -Row $t
         if ($dl.mode -eq 'vip') {
-            $t.note = 'vip:required'
+            if ($t.note -ne 'vip:required') { $t.note = 'vip:required'; [void]$vipRows.Add($t) }
             $vipCount++
             continue
         }
@@ -896,8 +933,7 @@ function Start-Download {
             })
     }
     if ($vipCount -gt 0) {
-        Save-Ledger -Rows @($State.Ledger) -NoSnapshot
-        Touch-State
+        if ($vipRows.Count -gt 0) { Save-Ledger -Rows @($vipRows) -NoSnapshot; Touch-State }
         if ($queue.Count -eq 0) {
             return @{ ok = $false; error = "$vipCount 条视频需要登录/VIP（源站只返回了提示片），登录后再试，或复制直链用外部工具" }
         }
@@ -1242,6 +1278,8 @@ function Repair-PartFiles {
 function Step-DownloadGuard {
     <#  兜底：进程已经没了，清掉可能残留的暂停标记  #>
     if ($State.Download -and $State.Download.Pid) { return }
+    # 没有暂停标记就没事可做：不要空闲时每 30 秒枚举一次全量进程（150-300ms 的主循环停顿）
+    if (-not (Test-Path $DlPause) -and -not (Test-Path $DlPauseItems)) { return }
     if ((Get-DownloadProcesses).Count -gt 0) { return }
     # 进程已经没了还留着暂停标记 → 清掉，避免下次误判成「暂停中」
     if (Test-Path $DlPause) { Remove-Item $DlPause -Force -ErrorAction SilentlyContinue }
@@ -1272,6 +1310,7 @@ function Apply-DeadFromProgress {
         $budgetMs = 6000
         $startedAt = Get-Date
         $n = 0
+        $dirty = New-Object System.Collections.ArrayList
         foreach ($d in $dead) {
             if (((Get-Date) - $startedAt).TotalMilliseconds -gt $budgetMs) { break }
             $row = $State.Ledger | Where-Object { $_.token -eq $d.token } | Select-Object -First 1
@@ -1291,10 +1330,11 @@ function Apply-DeadFromProgress {
 
             $row.status = 'failed'
             $row.note = "unreachable:$($d.error)"
+            [void]$dirty.Add($row)
             $n++
         }
         if ($n -gt 0) {
-            Save-Ledger -Rows $State.Ledger -Path $LedgerPath
+            Save-Ledger -Rows @($dirty) -SnapshotRows $State.Ledger -Path $LedgerPath
             Write-Log 'download' "标记 $n 条下载失败（源文件 403/404，可在「失败」里重试）"
             Touch-State
         }
@@ -1354,6 +1394,14 @@ function Refresh-ItemUrls {
     # 防御：函数内部是同步 HTTP（每条超时 25 秒），一次最多 20 条，避免被批量调用拖死主循环
     if ($Tokens.Count -gt 20) { $Tokens = @($Tokens | Select-Object -First 20) }
     $refreshed = 0; $unchanged = 0; $removed = 0; $errors = 0
+    # 只落库真正变化的行（其余条目原样保留，避免一次刷新重写整张表）
+    $dirty = New-Object System.Collections.ArrayList
+    $dirtyKeys = @{}
+    $markDirty = {
+        param($row)
+        $k = [string]$row.token
+        if ($k -and -not $dirtyKeys.ContainsKey($k)) { $dirtyKeys[$k] = $true; [void]$dirty.Add($row) }
+    }
 
     foreach ($tk in $Tokens) {
         $row = $State.Ledger | Where-Object { $_.token -eq $tk } | Select-Object -First 1
@@ -1361,40 +1409,48 @@ function Refresh-ItemUrls {
         $info = Get-DetailVideoInfo -Token $tk
 
         if ($null -eq $info) {
-            $row.note = 'removed:site'
+            if ($row.note -ne 'removed:site') { $row.note = 'removed:site'; & $markDirty $row }
             $removed++
             continue
         }
         if ($info.error) { $errors++; continue }
 
         $newUrl = [string]$info.url
-        if (-not $newUrl) { $row.note = 'removed:site'; $removed++; continue }
+        if (-not $newUrl) {
+            if ($row.note -ne 'removed:site') { $row.note = 'removed:site'; & $markDirty $row }
+            $removed++
+            continue
+        }
 
-        if ($info.title) { $row.title = [string]$info.title }
-        if ($info.duration) { $row.duration = [string]$info.duration }
-        if ($null -ne $info.seconds -and [string]$info.seconds -ne '') { $row.seconds = [string]$info.seconds }
-        if ($info.res) { $row.res = [string]$info.res }
-        if ($info.cover_url) { $row.cover_url = [string]$info.cover_url }
+        if ($info.title -and [string]$row.title -ne [string]$info.title) { $row.title = [string]$info.title; & $markDirty $row }
+        if ($info.duration -and [string]$row.duration -ne [string]$info.duration) { $row.duration = [string]$info.duration; & $markDirty $row }
+        if ($null -ne $info.seconds -and [string]$info.seconds -ne '' -and [string]$row.seconds -ne [string]$info.seconds) { $row.seconds = [string]$info.seconds; & $markDirty $row }
+        if ($info.res -and [string]$row.res -ne [string]$info.res) { $row.res = [string]$info.res; & $markDirty $row }
+        if ($info.cover_url -and [string]$row.cover_url -ne [string]$info.cover_url) { $row.cover_url = [string]$info.cover_url; & $markDirty $row }
 
         if ($newUrl -ne [string]$row.url) {
             $row.url = $newUrl
             $row.note = 'refresh:url'
+            & $markDirty $row
             $refreshed++
         } else {
             # URL 没变：再确认一次源文件是否真的还在
             $code = Get-UrlStatusCode -Url $newUrl
             if ($code -eq 200 -or $code -eq 206) {
-                if ($row.note -like 'dead:*' -or $row.note -like 'unreachable*' -or $row.note -like 'removed*') { $row.note = 'url-ok' }
+                if ($row.note -like 'dead:*' -or $row.note -like 'unreachable*' -or $row.note -like 'removed*') { $row.note = 'url-ok'; & $markDirty $row }
                 $unchanged++
             } else {
-                $row.note = "unreachable:http:$code"          # 源不可达：可能只是本机网络/CDN 边缘，迅雷仍可能下得动
+                $newNote = "unreachable:http:$code"          # 源不可达：可能只是本机网络/CDN 边缘，迅雷仍可能下得动
+                if ($row.note -ne $newNote) { $row.note = $newNote; & $markDirty $row }
                 $unchanged++
             }
         }
     }
 
-    Save-Ledger -Rows $State.Ledger -Path $LedgerPath
-    Touch-State
+    if ($dirty.Count -gt 0) {
+        Save-Ledger -Rows @($dirty) -SnapshotRows $State.Ledger -Path $LedgerPath
+        Touch-State
+    }
     Write-Log 'refresh' "刷新源地址：更新 $refreshed，未变 $unchanged，已下架 $removed，出错 $errors"
     return @{ ok = $true; refreshed = $refreshed; unchanged = $unchanged; removed = $removed; errors = $errors }
 }

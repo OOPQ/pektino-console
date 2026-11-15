@@ -42,7 +42,8 @@ if ($Start) {
     try { $probe.Connect('127.0.0.1', $Port); $busy = $true } catch { } finally { try { $probe.Close() } catch { } }
     if ($busy) {
         Write-Host "端口 $Port 已被占用（可能正有控制台在运行）。" -ForegroundColor Red
-        Write-Host "请换一个端口：.\test.ps1 -Start -Port 8899；或先停止正在运行的服务。" -ForegroundColor Yellow        exit 2
+        Write-Host "请换一个端口：.\test.ps1 -Start -Port 8899；或先停止正在运行的服务。" -ForegroundColor Yellow
+        exit 2
     }
     if (-not $Project) {
         # 临时项目：和真实数据完全隔离。目录名故意带空格，
@@ -68,6 +69,20 @@ if ($Start) {
             $null = Invoke-WebRequest "$base/api/state" -UseBasicParsing -TimeoutSec 2
             break
         } catch { Start-Sleep -Milliseconds 500 }
+    }
+    # 硬保护：确认连上的确实是刚启动的测试项目；否则后面 /api/config、/api/download/reset、
+    # /api/rate 这些写操作会落到真实项目上（端口被占用时曾发生过）。
+    try {
+        $probeState = Invoke-RestMethod "$base/api/state" -TimeoutSec 10
+        $gotRoot = [System.IO.Path]::GetFullPath([string]$probeState.project.root).TrimEnd('\')
+        $wantRoot = [System.IO.Path]::GetFullPath($Project).TrimEnd('\')
+        if ($gotRoot -ne $wantRoot) {
+            Write-Host "拒绝继续：$base 上的项目是 $gotRoot，不是测试项目 $wantRoot" -ForegroundColor Red
+            exit 3
+        }
+    } catch {
+        Write-Host "拒绝继续：无法确认 $base 上的测试项目（$($_.Exception.Message)）" -ForegroundColor Red
+        exit 3
     }
 }
 

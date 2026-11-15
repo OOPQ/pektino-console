@@ -18,6 +18,7 @@ param(
     [int]$Threads = 8,
     [string]$ProgressFile = '',
     [string]$Proxy = '',
+    [string]$QiseCookie = '',
     [switch]$Json
 )
 
@@ -40,7 +41,7 @@ if ($Tokens) {
 }
 if (-not $targets.Count) { Write-Host '没有需要入库的文件'; return }
 
-$ctx = New-SourceContext -Config ([pscustomobject]@{ proxy = $Proxy }) -Root $Root
+$ctx = New-SourceContext -Config ([pscustomobject]@{ proxy = $Proxy; qiseCookie = $QiseCookie }) -Root $Root
 $rows = New-Object System.Collections.ArrayList
 $done = 0
 foreach ($tk in $targets) {

@@ -180,7 +180,7 @@ function Get-ProjectSummary {
       /api/state 在任务运行期间每 1.2 秒被轮询一次，而这里要枚举 media\*.mp4 统计数量和体积。
       文件一多（几千个）就变成每次请求都扫一遍目录 → 缓存 10 秒，界面看不出差别。
     #>
-    param($Paths, [switch]$Refresh, [int]$MaxAgeSeconds = 10)
+    param($Paths, [switch]$Refresh, [int]$MaxAgeSeconds = 10, $Files, $Scan)
 
     $cache = $script:ProjectSummaryCache
     if (-not $Refresh -and $cache -and $cache.root -eq $Paths.ProjectRoot -and
@@ -188,10 +188,18 @@ function Get-ProjectSummary {
         return $cache.value
     }
 
-    $files = 0; $gb = 0
-    if (Test-Path $Paths.Content) {
+    $fileCount = 0; $gb = 0
+    if ($Files -and $Files.Exists -and $Files.Files) {
+        # 扫描已经在内存里维护了「文件名 -> 文件」索引，这里直接复用，避免每 10 秒再递归枚举一次 media
+        $fileCount = @($Files.Files.Keys).Count
+        $gb = if ($Scan -and $null -ne $Scan.totalGB) {
+            [double]$Scan.totalGB
+        } else {
+            [math]::Round((($Files.Files.Values | Measure-Object -Property size -Sum).Sum) / 1GB, 2)
+        }
+    } elseif (Test-Path $Paths.Content) {
         $mp4 = @(Get-ChildItem -Path $Paths.Content -Filter '*.mp4' -File -Recurse -Depth 4 -ErrorAction SilentlyContinue)
-        $files = $mp4.Count
+        $fileCount = $mp4.Count
         $gb = [math]::Round((($mp4 | Measure-Object Length -Sum).Sum) / 1GB, 2)
     }
     $covers = 0
@@ -206,7 +214,7 @@ function Get-ProjectSummary {
         cache      = (Split-Path $Paths.Covers -Parent)
         database   = $Paths.Database
         dbMB       = $dbMB
-        videoCount = $files
+        videoCount = $fileCount
         videoGB    = $gb
         coverCount = $covers
         exists     = (Test-Path $Paths.ProjectRoot)

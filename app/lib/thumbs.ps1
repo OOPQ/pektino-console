@@ -13,6 +13,8 @@
 #>
 
 Add-Type -AssemblyName System.Drawing -ErrorAction SilentlyContinue
+# JPEG 编码器枚举一次就够；每张图都 GetImageEncoders() 在批量补缩略图时是纯开销
+$script:JpegCodec = $null
 
 function New-Thumb {
     param(
@@ -40,7 +42,10 @@ function New-Thumb {
         $g.CompositingQuality = [System.Drawing.Drawing2D.CompositingQuality]::HighQuality
         $g.DrawImage($img, 0, 0, $w, $h)
 
-        $codec = [System.Drawing.Imaging.ImageCodecInfo]::GetImageEncoders() | Where-Object { $_.MimeType -eq 'image/jpeg' } | Select-Object -First 1
+        if (-not $script:JpegCodec) {
+            $script:JpegCodec = [System.Drawing.Imaging.ImageCodecInfo]::GetImageEncoders() | Where-Object { $_.MimeType -eq 'image/jpeg' } | Select-Object -First 1
+        }
+        $codec = $script:JpegCodec
         $ps = New-Object System.Drawing.Imaging.EncoderParameters(1)
         $ps.Param[0] = New-Object System.Drawing.Imaging.EncoderParameter([System.Drawing.Imaging.Encoder]::Quality, [long]$Quality)
         $bmp.Save($Dest, $codec, $ps)

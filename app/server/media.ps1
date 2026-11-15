@@ -140,7 +140,8 @@ try {
                 if ($hit) { $full = $hit.FullName }
             } catch { }
         }
-            if ($full -notlike ($mediaFull + '\*')) { Send-Simple $stream 403 'Forbidden' 'forbidden'; continue }
+            # 不用 -like：路径里含 [ ] * 时会被当成通配符；目录前缀比较必须按字面量
+            if (-not $full.StartsWith($mediaFull + '\', [System.StringComparison]::OrdinalIgnoreCase)) { Send-Simple $stream 403 'Forbidden' 'forbidden'; continue }
             if (-not (Test-Path -LiteralPath $full -PathType Leaf)) { Send-Simple $stream 404 'Not Found' 'not found'; continue }
 
             $total = (Get-Item -LiteralPath $full).Length

@@ -320,7 +320,7 @@ function Handle-Request {
             log      = @($State.Log | Select-Object -Last 40)
             job      = (Get-JobInfo)
             download = (Get-DownloadInfo)
-            project  = (Get-ProjectSummary -Paths $WS)
+            project  = (Get-ProjectSummary -Paths $WS -Files $State.Files -Scan $State.Scan)
             settings = [pscustomobject]@{ proxy = [string]$Config.proxy; concurrent = $(if ($Config.concurrent) { [int]$Config.concurrent } else { 3 }); ffmpegPath = [string]$Config.ffmpegPath; qiseCookie = [string]$Config.qiseCookie }
             sources  = @(Get-Sources | ForEach-Object {
                     [pscustomobject]@{
@@ -369,7 +369,7 @@ function Handle-Request {
     }
 
     if ($method -eq 'GET' -and $path -eq '/api/project') {
-        Send-Json -Stream $Stream -Object ([pscustomobject]@{ ok = $true; project = (Get-ProjectSummary -Paths $WS) })
+        Send-Json -Stream $Stream -Object ([pscustomobject]@{ ok = $true; project = (Get-ProjectSummary -Paths $WS -Files $State.Files -Scan $State.Scan) })
         return
     }
 

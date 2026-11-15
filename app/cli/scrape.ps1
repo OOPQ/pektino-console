@@ -19,6 +19,7 @@ param(
     [string]$Url = '',
     [bool]$Hd = $false,
     [string]$Proxy = '',
+    [string]$QiseCookie = '',
     [int]$PageSize = 50,
     [switch]$Json
 )
@@ -53,7 +54,7 @@ if ($KnownFile -and (Test-Path -LiteralPath $KnownFile)) {
 }
 
 Write-SourceProgress -Path $ProgressFile -Phase 'starting' -Done 0 -Total 0 -Started $started
-$ctx = New-SourceContext -Config ([pscustomobject]@{ proxy = $Proxy }) -Root $Root
+$ctx = New-SourceContext -Config ([pscustomobject]@{ proxy = $Proxy; qiseCookie = $QiseCookie }) -Root $Root
 $rows = @(Invoke-SourceScrape -Key $Source -Context $ctx -Options $options)
 
 # 规范化：补 source/token/标题兜底

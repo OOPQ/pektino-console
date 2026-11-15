@@ -1,5 +1,5 @@
 /* collections.js — 合集：弹窗内浏览（卡片墙）+ 维护 */
-import { $, state, api, toast, confirmDialog } from './core.js';
+import { $, state, api, toast, confirmDialog, escHtml } from './core.js';
 import { render, cardHtml } from './table.js';
 import { onRowClick } from './rows.js';
 
@@ -29,9 +29,6 @@ function paintCount() {
   el.textContent = n ? `(${n})` : '';
 }
 
-function safe(s) {
-  return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-}
 
 /* ---------- 弹窗 ---------- */
 export async function openCollections() {
@@ -62,7 +59,7 @@ function renderTabs() {
   const el = $('#colbTabs');
   if (!el) return;
   const cols = state.COLLECTIONS || [];
-  el.innerHTML = cols.map(c => `<button class="colb-tab ${browserCol && browserCol.id === c.id ? 'on' : ''}" data-colb-tab="${c.id}">${safe(c.name)} <span class="sub">${c.count}</span></button>`).join('');
+  el.innerHTML = cols.map(c => `<button class="colb-tab ${browserCol && browserCol.id === c.id ? 'on' : ''}" data-colb-tab="${c.id}">${escHtml(c.name)} <span class="sub">${c.count}</span></button>`).join('');
   const has = !!browserCol;
   if ($('#colbRename')) $('#colbRename').disabled = !has;
   if ($('#colbDelete')) $('#colbDelete').disabled = !has;
@@ -120,7 +117,7 @@ function renderBrowser() {
   el.innerHTML = `<div class="colb-grid">${rows.map(r => `
     <div class="colb-card">
       ${cardHtml(r, active)}
-      <button class="colb-remove" data-colb-remove="${r.token}" title="移出合集">×</button>
+      <button class="colb-remove" data-colb-remove="${escHtml(r.token)}" title="移出合集">×</button>
     </div>`).join('')}</div>`;
 }
 
@@ -265,14 +262,14 @@ function renderPickList() {
   }
   if (pickMode === 'toggle') {
     el.innerHTML = cols.map(c => `<div class="col-row">
-        <span class="name">${safe(c.name)}</span>
+        <span class="name">${escHtml(c.name)}</span>
         <span class="cnt">${c.count} 条</span>
         <button class="${c.has ? '' : 'ghost'}" data-pick-toggle="${c.id}">${c.has ? '✓ 已在 · 移出' : '加入'}</button>
       </div>`).join('');
     return;
   }
   el.innerHTML = cols.map(c => `<div class="col-row">
-      <span class="name" data-pick="${c.id}">${safe(c.name)}</span>
+      <span class="name" data-pick="${c.id}">${escHtml(c.name)}</span>
       <span class="cnt">${c.count} 条</span>
       <button data-pick="${c.id}">加入</button>
     </div>`).join('');

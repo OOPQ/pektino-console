@@ -55,13 +55,17 @@ function Touch-Ledger {
 }
 
 function Save-Ledger {
-    param($Rows, [string]$Path, [switch]$ForceSnapshot, [switch]$NoSnapshot)
+    param($Rows, [string]$Path, [switch]$ForceSnapshot, [switch]$NoSnapshot, $SnapshotRows)
     if (-not $Path) { $Path = Get-LedgerPath }
 
     if ($script:DbConn) {
         Save-StoreItems -Rows @($Rows)
         Touch-Ledger
-        if (-not $NoSnapshot) { Write-CsvSnapshot -Rows @($Rows) -Path $Path -Force:$ForceSnapshot }
+        if (-not $NoSnapshot) {
+            # 增量写库时 Rows 只是变化行；CSV 快照必须用完整台账，否则会把快照写成残缺的
+            $snap = if ($null -ne $SnapshotRows) { @($SnapshotRows) } else { @($Rows) }
+            Write-CsvSnapshot -Rows $snap -Path $Path -Force:$ForceSnapshot
+        }
         return
     }
 
@@ -83,6 +87,7 @@ function Merge-Ledger {
 
     $byToken = @{}
     $rows = New-Object System.Collections.ArrayList
+    $changedRows = New-Object System.Collections.ArrayList
     foreach ($r in @($Existing)) {
         if (-not $r.token) { continue }
         $byToken[$r.token] = $r
@@ -108,10 +113,16 @@ function Merge-Ledger {
             foreach ($f in @('rank', 'page', 'duration', 'seconds', 'res', 'views', 'likes', 'uploaded', 'url', 'page_url',
                     'title', 'cover_url', 'source', 'source_id', 'download_kind', 'download_headers', 'extra')) {
                 $v = $s.$f
-                if ($v) { $t.$f = $v }
+                if (-not $v) { continue }
+                # 增量抓取会为「跳过详情」的已知条目产出 title=裸 token 的占位行。
+                # 已有真实标题时不能被这种占位值覆盖，否则每抓一次标题就退化一次。
+                if ($f -eq 'title' -and $t.title -and
+                    (([string]$v -eq [string]$t.token) -or ([string]$v -eq [string]$t.source_id))) { continue }
+                $t.$f = $v
             }
             $t.last_seen = $Stamp
             if (-not $t.status) { $t.status = 'new' }
+            [void]$changedRows.Add($t)
             $updated++
         } else {
             $row = [pscustomobject]@{
@@ -134,11 +145,13 @@ function Merge-Ledger {
             }
             $byToken[$s.token] = $row
             [void]$rows.Add($row)
+            [void]$changedRows.Add($row)
             $added++
         }
     }
 
-    return [pscustomobject]@{ Rows = @($rows); Added = $added; Updated = $updated }
+    # Changed 只含新增/更新的行：调用方用它做增量落库，避免每轮重写整张表
+    return [pscustomobject]@{ Rows = @($rows); Added = $added; Updated = $updated; Changed = @($changedRows) }
 }
 
 function Set-LedgerStatus {

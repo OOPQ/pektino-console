@@ -56,7 +56,9 @@ function Get-QiseVideosMp4 {
     }
     Add-Type -AssemblyName System.Net.Http -ErrorAction SilentlyContinue
     $handler = New-Object System.Net.Http.HttpClientHandler
+    # qise 直连经常超时：有代理时必须走代理，否则刷新签名 URL 这一步会先失败
     $handler.UseProxy = $false
+    if ($script:proxyArg) { $handler.Proxy = New-Object System.Net.WebProxy([string]$script:proxyArg); $handler.UseProxy = $true }
     $client = New-Object System.Net.Http.HttpClient($handler)
     $client.Timeout = [TimeSpan]::FromSeconds(20)
     $client.DefaultRequestHeaders.UserAgent.ParseAdd('Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/157.0.0.0')
@@ -99,7 +101,9 @@ function Get-QiseSdM3u8 {
     }
     Add-Type -AssemblyName System.Net.Http -ErrorAction SilentlyContinue
     $handler = New-Object System.Net.Http.HttpClientHandler
+    # 同 Get-QiseVideosMp4：qise 刷新必须能走代理
     $handler.UseProxy = $false
+    if ($script:proxyArg) { $handler.Proxy = New-Object System.Net.WebProxy([string]$script:proxyArg); $handler.UseProxy = $true }
     $client = New-Object System.Net.Http.HttpClient($handler)
     $client.Timeout = [TimeSpan]::FromSeconds(20)
     $client.DefaultRequestHeaders.UserAgent.ParseAdd('Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/157.0.0.0')
@@ -209,6 +213,12 @@ function Get-RemoteSizesParallel {
     foreach ($it in $items) {
         try {
             $m = New-Object System.Net.Http.HttpRequestMessage([System.Net.Http.HttpMethod]::Head, [string]$it.url)
+            # HEAD 必须带和真正下载同一套请求头（Referer/Cookie），否则受保护的源会先被判 403/dead
+            if ($it.headers) {
+                foreach ($p in @($it.headers.PSObject.Properties)) {
+                    try { [void]$m.Headers.TryAddWithoutValidation([string]$p.Name, [string]$p.Value) } catch { }
+                }
+            }
             $reqs[[string]$it.token] = $script:http.SendAsync($m)
         } catch {
             $map[[string]$it.token] = [int64]0
@@ -377,10 +387,14 @@ function Complete-Item($tk) {
 function Test-DeadUrl {
     <#  HEAD 返回 403/404 时再用 1 字节 Range GET 复核：
         很多 CDN 会拦截 HEAD 或短时间大量请求，只有 GET 也失败才认为是真的失效 #>
-    param([string]$url, [int]$code)
+    param([string]$url, [int]$code, $Headers)
     try {
         $a = @('-sS', '-o', 'NUL', '-w', '%{http_code}', '-r', '0-0', '--max-time', '15', '-L')
         if ($script:proxyArg) { $a += @('-x', $script:proxyArg) }
+        if ($Headers) {
+            # 这里是 & curl @a 直接调用，不需要 Quote-Arg（那是 Start-Process 空格拼接才需要的）
+            foreach ($p in @($Headers.PSObject.Properties)) { $a += @('-H', "$($p.Name): $($p.Value)") }
+        }
         $a += $url
         $got = (& $curl @a 2>$null)
         return ([string]$got).Trim() -eq [string]$code
@@ -551,7 +565,7 @@ try {
             $states[$tk].expected = $expected
             if ($code -eq 403 -or $code -eq 404 -or $code -eq 410) {
                 # HEAD 可能是被 CDN 限流/拦了，用 1 字节 Range GET 复核一次再判死
-                if ((Test-DeadUrl -url $item.url -code $code) -and -not (Test-Path $part)) {
+                if ((Test-DeadUrl -url $item.url -code $code -Headers $item.headers) -and -not (Test-Path $part)) {
                     $states[$tk].state = 'dead'
                     $states[$tk].error = "http:$code"
                     continue
@@ -592,14 +606,20 @@ try {
             }
 
             if ($j.proc.HasExited) {
-                # 成功判定：退出码 0 或 大小正好等于远端 Content-Length
-                $complete = ($j.proc.ExitCode -eq 0) -or ($j.expected -gt 0 -and $size -eq $j.expected) -or ($j.hls -and $j.proc.HasExited -and $size -gt 0)
+                # 成功判定：退出码 0 或 大小正好等于远端 Content-Length。
+                # HLS 不能只看「文件非空」：网络中断时 ffmpeg 非 0 退出但已写入几 MB，
+                # 那样会把截断的视频改名成 .mp4 并记 done，之后永远不会重下。
+                $complete = ($j.proc.ExitCode -eq 0) -or ($j.expected -gt 0 -and $size -eq $j.expected)
                 if ($complete -and $size -gt 0) {
                     Complete-Item $tk
                 } else {
                     $j.retries++
                     $errText = ''
                     if (Test-Path $j.log) { $errText = (Get-Content $j.log -Tail 2 -ErrorAction SilentlyContinue) -join ' ' }
+                    if (-not $errText) {
+                        $exitText = if ($null -ne $j.proc.ExitCode) { [string]$j.proc.ExitCode } else { '未知' }
+                        $errText = "下载进程异常退出（code=$exitText）"
+                    }
                     if ($errText -match '(?i)\b5\d\d\b|5XX') {
                         $errText = '源站 CDN 返回 5XX（站点侧故障，可稍后重试或换线路）：' + $errText
                     }

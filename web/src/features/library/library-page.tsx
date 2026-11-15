@@ -1,5 +1,6 @@
 import * as React from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import {
   Archive,
@@ -95,6 +96,8 @@ export function LibraryPage() {
   const { data, isLoading, error, refetch, isFetching } = useAppState()
   const actions = useLibraryActions()
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
+  const collectionId = Number(searchParams.get('collection')) || null
 
   const view = useUiStore(s => s.view)
   const setView = useUiStore(s => s.setView)
@@ -123,14 +126,37 @@ export function LibraryPage() {
   const [scrapeOpen, setScrapeOpen] = React.useState(false)
   const [linkOpen, setLinkOpen] = React.useState(false)
 
+  const collectionItems = useQuery<{ tokens: string[] }>({
+    queryKey: ['collection-items', collectionId],
+    queryFn: async () => {
+      const res = await fetch(`/api/collections/items?id=${collectionId}`, { cache: 'no-store' })
+      if (!res.ok) throw new Error('读取合集失败')
+      return res.json()
+    },
+    enabled: !!collectionId,
+    staleTime: 3_000,
+  })
+  const collections = useQuery<{ items: Array<{ id: number; name: string }> }>({
+    queryKey: ['collections'],
+    queryFn: async () => {
+      const res = await fetch('/api/collections', { cache: 'no-store' })
+      if (!res.ok) throw new Error('读取合集失败')
+      return res.json()
+    },
+    enabled: !!collectionId,
+    staleTime: 5_000,
+  })
+  const collectionName = collections.data?.items?.find(c => c.id === collectionId)?.name
+  const collectionTokens = React.useMemo(() => new Set(collectionItems.data?.tokens || []), [collectionItems.data?.tokens])
+  const baseRows = React.useMemo(() => collectionId ? (data?.rows || []).filter(r => collectionTokens.has(r.token)) : (data?.rows || []), [data?.rows, collectionId, collectionTokens])
   const filters: LibraryFilters = { q: deferredQuery, status, source, flag, res, minDur }
-  const filtered = React.useMemo(() => filterRows(data?.rows || [], filters), [data?.rows, deferredQuery, status, source, flag, res, minDur])
+  const filtered = React.useMemo(() => filterRows(baseRows, filters), [baseRows, deferredQuery, status, source, flag, res, minDur])
   const sorted = React.useMemo(() => sortRows(filtered, sortKey, sortDir), [filtered, sortKey, sortDir])
   const pages = per > 0 ? Math.max(1, Math.ceil(sorted.length / per)) : 1
   const safePage = Math.min(page, pages)
   const visible = per > 0 ? sorted.slice((safePage - 1) * per, safePage * per) : sorted
 
-  React.useEffect(() => { setPage(1) }, [deferredQuery, status, source, flag, res, minDur, per, sortKey, sortDir])
+  React.useEffect(() => { setPage(1) }, [deferredQuery, status, source, flag, res, minDur, per, sortKey, sortDir, collectionId])
   React.useEffect(() => { if (page > pages) setPage(pages) }, [page, pages])
 
   const sourceOptions = React.useMemo(
@@ -360,6 +386,10 @@ export function LibraryPage() {
           {source !== 'all' ? ` · ${sourceLabel}` : ''}
           {flag !== 'none' ? ` · ${flagLabel}` : ''}
           {query ? ` · 搜索“${query}”` : ''}
+          {collectionId ? ` · 合集「${collectionName || collectionId}」` : ''}
+          {collectionId ? (
+            <button type="button" onClick={() => setSearchParams({})} className="ml-1 text-[color:var(--primary-2)] hover:underline">清除合集</button>
+          ) : null}
         </div>
         <div className="flex items-center gap-2 text-[10px] text-[color:var(--subtle)]">
           {isFetching ? <span className="text-[color:var(--primary-2)]">同步中…</span> : null}

@@ -7,6 +7,7 @@ import { useUiStore } from '@/store/ui'
 import { AppShell, PlaceholderPage } from '@/components/app-shell'
 import { LibraryPage } from '@/features/library/library-page'
 import { QueuePage } from '@/features/queue/queue-page'
+import { CollectionsPage } from '@/features/collections/collections-page'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -31,7 +32,7 @@ export default function App() {
             <Route element={<AppShell />}>
               <Route index element={<LibraryPage />} />
               <Route path="queue" element={<QueuePage />} />
-              <Route path="collections" element={<PlaceholderPage title="合集" description="下一批迁移：合集卡片墙、合集编辑、颜色、批量加入和在台账中查看。" />} />
+              <Route path="collections" element={<CollectionsPage />} />
               <Route path="bin" element={<PlaceholderPage title="回收站" description="下一批迁移：恢复、彻底删除和清空回收站。" />} />
               <Route path="settings" element={<PlaceholderPage title="设置" description="下一批迁移：代理、Cookie、FFmpeg、并发、封面修复、日志和运行指标。" />} />
               <Route path="*" element={<Navigate to="/" replace />} />

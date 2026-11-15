@@ -64,6 +64,9 @@ export function PreviewDialog({ rows, token, autoplay = false, media, onClose, o
   const [volume, setVolume] = React.useState(1)
   const [dragging, setDragging] = React.useState(false)
   const [isFullscreen, setIsFullscreen] = React.useState(false)
+  const [playbackRate, setPlaybackRate] = React.useState(1)
+  const resumeApplied = React.useRef(false)
+  const lastResumeSave = React.useRef(0)
   const [hoverTime, setHoverTime] = React.useState<number | null>(null)
   const [hoverPct, setHoverPct] = React.useState(0)
   const stageRef = React.useRef<HTMLDivElement>(null)
@@ -211,13 +214,13 @@ if (e.key === 'f' || e.key === 'F') { e.preventDefault(); e.stopImmediatePropaga
       const v = videoRef.current
       if (!v) return
       const held = performance.now() - spaceAt
-      v.playbackRate = 1
+      v.playbackRate = playbackRate
       blurActive()
       if (held < 250) {
         if (v.paused) { void v.play().catch(() => {}); setPlaying(true) }
         else v.pause()
       } else {
-        v.playbackRate = 1
+        v.playbackRate = playbackRate
       }
     }
     window.addEventListener('keydown', onKeyDown, true)
@@ -227,7 +230,7 @@ if (e.key === 'f' || e.key === 'F') { e.preventDefault(); e.stopImmediatePropaga
       window.removeEventListener('keyup', onKeyUp, true)
       window.clearTimeout(hintTimer)
     }
-  }, [token, canPlay, qc, longPressRate])
+  }, [token, canPlay, qc, longPressRate, playbackRate])
 
 
   if (!row) return null
@@ -353,6 +356,22 @@ if (e.key === 'f' || e.key === 'F') { e.preventDefault(); e.stopImmediatePropaga
     else v.pause()
   }
 
+  const setRate = (rate: number) => {
+    setPlaybackRate(rate)
+    const v = videoRef.current
+    if (v) v.playbackRate = rate
+  }
+
+  const saveResume = () => {
+    const v = videoRef.current
+    if (!v || !row) return
+    try {
+      if (v.currentTime > 3 && (v.duration ? v.currentTime < v.duration - 5 : true)) {
+        localStorage.setItem(`pektino.resume.${row.token}`, String(Math.floor(v.currentTime)))
+      }
+    } catch { }
+  }
+
   const timeFromPointer = (clientX: number, el: HTMLElement) => {
     const rect = el.getBoundingClientRect()
     let pct = Math.max(0, Math.min(1, (clientX - rect.left) / Math.max(1, rect.width)))
@@ -454,12 +473,12 @@ if (e.key === 'f' || e.key === 'F') { e.preventDefault(); e.stopImmediatePropaga
               playsInline
               preload="auto"
               muted={isMuted}
-              onTimeUpdate={e => setCurrentTime(e.currentTarget.currentTime)}
-              onLoadedMetadata={e => setDuration(e.currentTarget.duration || Number(row.seconds) || 0)}
+onTimeUpdate={e => { const t = e.currentTarget.currentTime; setCurrentTime(t); if (t > 3 && Date.now() - lastResumeSave.current > 5000) { lastResumeSave.current = Date.now(); try { localStorage.setItem(`pektino.resume.${row.token}`, String(Math.floor(t))) } catch { } } }}
+onLoadedMetadata={e => { const d = e.currentTarget.duration || Number(row.seconds) || 0; setDuration(d); e.currentTarget.playbackRate = playbackRate; if (!resumeApplied.current) { resumeApplied.current = true; try { const saved = Number(localStorage.getItem(`pektino.resume.${row.token}`) || 0); if (saved > 3 && (!d || saved < d - 5)) { e.currentTarget.currentTime = saved; setCurrentTime(saved) } } catch { } } }}
               onDurationChange={e => setDuration(e.currentTarget.duration || Number(row.seconds) || 0)}
               onPlaying={() => { setVideoReady(true); setIsPlaying(true) }}
-              onPause={() => setIsPlaying(false)}
-              onPlay={() => setIsPlaying(true)}
+onPause={() => { setIsPlaying(false); saveResume() }}
+onPlay={() => { setIsPlaying(true); if (videoRef.current) videoRef.current.playbackRate = playbackRate }}
               onVolumeChange={e => { setIsMuted(e.currentTarget.muted); setVolume(e.currentTarget.volume) }}
               onCanPlay={() => setVideoReady(true)}
               onError={() => { setVideoError(true); setPlaying(false); setIsPlaying(false) }}
@@ -515,6 +534,9 @@ if (e.key === 'f' || e.key === 'F') { e.preventDefault(); e.stopImmediatePropaga
                     onChange={e => { const v = videoRef.current; const next = Number(e.target.value); setVolume(next); setIsMuted(next === 0); if (v) { v.volume = next; v.muted = next === 0 } }}
                     className="h-1 w-16 cursor-pointer accent-[color:var(--primary)]"
                   />
+                  <select value={playbackRate} aria-label="播放倍速" onChange={e => setRate(Number(e.target.value))} className="h-6 rounded border border-white/20 bg-black/55 px-1 text-[9px] text-white outline-none">
+                    {[1, 1.25, 1.5, 2].map(rate => <option key={rate} value={rate} className="bg-[#111]">{rate}×</option>)}
+                  </select>
                   <IconButton label={isFullscreen ? '退出全屏' : '全屏'} size="sm" onClick={toggleStageFullscreen}>
                     {isFullscreen ? <Minimize className="size-3.5" /> : <Maximize className="size-3.5" />}
                   </IconButton>

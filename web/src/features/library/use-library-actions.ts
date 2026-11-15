@@ -1,10 +1,12 @@
 import { useQueryClient } from '@tanstack/react-query'
+import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import { post } from '@/lib/api'
 import { copyText } from '@/lib/utils'
 
 export function useLibraryActions() {
   const qc = useQueryClient()
+  const navigate = useNavigate()
   const invalidate = () => qc.invalidateQueries({ queryKey: ['state'] })
 
   const download = async (tokens: string[], limit = 0) => {
@@ -15,7 +17,9 @@ export function useLibraryActions() {
         status: 'new',
       })
       if (!r.ok) throw new Error(r.error || '开始下载失败')
-      toast.success(`已加入下载队列${r.started ? ` · ${r.started} 条` : ''}`)
+      toast.success(`已加入下载队列${r.started ? ` · ${r.started} 条` : ''}`, {
+        action: { label: '查看队列', onClick: () => navigate('/queue') },
+      })
       invalidate()
       return true
     } catch (e) {

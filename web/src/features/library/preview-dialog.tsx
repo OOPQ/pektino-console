@@ -350,7 +350,7 @@ if (e.key === 'f' || e.key === 'F') { e.preventDefault(); e.stopImmediatePropaga
     try {
       const r = await post<{ ok: boolean; error?: string }>('/api/download', { tokens: [row.token], status: 'new' })
       if (!r.ok) throw new Error(r.error || '开始下载失败')
-      toast.success('已加入下载队列')
+      toast.success('已加入下载队列', { action: { label: '查看队列', onClick: () => navigate('/queue') } })
       qc.invalidateQueries({ queryKey: ['state'] })
     } catch (e) {
       toast.error((e as Error).message)

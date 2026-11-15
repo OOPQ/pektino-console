@@ -263,7 +263,7 @@ const [per, setPer] = React.useState(Number(searchParams.get('per')) || 50)
     open: openPreview,
     download: async row => {
       if (await confirmAction({ title: '开始下载', description: `把「${row.title?.trim() || row.token}」加入下载队列？`, confirmText: '开始下载' })) {
-        if (await actions.download([row.token])) navigate('/queue')
+        await actions.download([row.token])
       }
     },
     fav: row => actions.fav([row.token], row.fav !== '1'),
@@ -282,7 +282,7 @@ const [per, setPer] = React.useState(Number(searchParams.get('per')) || 50)
 
   const bulkDownload = async () => {
     if (await confirmAction({ title: '批量下载', description: `把已选 ${selected.length} 条加入下载队列？`, confirmText: '开始下载' })) {
-      if (await actions.download(selected)) navigate('/queue')
+      await actions.download(selected)
     }
   }
   const bulkRecycle = async () => {

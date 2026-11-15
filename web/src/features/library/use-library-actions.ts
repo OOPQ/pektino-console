@@ -80,7 +80,21 @@ export function useLibraryActions() {
     try {
       const r = await post<{ ok: boolean; error?: string }>('/api/mark', { tokens, status: 'recycled' })
       if (!r.ok) throw new Error(r.error || '移入回收站失败')
-      toast.success(`已移入回收站 · ${tokens.length} 条`)
+      toast.success(`已移入回收站 · ${tokens.length} 条`, {
+        action: {
+          label: '撤销',
+          onClick: async () => {
+            try {
+              const rr = await post<{ ok: boolean; error?: string }>('/api/restore', { tokens })
+              if (!rr.ok) throw new Error(rr.error || '撤销失败')
+              toast.success('已撤销')
+              invalidate()
+            } catch (e) {
+              toast.error((e as Error).message)
+            }
+          },
+        },
+      })
       invalidate()
       return true
     } catch (e) {

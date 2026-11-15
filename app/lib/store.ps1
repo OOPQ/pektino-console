@@ -96,6 +96,12 @@ CREATE TABLE IF NOT EXISTS items (
 );
 CREATE INDEX IF NOT EXISTS idx_items_status ON items(status);
 CREATE INDEX IF NOT EXISTS idx_items_fav ON items(fav);
+CREATE TABLE IF NOT EXISTS deleted_tokens (
+  token      TEXT PRIMARY KEY,
+  source     TEXT DEFAULT '',
+  title      TEXT DEFAULT '',
+  deleted_at TEXT DEFAULT ''
+);
 CREATE TABLE IF NOT EXISTS collections (
   id         INTEGER PRIMARY KEY AUTOINCREMENT,
   name       TEXT NOT NULL,
@@ -114,6 +120,8 @@ CREATE INDEX IF NOT EXISTS idx_collection_items_token ON collection_items(token)
 '@
     $cmd = $script:DbConn.CreateCommand()
     $cmd.CommandText = $schema
+    [void]$cmd.ExecuteNonQuery()
+    $cmd.CommandText = "DELETE FROM deleted_tokens WHERE token = '' OR token LIKE '% %'"
     [void]$cmd.ExecuteNonQuery()
 
     # 合集颜色列：老库补列，并按序给已有合集补一个默认色
@@ -280,6 +288,38 @@ function Remove-StoreItems {
         $tx.Commit(); $cmd.Dispose()
     } catch { $tx.Rollback(); throw } finally { $tx.Dispose() }
     return $n
+}
+
+function Get-DeletedTokens {
+    $conn = Get-StoreConnection
+    $cmd = $conn.CreateCommand()
+    $cmd.CommandText = 'SELECT token, source, title, deleted_at FROM deleted_tokens ORDER BY deleted_at DESC'
+    $r = $cmd.ExecuteReader()
+    $out = New-Object System.Collections.ArrayList
+    while ($r.Read()) {
+        [void]$out.Add([pscustomobject]@{
+                token     = [string]$r.GetValue(0)
+                source    = [string]$r.GetValue(1)
+                title     = [string]$r.GetValue(2)
+                deletedAt = [string]$r.GetValue(3)
+            })
+    }
+    $r.Close(); $cmd.Dispose()
+    return @($out)
+}
+
+function Save-DeletedToken {
+    param([string]$Token, [string]$Source = '', [string]$Title = '', [string]$DeletedAt = '')
+    if (-not $Token -or $Token.Length -gt 200 -or $Token -match '\s') { return }
+    $conn = Get-StoreConnection
+    $cmd = $conn.CreateCommand()
+    $cmd.CommandText = 'INSERT OR REPLACE INTO deleted_tokens(token, source, title, deleted_at) VALUES (@t,@s,@ti,@d)'
+    [void]$cmd.Parameters.AddWithValue('@t', $Token)
+    [void]$cmd.Parameters.AddWithValue('@s', $Source)
+    [void]$cmd.Parameters.AddWithValue('@ti', $Title)
+    [void]$cmd.Parameters.AddWithValue('@d', $DeletedAt)
+    [void]$cmd.ExecuteNonQuery()
+    $cmd.Dispose()
 }
 
 function Get-StoreCount {

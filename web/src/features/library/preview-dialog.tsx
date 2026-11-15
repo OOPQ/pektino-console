@@ -52,6 +52,7 @@ export function PreviewDialog({ rows, token, autoplay = false, media, onClose, o
   const [copied, setCopied] = React.useState(false)
   const [seek, setSeek] = React.useState<number | null>(null)
   const [busySnap, setBusySnap] = React.useState(false)
+  const [pendingSnap, setPendingSnap] = React.useState<{ id: string; name: string } | null>(null)
   const [downloading, setDownloading] = React.useState(false)
   const [collectionsEditing, setCollectionsEditing] = React.useState(false)
   const [hoverSnap, setHoverSnap] = React.useState<Snapshot | null>(null)
@@ -85,6 +86,30 @@ export function PreviewDialog({ rows, token, autoplay = false, media, onClose, o
     staleTime: 3_000,
   })
   const snapshots = snapshotsQuery.data?.items || []
+  const snapshotJobsQuery = useQuery<{ items: Array<{ id: string; name: string; status: string; error?: string }> }>({
+    queryKey: ['snapshot-jobs', token],
+    queryFn: async () => {
+      const res = await fetch(`/api/snapshot/jobs?token=${encodeURIComponent(token || '')}`, { cache: 'no-store' })
+      if (!res.ok) throw new Error('读取快照任务失败')
+      return res.json()
+    },
+    enabled: !!token && !!pendingSnap,
+    refetchInterval: 1000,
+  })
+
+  React.useEffect(() => {
+    if (!pendingSnap) return
+    const job = (snapshotJobsQuery.data?.items || []).find(item => item.id === pendingSnap.id)
+    if (!job) return
+    if (job.status === 'done') {
+      toast.success('快照已生成')
+      qc.invalidateQueries({ queryKey: ['snapshots', token] })
+      setPendingSnap(null)
+    } else if (job.status === 'failed') {
+      toast.error(job.error || '快照生成失败')
+      setPendingSnap(null)
+    }
+  }, [snapshotJobsQuery.data, pendingSnap, qc, token])
   const collectionsQuery = useQuery<{ items: Array<{ id: number; name: string; color: string; has: boolean }> }>({
     queryKey: ['collections', token],
     queryFn: async () => {
@@ -109,6 +134,7 @@ export function PreviewDialog({ rows, token, autoplay = false, media, onClose, o
     setIsPlaying(false)
     setIsMuted(false)
     setHoverSnap(null)
+    setPendingSnap(null)
   }, [token, autoplay, canPlay, row?.seconds])
 
   const prev = index > 0 ? rows[index - 1] : null
@@ -247,12 +273,17 @@ if (e.key === 'f' || e.key === 'F') { e.preventDefault(); e.stopImmediatePropaga
   }
 
   const takeSnapshot = async () => {
-    if (!canPlay || busySnap) return
+    if (!canPlay || busySnap || pendingSnap) return
     setBusySnap(true)
     try {
       const time = videoRef.current?.currentTime || 0
-      const r = await post<{ ok: boolean; error?: string; time?: number }>('/api/snapshot', { token: row.token, time })
+      const r = await post<{ ok: boolean; error?: string; time?: number; pending?: boolean; id?: string; name?: string }>('/api/snapshot', { token: row.token, time })
       if (!r.ok) throw new Error(r.error || '快照失败')
+      if (r.pending && r.id && r.name) {
+        setPendingSnap({ id: r.id, name: r.name })
+        toast.success(`快照生成中${r.time != null ? ` · ${formatTime(r.time)}` : ''}`)
+        return
+      }
       toast.success(`快照已保存${r.time != null ? ` · ${formatTime(r.time)}` : ''}`)
       qc.invalidateQueries({ queryKey: ['snapshots', row.token] })
       bumpCoverRev()
@@ -333,6 +364,19 @@ if (e.key === 'f' || e.key === 'F') { e.preventDefault(); e.stopImmediatePropaga
   }
 
   const totalDuration = duration || Number(row.seconds) || 0
+  const snapshotClusters = (() => {
+    if (!totalDuration) return [] as Array<{ time: number; items: Snapshot[] }>
+    const items = [...snapshots].sort((a, b) => a.time - b.time)
+    const groups: Array<{ time: number; items: Snapshot[] }> = []
+    for (const s of items) {
+      const pct = (s.time / totalDuration) * 100
+      const last = groups[groups.length - 1]
+      const lastPct = last ? (last.time / totalDuration) * 100 : -999
+      if (last && Math.abs(pct - lastPct) < 2.5) last.items.push(s)
+      else groups.push({ time: s.time, items: [s] })
+    }
+    return groups
+  })()
   const progressPct = totalDuration ? Math.min(100, Math.max(0, (currentTime / totalDuration) * 100)) : 0
 
   const seekTo = (time: number) => {
@@ -440,8 +484,8 @@ if (e.key === 'f' || e.key === 'F') { e.preventDefault(); e.stopImmediatePropaga
               <Button size="sm" variant="outline" onClick={() => setTimelineOpen(true)}>
                 <List className="size-3.5" /> 时间轴
               </Button>
-              <Button size="sm" variant="outline" onClick={takeSnapshot} disabled={!canPlay || busySnap}>
-                <Camera className="size-3.5" /> {busySnap ? '保存中…' : '快照'}
+              <Button size="sm" variant="outline" onClick={takeSnapshot} disabled={!canPlay || busySnap || !!pendingSnap}>
+                <Camera className="size-3.5" /> {busySnap ? '保存中…' : pendingSnap ? '生成中…' : '快照'}
               </Button>
               <Button size="sm" variant="outline" disabled title="下一批接入">
                 画中画
@@ -559,20 +603,26 @@ onPlay={() => { setIsPlaying(true); if (videoRef.current) videoRef.current.playb
                   <div className="h-full rounded-full bg-[color:var(--primary)]" style={{ width: `${progressPct}%` }} />
                 </div>
                 <div className="absolute top-1/2 size-3 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/60 bg-white shadow" style={{ left: `${progressPct}%` }} />
-                {snapshots.map(s => (
-                  <button
-                    key={s.name}
-                    type="button"
-                    title={`快照 ${formatTime(s.time)}`}
-                    aria-label={`跳转到快照 ${formatTime(s.time)}`}
-                    onPointerDown={e => e.stopPropagation()}
-                    onMouseEnter={() => setHoverSnap(s)}
-                    onMouseLeave={() => setHoverSnap(null)}
-                    onClick={() => { setHoverSnap(null); setHoverTime(null); seekTo(s.time) }}
-                    className="absolute top-1/2 size-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/80 bg-[color:var(--warning)] shadow-[0_0_0_3px_rgba(227,179,65,.18)] transition-transform hover:scale-125"
-                    style={{ left: `${totalDuration ? Math.min(100, Math.max(0, (s.time / totalDuration) * 100)) : 0}%` }}
-                  />
-                ))}
+                {snapshotClusters.map(cluster => {
+                  const s = cluster.items[cluster.items.length - 1]
+                  const count = cluster.items.length
+                  return (
+                    <button
+                      key={cluster.items[0].name}
+                      type="button"
+                      title={count > 1 ? `${count} 个快照 · ${formatTime(cluster.time)}` : `快照 ${formatTime(cluster.time)}`}
+                      aria-label={count > 1 ? `${count} 个快照，打开时间轴` : `跳转到快照 ${formatTime(cluster.time)}`}
+                      onPointerDown={e => e.stopPropagation()}
+                      onMouseEnter={() => setHoverSnap(s)}
+                      onMouseLeave={() => setHoverSnap(null)}
+                      onClick={() => { setHoverSnap(null); setHoverTime(null); if (count > 1) setTimelineOpen(true); else seekTo(s.time) }}
+                      className="absolute top-1/2 size-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/80 bg-[color:var(--warning)] shadow-[0_0_0_3px_rgba(227,179,65,.18)] transition-transform hover:scale-125"
+                      style={{ left: `${totalDuration ? Math.min(100, Math.max(0, (cluster.time / totalDuration) * 100)) : 0}%` }}
+                    >
+                      {count > 1 ? <span className="absolute -right-2 -top-2 grid min-w-3.5 place-items-center rounded-full bg-black px-1 text-[8px] leading-3.5 text-white">{count}</span> : null}
+                    </button>
+                  )
+                })}
                 {hoverSnap ? (
                   <div className="pointer-events-none absolute bottom-6 z-40 w-[150px] -translate-x-1/2 overflow-hidden rounded-lg border border-white/20 bg-black shadow-2xl" style={{ left: `${totalDuration ? Math.min(90, Math.max(10, (hoverSnap.time / totalDuration) * 100)) : 50}%` }}>
                     <img src={hoverSnap.url} alt="" className="aspect-video w-full object-cover" />

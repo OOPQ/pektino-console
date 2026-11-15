@@ -177,6 +177,7 @@ $State = @{
     Files  = @{ Files = @{}; Partial = @(); Dir = $Config.contentDir; Exists = $false }
     Scan   = $null
     Job    = $null
+    SnapshotJobs = @{}
     Rev    = 0
     Download = $null
     Metrics = @{
@@ -197,7 +198,14 @@ try {
         }
     }
 } catch { Write-Host "  （删除记录加载跳过：$($_.Exception.Message)）" -ForegroundColor DarkYellow }
+try {
+    foreach ($d in @(Get-DeletedTokens)) {
+        $k = ([string]$d.token).ToLowerInvariant()
+        if ($k -and -not $State.Deleted.ContainsKey($k)) { $State.Deleted[$k] = $d }
+    }
+} catch { }
 # 老数据里时长解析失败（seconds=0）的，用 duration 回算（必须放在 $State 初始化之后）
+try { foreach ($e in $State.Deleted.GetEnumerator()) { $d = $e.Value; Save-DeletedToken -Token ([string]$d.token) -Source ([string]$d.source) -Title ([string]$d.title) -DeletedAt ([string]$d.deletedAt) } } catch { }
 try { $fixedSec = Repair-Durations -LedgerPath $LedgerPath; if ($fixedSec -gt 0) { Write-Host "  修正时长 $fixedSec 条" -ForegroundColor DarkGray } } catch { Write-Host "  （时长修正跳过：$($_.Exception.Message)）" -ForegroundColor DarkYellow }
 # 旧状态（sent 已投递 / downloading 下载中）合并回 new / done
 try { $moved = Repair-Statuses; if ($moved -gt 0) { Write-Host "  状态迁移 $moved 条（已投递/下载中 → 待下载）" -ForegroundColor DarkGray } } catch { Write-Host "  （状态迁移跳过：$($_.Exception.Message)）" -ForegroundColor DarkYellow }
@@ -357,6 +365,12 @@ function Handle-Request {
         return
     }
 
+    if ($method -eq 'GET' -and $path -eq '/api/snapshot/jobs') {
+        $tk = [string]$Req.Query['token']
+        Send-Json -Stream $Stream -Object @{ ok = $true; items = @(Get-SnapshotJobs -Token $tk) }
+        return
+    }
+
     if ($method -eq 'GET' -and $path -eq '/api/snapshots') {
         $tk = [string]$Req.Query['token']
         $coverName = Get-SnapshotCoverName $tk
@@ -399,7 +413,7 @@ function Handle-Request {
     }
 
     if ($method -eq 'GET' -and $path -eq '/api/deleted') {
-        $items = @($State.Deleted.Values | Sort-Object deletedAt -Descending)
+        $items = @($State.Deleted.GetEnumerator() | ForEach-Object { $_.Value } | Sort-Object deletedAt -Descending)
         Send-Json -Stream $Stream -Object @{ ok = $true; count = $items.Count; items = $items }
         return
     }
@@ -708,25 +722,21 @@ function Handle-Request {
                 $timeText = ([Math]::Round($captureTime, 3)).ToString([Globalization.CultureInfo]::InvariantCulture)
                 $name = $tk + '_' + $timeText + '_' + (Get-Date -Format 'yyyyMMddHHmmssfff') + '.jpg'
                 $out = Join-Path $SnapshotDir $name
+                $running = @(Get-SnapshotJobs | Where-Object { $_.status -eq 'running' }).Count
+                if ($running -ge 2) {
+                    Send-Json -Stream $Stream -Object @{ ok = $false; error = '已有 2 个快照任务在生成，请稍后再试' }
+                    return
+                }
                 try {
-                    $p = Start-Process -FilePath $ff -ArgumentList @(
-                        '-hide_banner', '-loglevel', 'error',
-                        '-ss', $timeText,
-                        '-i', [string]$row.file_path,
-                        '-frames:v', '1',
-                        '-q:v', '3',
-                        '-y', $out
-                    ) -NoNewWindow -Wait -PassThru
-                    if ($p.ExitCode -ne 0 -or -not (Test-Path -LiteralPath $out)) {
-                        Send-Json -Stream $Stream -Object @{ ok = $false; error = "FFmpeg 退出码 $($p.ExitCode)" }
-                        return
-                    }
+                    $job = Start-SnapshotJob -Token $tk -Time $captureTime -Name $name -Out $out -Ff $ff -InputPath ([string]$row.file_path)
                 } catch {
                     Send-Json -Stream $Stream -Object @{ ok = $false; error = $_.Exception.Message }
                     return
                 }
                 Send-Json -Stream $Stream -Object @{
                     ok = $true
+                    pending = $true
+                    id = $job.id
                     name = $name
                     token = $tk
                     time = $captureTime

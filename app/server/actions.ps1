@@ -398,6 +398,40 @@ function Write-JobResult {
     } catch { }
 }
 
+function Get-SnapshotJobs {
+    param([string]$Token = '')
+    $changed = $false
+    foreach ($id in @($State.SnapshotJobs.Keys)) {
+        $job = $State.SnapshotJobs[$id]
+        if ($job.status -eq 'running') {
+            $proc = Get-Process -Id $job.pid -ErrorAction SilentlyContinue
+            if (-not $proc) {
+                if (Test-Path -LiteralPath $job.path) { $job.status = 'done' } else { $job.status = 'failed'; $job.error = 'FFmpeg 没有产出文件' }
+                $job.finishedAt = (Get-Date).ToString('yyyy-MM-dd HH:mm:ss')
+                $changed = $true
+            }
+        }
+        if ($job.status -ne 'running' -and $job.finishedAt) {
+            try { if (((Get-Date) - [datetime]$job.finishedAt).TotalMinutes -gt 10) { $State.SnapshotJobs.Remove($id) } } catch { }
+        }
+    }
+    if ($changed) { Touch-State }
+    $items = @($State.SnapshotJobs.Values | Where-Object { -not $Token -or $_.token -eq $Token } | Sort-Object time)
+    return $items
+}
+
+function Start-SnapshotJob {
+    param([string]$Token, [double]$Time, [string]$Name, [string]$Out, [string]$Ff, [string]$InputPath)
+    $timeText = ([Math]::Round($Time, 3)).ToString([Globalization.CultureInfo]::InvariantCulture)
+    $ffArgs = @('-hide_banner', '-loglevel', 'error', '-ss', $timeText, '-i', [string]$InputPath, '-frames:v', '1', '-q:v', '3', '-y', $Out)
+    $proc = Start-Process -FilePath $Ff -ArgumentList $ffArgs -NoNewWindow -PassThru
+    $id = [guid]::NewGuid().ToString('N').Substring(0, 10)
+    $job = [pscustomobject]@{ id = $id; token = $Token; time = $Time; name = $Name; path = $Out; pid = $proc.Id; status = 'running'; error = ''; startedAt = (Get-Date).ToString('yyyy-MM-dd HH:mm:ss'); finishedAt = '' }
+    $State.SnapshotJobs[$id] = $job
+    Touch-State
+    return $job
+}
+
 function Update-Job {
     if (-not $State.Job) { return }
     $j = $State.Job.handle
@@ -1639,6 +1673,7 @@ function Add-DeletedTokens {
         $State.Deleted[$tk.ToLowerInvariant()] = [pscustomobject]@{
             token = $tk; source = [string]$r.source; title = [string]$r.title; deletedAt = $now
         }
+        try { Save-DeletedToken -Token $tk -Source ([string]$r.source) -Title ([string]$r.title) -DeletedAt $now } catch { }
         $n++
     }
     if ($n -gt 0 -and $DeletedPath) {

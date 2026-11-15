@@ -93,6 +93,10 @@ const PER_OPTIONS = [
   { value: '0', label: '全部' },
 ]
 
+type SavedView = {
+  name: string; query: string; status: string; source: string; flag: string; res: string; minDur: string; sortKey: SortKey; sortDir: SortDir; per: number
+}
+
 export function LibraryPage() {
   const { data, isLoading, error, refetch, isFetching } = useAppState()
   const actions = useLibraryActions()
@@ -129,6 +133,9 @@ const [per, setPer] = React.useState(Number(searchParams.get('per')) || 50)
   const [pickerTokens, setPickerTokens] = React.useState<string[] | null>(null)
   const [scrapeOpen, setScrapeOpen] = React.useState(false)
   const [linkOpen, setLinkOpen] = React.useState(false)
+  const [savedViews, setSavedViews] = React.useState<SavedView[]>(() => {
+    try { return JSON.parse(localStorage.getItem('pektino.views.v1') || '[]') } catch { return [] }
+  })
 
   const collectionItems = useQuery<{ tokens: string[] }>({
     queryKey: ['collection-items', collectionId],
@@ -202,6 +209,31 @@ const [per, setPer] = React.useState(Number(searchParams.get('per')) || 50)
     setMinDur('')
     setSortKey('rank')
     setSortDir('asc')
+    setPage(1)
+  }
+
+  const saveView = () => {
+    const name = window.prompt('保存当前筛选视图为：')?.trim()
+    if (!name) return
+    const view: SavedView = { name, query, status, source, flag, res, minDur, sortKey, sortDir, per }
+    const next = [...savedViews.filter(v => v.name !== name), view]
+    setSavedViews(next)
+    try { localStorage.setItem('pektino.views.v1', JSON.stringify(next)) } catch { }
+    toast.success('视图已保存')
+  }
+
+  const applyView = (name: string) => {
+    const view = savedViews.find(v => v.name === name)
+    if (!view) return
+    setQuery(view.query)
+    setStatus(view.status)
+    setSource(view.source)
+    setFlag(view.flag)
+    setRes(view.res)
+    setMinDur(view.minDur)
+    setSortKey(view.sortKey)
+    setSortDir(view.sortDir)
+    setPer(view.per)
     setPage(1)
   }
 
@@ -394,6 +426,13 @@ const [per, setPer] = React.useState(Number(searchParams.get('per')) || 50)
         <Button size="sm" variant="ghost" onClick={reset} disabled={!hasFilters}>
           <RotateCcw className="size-3.5" /> 重置
         </Button>
+        <Button size="sm" variant="ghost" onClick={saveView}>保存视图</Button>
+        {savedViews.length ? (
+          <select value="" onChange={e => applyView(e.target.value)} className="h-7 rounded-lg border border-[color:var(--border)] bg-[color:var(--surface-2)] px-2 text-[10px] text-[color:var(--muted)] outline-none">
+            <option value="">选择视图</option>
+            {savedViews.map(v => <option key={v.name} value={v.name}>{v.name}</option>)}
+          </select>
+        ) : null}
         <div className="ml-auto flex items-center gap-1 rounded-[9px] border border-[color:var(--border)] bg-[color:var(--surface-2)] p-0.5">
           <Button size="sm" variant={view === 'table' ? 'outline' : 'ghost'} className="h-7 px-2" onClick={() => setView('table')} aria-pressed={view === 'table'}>
             <Table2 className="size-3.5" /> 表格

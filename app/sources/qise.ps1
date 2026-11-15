@@ -266,7 +266,18 @@ function Resolve-QiseDownload {
     if ($Context -and $Context.qiseCookie) { $h['Cookie'] = [string]$Context.qiseCookie }
     $sec = Get-QiseSection $Row
     if ($sec -eq 'videos') {
-        return @{ url = [string]$Row.url; mode = 'http'; headers = $h; source = 'qise'; source_id = [string]$Row.source_id; section = 'videos'; page_url = [string]$Row.page_url; sd = $false }
+        # videos 页的 CDN 地址带签名，过期后旧 URL 会返回 410；下载前重新解析详情页。
+        $freshUrl = ''
+        try {
+            $m = [regex]::Match([string]$Row.page_url, '/videos/view/(\d+)/([^/?#]+)')
+            if ($m.Success) {
+                $d = Get-QiseDetail -Context $Context -Id $m.Groups[1].Value -Hd $false -Section 'videos' -Slug $m.Groups[2].Value
+                if ($d -and -not $d.error -and $d.url) { $freshUrl = [string]$d.url }
+            }
+        } catch { }
+        $url = if ($freshUrl) { $freshUrl } else { [string]$Row.url }
+        if ($freshUrl) { $Row.url = $freshUrl }
+        return @{ url = $url; mode = 'http'; headers = $h; source = 'qise'; source_id = [string]$Row.source_id; section = 'videos'; page_url = [string]$Row.page_url; sd = $false }
     }
     $isSd = ([string]$Row.page_url -match '/(video|vod)/view/') -or ([string]$Row.extra -match 'hd=0')
     return @{

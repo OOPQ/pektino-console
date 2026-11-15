@@ -99,6 +99,7 @@ export function LibraryPage() {
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const collectionId = Number(searchParams.get('collection')) || null
+  const batchMode = searchParams.get('batch') === '1'
 
   const view = useUiStore(s => s.view)
   const setView = useUiStore(s => s.setView)
@@ -154,12 +155,20 @@ export function LibraryPage() {
   const baseRows = React.useMemo(() => collectionId ? (data?.rows || []).filter(r => collectionTokens.has(r.token)) : (data?.rows || []), [data?.rows, collectionId, collectionTokens])
   const filters: LibraryFilters = { q: deferredQuery, status, source, flag, res, minDur }
   const filtered = React.useMemo(() => filterRows(baseRows, filters), [baseRows, deferredQuery, status, source, flag, res, minDur])
-  const sorted = React.useMemo(() => sortRows(filtered, sortKey, sortDir), [filtered, sortKey, sortDir])
+  const batchSet = React.useMemo(() => {
+    if (!batchMode) return null
+    let tokens: string[] = []
+    try { tokens = JSON.parse(sessionStorage.getItem('pektino.batchTokens') || '[]') } catch { }
+    if (!tokens.length) tokens = (data?.job?.progress?.addedTokens || []).filter(Boolean)
+    return new Set(tokens)
+  }, [batchMode, data?.job?.progress?.addedTokens])
+  const batchRows = React.useMemo(() => batchSet ? filtered.filter(row => batchSet.has(row.token)) : filtered, [filtered, batchSet])
+  const sorted = React.useMemo(() => sortRows(batchRows, sortKey, sortDir), [batchRows, sortKey, sortDir])
   const pages = per > 0 ? Math.max(1, Math.ceil(sorted.length / per)) : 1
   const safePage = Math.min(page, pages)
   const visible = per > 0 ? sorted.slice((safePage - 1) * per, safePage * per) : sorted
 
-  React.useEffect(() => { setPage(1) }, [deferredQuery, status, source, flag, res, minDur, per, sortKey, sortDir, collectionId])
+  React.useEffect(() => { setPage(1) }, [deferredQuery, status, source, flag, res, minDur, per, sortKey, sortDir, collectionId, batchMode])
   React.useEffect(() => { if (page > pages) setPage(pages) }, [page, pages])
 
   const sourceOptions = React.useMemo(
@@ -253,6 +262,20 @@ export function LibraryPage() {
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [previewToken, data?.rows])
+
+  const addedTokens = (data?.job?.progress?.addedTokens || []).filter(Boolean)
+  const enterBatch = () => {
+    if (!addedTokens.length) return
+    try { sessionStorage.setItem('pektino.batchTokens', JSON.stringify(addedTokens)) } catch { }
+    const next = new URLSearchParams(searchParams)
+    next.set('batch', '1')
+    setSearchParams(next)
+  }
+  const exitBatch = () => {
+    const next = new URLSearchParams(searchParams)
+    next.delete('batch')
+    setSearchParams(next)
+  }
 
   if (isLoading) return <LibrarySkeleton />
 
@@ -378,6 +401,11 @@ export function LibraryPage() {
         <Button size="sm" variant="ghost" onClick={() => { setStatus('all'); setFlag('towatch') }}>
           <CalendarClock className="size-3.5" /> 待看
         </Button>
+        {batchMode ? (
+          <Button size="sm" variant="outline" onClick={exitBatch}>退出本批</Button>
+        ) : addedTokens.length ? (
+          <Button size="sm" variant="ghost" onClick={enterBatch}>本批新增 {addedTokens.length}</Button>
+        ) : null}
         {multi && selected.length > 0 ? (
           <div className="ml-auto flex items-center gap-2 text-[10px] text-[color:var(--muted)]">
             <span>已选 {selected.length}</span>
@@ -399,6 +427,12 @@ export function LibraryPage() {
         </div>
       ) : null}
 
+      {batchMode ? (
+        <div className="flex items-center gap-2 rounded-[10px] border border-[color:color-mix(in_srgb,var(--primary)_35%,var(--border))] bg-[color:color-mix(in_srgb,var(--primary)_6%,var(--surface))] px-3 py-2 text-[10px] text-[color:var(--primary-2)]">
+          临时视图：本批新增 {batchSet?.size || 0} 条
+          <Button size="sm" variant="ghost" className="ml-auto h-7" onClick={exitBatch}>退出本批</Button>
+        </div>
+      ) : null}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="text-[10px] text-[color:var(--subtle)]">
           共 <b className="text-[color:var(--foreground)]">{sorted.length}</b> 条

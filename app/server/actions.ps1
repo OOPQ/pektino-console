@@ -388,10 +388,11 @@ function Write-JobResult {
     if (-not $ProgressFile) { return }
     try {
         $speed = if ($Elapsed -gt 0) { [math]::Round($Count / $Elapsed, 2) } else { 0 }
+        $AddedTokens = @($AddedTokens | Where-Object { $_ })
         $obj = [pscustomobject]@{
             phase = $Phase; done = $Count; total = $Count; elapsed = [math]::Round($Elapsed, 1)
             speed = $speed; eta = 0; at = (Get-Date -Format 'HH:mm:ss')
-            added = $Added; updated = $Updated; count = $Count; kind = $Kind; error = $ErrorText; finishedAt = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
+            added = $Added; updated = $Updated; count = $Count; kind = $Kind; error = $ErrorText; finishedAt = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds(); addedTokens = @($AddedTokens)
         }
         $obj | ConvertTo-Json -Compress | Set-Content -LiteralPath $ProgressFile -Encoding UTF8
     } catch { }
@@ -407,15 +408,21 @@ function Update-Job {
     if ($j.State -eq 'Completed') {
         if (Test-Path $TmpCsv) {
             $mergeOk = $false
+            $recycledTokens = @{}
+            foreach ($rr in @($State.Ledger)) { if ($rr.status -eq 'recycled') { $recycledTokens[([string]$rr.token).ToLowerInvariant()] = $true } }
             try {
                 $scraped = @(Import-Csv $TmpCsv -Encoding UTF8)
                 if ($kind -eq 'scrape' -and $State.Job.skipDeleted -ne $false -and (Get-Command Test-DeletedToken -ErrorAction SilentlyContinue)) {
+                    # 回收站里的条目也不再作为新数据抓回
                     $before = $scraped.Count
-                    $scraped = @($scraped | Where-Object { -not (Test-DeletedToken ([string]$_.token)) })
+                    $scraped = @($scraped | Where-Object {
+                        $tk = ([string]$_.token).ToLowerInvariant()
+                        -not $recycledTokens.ContainsKey($tk) -and -not (Test-DeletedToken ([string]$_.token))
+                    })
                     $skippedDeleted = $before - $scraped.Count
                     if ($skippedDeleted -gt 0) {
-                        Write-Log 'scrape' "跳过 $skippedDeleted 条此前手动删除的条目"
-                        try { Write-FileLog "scrape skipped previously deleted: $skippedDeleted" } catch { }
+                        Write-Log 'scrape' "跳过 $skippedDeleted 条回收站/已删除条目"
+                        try { Write-FileLog "scrape skipped recycled/deleted: $skippedDeleted" } catch { }
                     }
                 }
                 $merged = Merge-Ledger -Existing $State.Ledger -Scraped $scraped
@@ -427,10 +434,10 @@ function Update-Job {
                 $mergeOk = $true
                 if ($kind -eq 'import') {
                     Write-Log 'import' "本地入库完成（$secs s）：新增 $($merged.Added)，更新 $($merged.Updated)，可识别 $($scraped.Count) 个文件"
-                Write-JobResult -Phase 'done' -Added ([int]$merged.Added) -Updated ([int]$merged.Updated) -Count ([int]$scraped.Count) -Elapsed $secs -Kind $kind
+                Write-JobResult -Phase 'done' -Added ([int]$merged.Added) -Updated ([int]$merged.Updated) -Count ([int]$scraped.Count) -Elapsed $secs -Kind $kind -AddedTokens @($merged.AddedTokens)
                 } else {
                     Write-Log 'scrape' "抓取完成（$secs s）：新增 $($merged.Added)，更新 $($merged.Updated)，共 $($scraped.Count) 条"
-                Write-JobResult -Phase 'done' -Added ([int]$merged.Added) -Updated ([int]$merged.Updated) -Count ([int]$scraped.Count) -Elapsed $secs -Kind $kind
+                Write-JobResult -Phase 'done' -Added ([int]$merged.Added) -Updated ([int]$merged.Updated) -Count ([int]$scraped.Count) -Elapsed $secs -Kind $kind -AddedTokens @($merged.AddedTokens)
                 }
             } catch {
                 Write-Log 'error' "导入结果失败（保留 CSV 待重试）: $($_.Exception.Message)"

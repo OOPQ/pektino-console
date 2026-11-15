@@ -99,6 +99,7 @@ export type JobProgress = {
   kind?: string
   error?: string
   finishedAt?: number
+  addedTokens?: string[]
 }
 
 export type Job = {

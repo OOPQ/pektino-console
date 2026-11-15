@@ -89,6 +89,7 @@ function Merge-Ledger {
     $byToken = @{}
     $rows = New-Object System.Collections.ArrayList
     $changedRows = New-Object System.Collections.ArrayList
+    $addedTokens = New-Object System.Collections.ArrayList
     foreach ($r in @($Existing)) {
         if (-not $r.token) { continue }
         $byToken[$r.token] = $r
@@ -148,11 +149,12 @@ function Merge-Ledger {
             [void]$rows.Add($row)
             [void]$changedRows.Add($row)
             $added++
+            [void]$addedTokens.Add($s.token)
         }
     }
 
     # Changed 只含新增/更新的行：调用方用它做增量落库，避免每轮重写整张表
-    return [pscustomobject]@{ Rows = @($rows); Added = $added; Updated = $updated; Changed = @($changedRows) }
+    return [pscustomobject]@{ Rows = @($rows); Added = $added; Updated = $updated; Changed = @($changedRows); AddedTokens = @($addedTokens) }
 }
 
 function Set-LedgerStatus {

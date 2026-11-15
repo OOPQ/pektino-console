@@ -60,6 +60,7 @@ function Sidebar() {
   const theme = useUiStore(s => s.theme)
   const setTheme = useUiStore(s => s.setTheme)
   const { data } = useAppState()
+  const navigate = useNavigate()
   const stats = data?.stats
 
   const counts: Record<string, number> = {
@@ -200,6 +201,7 @@ export function AppShell() {
   const theme = useUiStore(s => s.theme)
   const setTheme = useUiStore(s => s.setTheme)
   const { data } = useAppState()
+  const navigate = useNavigate()
   const wasRunning = React.useRef(false)
   const lastResult = React.useRef('')
 
@@ -229,7 +231,15 @@ export function AppShell() {
       return
     }
     const title = p.kind === 'import' ? '导入完成' : '抓取完成'
-    toast.success(`${title}：新增 ${p.added || 0}，更新 ${p.updated || 0}`, { description: p.count ? `本轮共处理 ${p.count} 条` : undefined, duration: 7000 })
+    const addedTokens = (p.addedTokens || []).filter(Boolean)
+    if (addedTokens.length) {
+      try { sessionStorage.setItem('pektino.batchTokens', JSON.stringify(addedTokens)); sessionStorage.setItem('pektino.batchAt', p.at || '') } catch { }
+    }
+    toast.success(`${title}：新增 ${p.added || 0}，更新 ${p.updated || 0}`, {
+      description: p.count ? `本轮共处理 ${p.count} 条` : undefined,
+      duration: 7000,
+      action: addedTokens.length ? { label: '查看新增', onClick: () => navigate('/?batch=1') } : undefined,
+    })
   }, [data?.job, data?.job?.running, data?.job?.progress?.phase, data?.job?.progress?.at])
 
   return (

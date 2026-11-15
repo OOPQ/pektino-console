@@ -2,12 +2,12 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { fetchState, post } from '@/lib/api'
 import type { AppState } from '@/types'
 
-export function useAppState() {
+export function useAppState(refetchMs = 15_000) {
   return useQuery<AppState>({
     queryKey: ['state'],
     queryFn: ({ signal }) => fetchState(signal),
     staleTime: 5_000,
-    refetchInterval: 15_000,
+    refetchInterval: refetchMs,
     refetchOnWindowFocus: false,
   })
 }

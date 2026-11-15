@@ -178,7 +178,7 @@ export function LibraryPage() {
     open: openPreview,
     download: async row => {
       if (await confirmAction({ title: '开始下载', description: `把「${row.title?.trim() || row.token}」加入下载队列？`, confirmText: '开始下载' })) {
-        actions.download([row.token])
+        if (await actions.download([row.token])) navigate('/queue')
       }
     },
     fav: row => actions.fav([row.token], row.fav !== '1'),
@@ -197,7 +197,7 @@ export function LibraryPage() {
 
   const bulkDownload = async () => {
     if (await confirmAction({ title: '批量下载', description: `把已选 ${selected.length} 条加入下载队列？`, confirmText: '开始下载' })) {
-      actions.download(selected)
+      if (await actions.download(selected)) navigate('/queue')
     }
   }
   const bulkRecycle = async () => {

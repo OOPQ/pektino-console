@@ -87,15 +87,28 @@ export type AppState = {
   settings: AppSettings
   rows: Row[]
   download?: {
+    running?: boolean
+    paused?: boolean
+    phase?: string
+    total?: number
+    done?: number
+    failed?: number
+    queued?: number
+    pausedCount?: number
+    bytes?: number
+    speed?: number
+    pid?: number
+    active?: string[]
+    errors?: Array<{ token?: string; error?: string }>
     items?: Array<{
       token: string
       state: string
       bytes: number
-      expected: number
+      expected?: number
       speed?: number
       error?: string
+      history?: boolean
     }>
-    active?: number
   }
   job?: unknown
   log?: unknown

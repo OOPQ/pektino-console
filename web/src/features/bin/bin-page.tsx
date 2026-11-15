@@ -122,7 +122,7 @@ export function BinPage() {
       ) : (
         <div className="space-y-2">
           {groups.map(([date, items]) => (
-            <details key={date} open className="group overflow-hidden rounded-[var(--radius-card)] border border-[color:var(--border)] bg-[color:var(--surface)]">
+            <details key={date} className="group overflow-hidden rounded-[var(--radius-card)] border border-[color:var(--border)] bg-[color:var(--surface)]">
               <summary className="flex cursor-pointer list-none items-center gap-2 px-3 py-2 text-[10.5px] text-[color:var(--muted)] [&::-webkit-details-marker]:hidden">
                 <ChevronDown className="size-3.5 -rotate-90 text-[color:var(--subtle)] transition-transform group-open:rotate-0" />
                 <span className="font-medium text-[color:var(--foreground)]">{date}</span>

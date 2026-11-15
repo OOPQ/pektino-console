@@ -1,5 +1,5 @@
 import * as React from 'react'
-import { Check, Download, ExternalLink, Eye, Heart } from 'lucide-react'
+import { Check, Download, Eye, Heart } from 'lucide-react'
 import type { Row } from '@/types'
 import { cn, formatCount, formatDate, rowTitle } from '@/lib/utils'
 import { useUiStore } from '@/store/ui'
@@ -56,36 +56,6 @@ export function LibraryGallery({ rows, selected, onToggle, onOpen, onFav, onRate
                   </div>
                 ) : null}
 
-                <div className="absolute right-2 top-2 z-10 flex items-center gap-1" onClick={e => e.stopPropagation()}>
-                  {row.file_name ? (
-                    <IconButton
-                      label="打开文件位置"
-                      size="sm"
-                      className="border-[color:color-mix(in_srgb,var(--success)_55%,transparent)] bg-[color:color-mix(in_srgb,var(--success)_24%,black)] text-[color:var(--success)] backdrop-blur hover:bg-[color:color-mix(in_srgb,var(--success)_32%,black)]"
-                      onClick={() => menu.reveal(row)}
-                    >
-                      <Check className="size-3.5" />
-                    </IconButton>
-                  ) : (
-                    <IconButton
-                      label="下载"
-                      size="sm"
-                      className="border-white/20 bg-black/55 text-white backdrop-blur hover:bg-black/70"
-                      onClick={() => onDownload(row)}
-                    >
-                      <Download className="size-3.5" />
-                    </IconButton>
-                  )}
-                  <IconButton
-                    label={row.fav === '1' ? '取消收藏' : '收藏'}
-                    size="sm"
-                    className={cn('border-white/20 bg-black/55 text-white backdrop-blur hover:bg-black/70', row.fav === '1' && 'text-[color:var(--danger)]')}
-                    onClick={() => onFav(row)}
-                  >
-                    <Heart className={cn('size-3.5', row.fav === '1' && 'fill-current')} />
-                  </IconButton>
-                </div>
-
                 <span className="absolute bottom-2 left-2 z-10 rounded-md border border-white/15 bg-black/55 px-2 py-0.5 text-[12px] font-semibold text-white/90 backdrop-blur">
                   {row.duration || '—'}
                 </span>
@@ -107,13 +77,25 @@ export function LibraryGallery({ rows, selected, onToggle, onOpen, onFav, onRate
                 <div onClick={e => e.stopPropagation()}>
                   <RatingInput value={row.rating} onChange={value => onRate(row, value)} />
                 </div>
-                {row.source !== 'local' && row.page_url ? (
-                  <div className="flex items-center gap-0.5" onClick={e => e.stopPropagation()}>
-                    <IconButton label="打开原页面" size="sm" onClick={() => window.open(row.page_url, '_blank', 'noopener')}>
-                      <ExternalLink className="size-3.5" />
+                <div className="flex items-center gap-0.5" onClick={e => e.stopPropagation()}>
+                  {row.file_name ? (
+                    <IconButton label="打开文件位置" size="sm" className="text-[color:var(--success)]" onClick={() => menu.reveal(row)}>
+                      <Check className="size-3.5" />
                     </IconButton>
-                  </div>
-                ) : null}
+                  ) : (
+                    <IconButton label="下载" size="sm" onClick={() => onDownload(row)}>
+                      <Download className="size-3.5" />
+                    </IconButton>
+                  )}
+                  <IconButton
+                    label={row.fav === '1' ? '取消收藏' : '收藏'}
+                    size="sm"
+                    className={cn(row.fav === '1' && 'text-[color:var(--danger)]')}
+                    onClick={() => onFav(row)}
+                  >
+                    <Heart className={cn('size-3.5', row.fav === '1' && 'fill-current')} />
+                  </IconButton>
+                </div>
               </CardFooter>
             </Card>
           </RowContextMenu>

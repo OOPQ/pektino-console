@@ -43,9 +43,7 @@ function usePageMeta() {
 function Brand({ collapsed }: { collapsed: boolean }) {
   return (
     <div className={cn('flex h-[38px] items-center gap-2.5 px-1', collapsed && 'justify-center px-0')}>
-      <div className="grid size-[34px] shrink-0 place-items-center rounded-[10px] bg-[linear-gradient(145deg,#7ab7ff,#2f6fe4)] text-[19px] font-extrabold text-white shadow-[0_8px_22px_rgba(47,111,228,.35)]">
-        p
-      </div>
+      <img src="/api/logo" alt="pektino" className="size-[34px] shrink-0 rounded-[10px] object-cover shadow-[0_8px_22px_rgba(47,111,228,.35)]" />
       {!collapsed ? (
         <div className="min-w-0">
           <b className="block text-[13px] leading-tight tracking-[.2px]">pektino</b>

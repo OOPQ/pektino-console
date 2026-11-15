@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="color-scheme" content="dark light" />
     <title>pektino · 媒体库</title>
+    <link rel="icon" href="/api/logo" />
     <script>
       try {
         const theme = localStorage.getItem('pektino.theme') || 'dark';
@@ -35,7 +36,7 @@
       }
       .boot aside { border-right: 1px solid var(--boot-line); padding: 18px 14px; background: var(--boot-panel); }
       .boot-brand { display: flex; gap: 10px; align-items: center; margin-bottom: 26px; }
-      .boot-mark { width: 34px; height: 34px; border-radius: 10px; background: linear-gradient(145deg, #7ab7ff, #2f6fe4); }
+      .boot-mark { width: 34px; height: 34px; border-radius: 10px; background: url("/api/logo") center/cover no-repeat; }
       .boot-line { height: 9px; border-radius: 5px; background: color-mix(in srgb, var(--boot-dim) 18%, transparent); }
       .boot-nav { height: 175px; border-radius: 10px; background: color-mix(in srgb, var(--boot-dim) 8%, transparent); margin-top: 18px; }
       .boot main { padding: 26px 30px; }

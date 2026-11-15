@@ -452,6 +452,26 @@ function Handle-Request {
         return
     }
 
+    if ($method -eq 'GET' -and $path -eq '/api/logo') {
+        $repoRoot = Split-Path $Root -Parent
+        $candidates = @()
+        foreach ($dir in @($repoRoot, $Root, (Join-Path $repoRoot 'web\public'), $NewWebDir)) {
+            if (-not $dir) { continue }
+            foreach ($ext in @('svg', 'png', 'jpg', 'jpeg', 'webp')) { $candidates += (Join-Path $dir ('logo.' + $ext)) }
+        }
+        foreach ($file in $candidates) {
+            if (Test-Path -LiteralPath $file -PathType Leaf) {
+                $ext = [System.IO.Path]::GetExtension($file).TrimStart('.').ToLower()
+                $ct = switch ($ext) { 'svg' { 'image/svg+xml' } 'png' { 'image/png' } 'webp' { 'image/webp' } default { 'image/jpeg' } }
+                Send-Bytes -Stream $Stream -Bytes ([System.IO.File]::ReadAllBytes($file)) -ContentType $ct -ExtraHeaders @{ 'Cache-Control' = 'no-store' }
+                return
+            }
+        }
+        $svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#7ab7ff"/><stop offset="1" stop-color="#2f6fe4"/></linearGradient></defs><rect width="64" height="64" rx="14" fill="url(#g)"/><path d="M20 15h15c9 0 15 6 15 14S44 43 35 43h-9v6H20V15zm6 6v16h9c6 0 9-3 9-8s-3-8-9-8h-9z" fill="#fff"/></svg>'
+        Send-Bytes -Stream $Stream -Bytes ([Text.Encoding]::UTF8.GetBytes($svg)) -ContentType 'image/svg+xml' -ExtraHeaders @{ 'Cache-Control' = 'no-store' }
+        return
+    }
+
     if ($method -eq 'GET' -and $path -eq '/api/cover') {
         $tk = [string]$Req.Query['token']
         $full = ($Req.Query['full'] -eq '1')

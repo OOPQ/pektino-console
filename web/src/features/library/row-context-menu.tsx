@@ -6,6 +6,7 @@ import {
   Copy,
   Download,
   Eye,
+  ExternalLink,
   FolderOpen,
   Heart,
   ListPlus,
@@ -54,6 +55,11 @@ export function RowContextMenu({
           <ContextMenuPrimitive.Item className={itemClass} onSelect={() => actions.open(row.token, false)}>
             <Eye className="size-3.5" /> 查看详情
           </ContextMenuPrimitive.Item>
+          {row.source !== 'local' && row.page_url ? (
+            <ContextMenuPrimitive.Item className={itemClass} onSelect={() => window.open(row.page_url, '_blank', 'noopener')}>
+              <ExternalLink className="size-3.5" /> 打开原网页
+            </ContextMenuPrimitive.Item>
+          ) : null}
           <ContextMenuPrimitive.Separator className="my-1 h-px bg-[color:var(--border)]" />
           <ContextMenuPrimitive.Item className={itemClass} onSelect={() => actions.download(row)}>
             <Download className="size-3.5" /> 下载

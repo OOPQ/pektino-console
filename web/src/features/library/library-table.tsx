@@ -119,7 +119,7 @@ export function LibraryTable({
             <SortHead label="评分" col="rating" sortKey={sortKey} sortDir={sortDir} onSort={onSort} className="w-[86px]" />
             <SortHead label="入库" col="first_seen" sortKey={sortKey} sortDir={sortDir} onSort={onSort} className="w-[104px]" />
             <th className="w-[72px] px-2 py-2 text-left text-[9.5px] tracking-[.4px] text-[color:var(--subtle)]">状态</th>
-            <th className="w-[104px] px-2 py-2 text-right text-[9.5px] tracking-[.4px] text-[color:var(--subtle)]">操作</th>
+            <th className="sticky right-0 z-20 w-[104px] border-l border-[color:var(--border)] bg-[color:var(--surface-2)] px-2 py-2 text-right text-[9.5px] tracking-[.4px] text-[color:var(--subtle)]">操作</th>
           </tr>
         </thead>
         <tbody>
@@ -168,7 +168,7 @@ export function LibraryTable({
                 <td className="px-2 py-2.5"><RatingInput value={row.rating} onChange={value => onRate(row, value)} /></td>
                 <td className="px-2 py-2.5 text-[10px] text-[color:var(--muted)]">{formatDate(row.first_seen)}</td>
                 <td className="px-2 py-2.5"><StatusBadge status={row.status} /></td>
-                <td className="px-2 py-2.5">
+<td className="sticky right-0 border-l border-[color:var(--border)] bg-[color:var(--surface)] px-2 py-2.5 group-hover:bg-[color:color-mix(in_srgb,var(--primary)_4%,var(--surface))]">
                   <div className="flex items-center justify-end gap-0.5 opacity-70 transition-opacity group-hover:opacity-100">
                     <IconButton label="预览 / 播放" size="sm" onClick={() => onOpen(row.token, true)}>
                       <Play className="size-3.5" />

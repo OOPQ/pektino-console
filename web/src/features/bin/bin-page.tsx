@@ -43,7 +43,7 @@ export function BinPage() {
   const restore = async (tokens: string[]) => {
     setBusy(tokens[0] || 'restore')
     try {
-      const r = await post<{ ok: boolean; error?: string }>('/api/mark', { tokens, status: 'new' })
+      const r = await post<{ ok: boolean; error?: string }>('/api/restore', { tokens })
       if (!r.ok) throw new Error(r.error || '恢复失败')
       toast.success(`已恢复 ${tokens.length} 条`)
       after()

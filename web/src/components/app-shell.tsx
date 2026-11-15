@@ -1,6 +1,7 @@
 import * as React from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import {
+  CircleHelp,
   Download,
   Layers,
   Library,
@@ -19,6 +20,7 @@ import { cn, formatCount } from '@/lib/utils'
 import { toast } from 'sonner'
 import { IconButton } from '@/components/ui/icon-button'
 import { Button } from '@/components/ui/button'
+import { ShortcutHelp } from '@/components/shortcut-help'
 
 const NAV = [
   { to: '/', label: '媒体库', icon: Library, key: 'library' },
@@ -156,7 +158,7 @@ function SideLink({
   )
 }
 
-function Topbar() {
+function Topbar({ onHelp }: { onHelp: () => void }) {
   const collapsed = useUiStore(s => s.sidebarCollapsed)
   const toggleSidebar = useUiStore(s => s.toggleSidebar)
   const { kicker, title } = usePageMeta()
@@ -189,6 +191,9 @@ function Topbar() {
         >
           <RefreshCw className={cn('size-4', isFetching && 'animate-spin')} />
         </IconButton>
+        <IconButton label="快捷键" size="sm" onClick={onHelp}>
+          <CircleHelp className="size-4" />
+        </IconButton>
         <IconButton label="设置" size="sm" onClick={() => navigate('/settings')}>
           <Settings className="size-4" />
         </IconButton>
@@ -204,6 +209,19 @@ export function AppShell() {
   const navigate = useNavigate()
   const wasRunning = React.useRef(false)
   const lastResult = React.useRef('')
+  const [helpOpen, setHelpOpen] = React.useState(false)
+
+  React.useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== '?' || e.ctrlKey || e.metaKey || e.altKey) return
+      const target = e.target as HTMLElement | null
+      if (target instanceof Element && target.closest('input,textarea,select,[contenteditable]')) return
+      e.preventDefault()
+      setHelpOpen(true)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
 
   React.useEffect(() => {
     setTheme(theme)
@@ -245,8 +263,9 @@ export function AppShell() {
   return (
     <div className="flex h-screen overflow-hidden">
       <Sidebar />
+      <ShortcutHelp open={helpOpen} onOpenChange={setHelpOpen} />
       <div className="flex min-w-0 flex-1 flex-col">
-        <Topbar />
+        <Topbar onHelp={() => setHelpOpen(true)} />
         <main className="min-h-0 flex-1 overflow-auto">
           <Outlet />
         </main>

@@ -114,16 +114,16 @@ export function LibraryPage() {
   const openPreview = useUiStore(s => s.openPreview)
   const closePreview = useUiStore(s => s.closePreview)
 
-  const [query, setQuery] = React.useState('')
+const [query, setQuery] = React.useState(searchParams.get('q') || '')
   const deferredQuery = React.useDeferredValue(query)
-  const [status, setStatus] = React.useState('all')
-  const [source, setSource] = React.useState('all')
-  const [flag, setFlag] = React.useState('none')
-  const [res, setRes] = React.useState('all')
-  const [minDur, setMinDur] = React.useState('')
-  const [sortKey, setSortKey] = React.useState<SortKey>('rank')
-  const [sortDir, setSortDir] = React.useState<SortDir>('asc')
-  const [per, setPer] = React.useState(50)
+const [status, setStatus] = React.useState(searchParams.get('status') || 'all')
+const [source, setSource] = React.useState(searchParams.get('source') || 'all')
+const [flag, setFlag] = React.useState(searchParams.get('flag') || 'none')
+const [res, setRes] = React.useState(searchParams.get('res') || 'all')
+const [minDur, setMinDur] = React.useState(searchParams.get('minDur') || '')
+const [sortKey, setSortKey] = React.useState<SortKey>((searchParams.get('sort')?.split(':')[0] as SortKey) || 'rank')
+const [sortDir, setSortDir] = React.useState<SortDir>((searchParams.get('sort')?.split(':')[1] as SortDir) || 'asc')
+const [per, setPer] = React.useState(Number(searchParams.get('per')) || 50)
   const [page, setPage] = React.useState(1)
   const [filterOpen, setFilterOpen] = React.useState(false)
   const [pickerTokens, setPickerTokens] = React.useState<string[] | null>(null)
@@ -170,6 +170,20 @@ export function LibraryPage() {
 
   React.useEffect(() => { setPage(1) }, [deferredQuery, status, source, flag, res, minDur, per, sortKey, sortDir, collectionId, batchMode])
   React.useEffect(() => { if (page > pages) setPage(pages) }, [page, pages])
+
+  React.useEffect(() => {
+    const next = new URLSearchParams(window.location.search)
+    const put = (key: string, value: string, fallback: string) => { if (value && value !== fallback) next.set(key, value); else next.delete(key) }
+    put('q', query, '')
+    put('status', status, 'all')
+    put('source', source, 'all')
+    put('flag', flag, 'none')
+    put('res', res, 'all')
+    put('minDur', minDur, '')
+    put('per', String(per), '50')
+    put('sort', `${sortKey}:${sortDir}`, 'rank:asc')
+    if (next.toString() !== window.location.search.replace(/^\?/, '')) setSearchParams(next, { replace: true })
+  }, [query, status, source, flag, res, minDur, per, sortKey, sortDir, setSearchParams])
 
   const sourceOptions = React.useMemo(
     () => [{ value: 'all', label: '全部来源' }, ...(data?.sources || []).map(s => ({ value: s.key, label: s.name || s.key }))],
@@ -271,6 +285,12 @@ export function LibraryPage() {
   const addedTokens = (data?.job?.progress?.addedTokens || []).filter(Boolean)
   const enterBatch = () => {
     if (!addedTokens.length) return
+    setQuery('')
+    setStatus('all')
+    setSource('all')
+    setFlag('none')
+    setRes('all')
+    setMinDur('')
     try { sessionStorage.setItem('pektino.batchTokens', JSON.stringify(addedTokens)) } catch { }
     const next = new URLSearchParams(searchParams)
     next.set('batch', '1')

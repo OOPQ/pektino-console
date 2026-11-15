@@ -27,10 +27,10 @@ pnpm dev
 
 ```powershell
 pnpm build       # 普通构建，base=/
-pnpm build:new   # 接入现有控制台 /new/ 预览，base=/new/
+pnpm build:new   # 旧 /new/ 预览构建；正式发布用 pnpm build
 ```
 
-构建产物在 `web/dist`。`app/console.ps1` 已支持 `http://127.0.0.1:8791/new/` 读取这份产物；旧 `app/web` 仍在根路径保留回退。
+构建产物在 `web/dist`，`app/console.ps1` 直接从根路径 `http://127.0.0.1:8791/` 服务；旧 `/new/` 已重定向到根路径，`app/web` 仅作备份。
 
 ## 目录
 
@@ -74,7 +74,7 @@ src/
 
 ## 下一批
 
-- 生产构建接入 8791
+- 生产根路径切换、旧前端清理
 - 构建产物接入 8791、旧 `app/web` 清理
 
 ## 约定

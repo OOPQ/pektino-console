@@ -516,13 +516,31 @@ function Invoke-Mark {
     }
     $nowStamp = (Get-Date).ToString('yyyy-MM-dd HH:mm:ss')
     foreach ($r in @($changed)) {
-        if ($Status -eq 'recycled') { if (-not $r.recycled_at) { $r.recycled_at = $nowStamp } }
-        else { $r.recycled_at = '' }
+        if ($Status -eq 'recycled') { if (-not $r.recycled_at) { $r.recycled_at = $nowStamp }; if ($r.status -ne 'recycled') { $r.recycled_from = $r.status } }
+        else { $r.recycled_at = ''; $r.recycled_from = '' }
     }
     $n = Set-LedgerStatus -Rows @($changed) -Tokens $Tokens -Status $Status -Note $Note
     if ($n -gt 0) { Save-Ledger -Rows @($changed) -NoSnapshot; Touch-State }
     Write-Log 'mark' "标记 $n 条为 $Status"
     return @{ ok = $true; count = $n }
+}
+
+function Invoke-Restore {
+    param([string[]]$Tokens)
+    if (-not $Tokens) { return @{ ok = $false; error = '没选条目' } }
+    $changed = New-Object System.Collections.ArrayList
+    foreach ($r in @($State.Ledger)) {
+        if ($Tokens -notcontains $r.token) { continue }
+        $prev = [string]$r.recycled_from
+        if (@('new', 'done', 'failed') -notcontains $prev) { $prev = 'new' }
+        $r.status = $prev
+        $r.recycled_at = ''
+        $r.recycled_from = ''
+        [void]$changed.Add($r)
+    }
+    if ($changed.Count -gt 0) { Save-Ledger -Rows @($changed) -NoSnapshot; Touch-State }
+    Write-Log 'restore' "恢复 $($changed.Count) 条到原状态"
+    return @{ ok = $true; count = $changed.Count }
 }
 
 function Invoke-Rate {
@@ -1625,6 +1643,7 @@ function Add-DeletedTokens {
     }
     if ($n -gt 0 -and $DeletedPath) {
         try {
+            try { if (Test-Path -LiteralPath $DeletedPath) { Copy-Item -LiteralPath $DeletedPath -Destination ($DeletedPath + '.bak') -Force } } catch { }
             $tmp = "$DeletedPath.tmp"
             @($State.Deleted.Values | Sort-Object deletedAt) | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $tmp -Encoding UTF8
             Move-Item -LiteralPath $tmp -Destination $DeletedPath -Force

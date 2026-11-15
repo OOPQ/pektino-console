@@ -32,6 +32,7 @@ export type Row = {
   last_play: string
   rating: string
   recycled_at?: string
+  recycled_from?: string
 }
 
 export type Stats = {

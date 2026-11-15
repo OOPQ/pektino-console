@@ -375,6 +375,20 @@ if (e.key === 'f' || e.key === 'F') { e.preventDefault(); e.stopImmediatePropaga
     seekTo(time)
   }
 
+  const togglePip = async () => {
+    const v = videoRef.current
+    if (!v) return
+    try {
+      if (document.pictureInPictureElement) {
+        await document.exitPictureInPicture()
+      } else {
+        await v.requestPictureInPicture()
+      }
+    } catch (e) {
+      toast.error('当前浏览器不支持画中画')
+    }
+  }
+
   const toggleStageFullscreen = () => {
     const el = stageRef.current as (HTMLDivElement & { webkitRequestFullscreen?: () => Promise<void> }) | null
     if (!el) return

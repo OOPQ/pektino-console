@@ -1,5 +1,5 @@
 import * as React from 'react'
-import { Copy, Download, Eye, Heart } from 'lucide-react'
+import { Check, Download, ExternalLink, Eye, Heart } from 'lucide-react'
 import type { Row } from '@/types'
 import { cn, formatCount, formatDate, rowTitle } from '@/lib/utils'
 import { useUiStore } from '@/store/ui'
@@ -25,17 +25,7 @@ type Props = {
 export function LibraryGallery({ rows, selected, onToggle, onOpen, onFav, onRate, onDownload, menu }: Props) {
   const density = useUiStore(s => s.density)
   const multi = useUiStore(s => s.multi)
-  const [copied, setCopied] = React.useState<string | null>(null)
-
   const minWidth = density === 'large' ? 220 : density === 'compact' ? 150 : 182
-
-  const copy = async (row: Row) => {
-    try {
-      await navigator.clipboard.writeText(row.page_url || row.url)
-      setCopied(row.token)
-      window.setTimeout(() => setCopied(c => (c === row.token ? null : c)), 1600)
-    } catch (e) {}
-  }
 
   return (
     <div
@@ -51,7 +41,7 @@ export function LibraryGallery({ rows, selected, onToggle, onOpen, onFav, onRate
                 'group cursor-pointer overflow-hidden transition-[border-color,transform] hover:-translate-y-0.5 hover:border-[color:var(--border-strong)]',
                 isSelected && 'border-[color:var(--primary)]',
               )}
-              onClick={() => multi ? onToggle(row.token) : onOpen(row.token, false)}
+              onClick={() => multi ? onToggle(row.token) : onOpen(row.token, true)}
             >
               <CardMedia className="aspect-[3/4]">
                 <CoverImage token={row.token} full alt={rowTitle(row)} className="absolute inset-0" />
@@ -76,14 +66,25 @@ export function LibraryGallery({ rows, selected, onToggle, onOpen, onFav, onRate
                     {row.duration || '—'}
                   </span>
                   <div className="flex items-center gap-1">
-                    <IconButton
-                      label="下载"
-                      size="sm"
-                      className="border-white/20 bg-black/55 text-white backdrop-blur hover:bg-black/70"
-                      onClick={() => onDownload(row)}
-                    >
-                      <Download className="size-3.5" />
-                    </IconButton>
+                    {row.file_name ? (
+                      <IconButton
+                        label="打开文件位置"
+                        size="sm"
+                        className="border-[color:color-mix(in_srgb,var(--success)_55%,transparent)] bg-[color:color-mix(in_srgb,var(--success)_24%,black)] text-[color:var(--success)] backdrop-blur hover:bg-[color:color-mix(in_srgb,var(--success)_32%,black)]"
+                        onClick={() => menu.reveal(row)}
+                      >
+                        <Check className="size-3.5" />
+                      </IconButton>
+                    ) : (
+                      <IconButton
+                        label="下载"
+                        size="sm"
+                        className="border-white/20 bg-black/55 text-white backdrop-blur hover:bg-black/70"
+                        onClick={() => onDownload(row)}
+                      >
+                        <Download className="size-3.5" />
+                      </IconButton>
+                    )}
                     <IconButton
                       label={row.fav === '1' ? '取消收藏' : '收藏'}
                       size="sm"
@@ -112,11 +113,13 @@ export function LibraryGallery({ rows, selected, onToggle, onOpen, onFav, onRate
                 <div onClick={e => e.stopPropagation()}>
                   <RatingInput value={row.rating} onChange={value => onRate(row, value)} />
                 </div>
-                <div className="flex items-center gap-0.5" onClick={e => e.stopPropagation()}>
-                  <IconButton label={copied === row.token ? '已复制' : '复制链接'} size="sm" onClick={() => copy(row)}>
-                    <Copy className={cn('size-3.5', copied === row.token && 'text-[color:var(--success)]')} />
-                  </IconButton>
-                </div>
+                {row.source !== 'local' && row.page_url ? (
+                  <div className="flex items-center gap-0.5" onClick={e => e.stopPropagation()}>
+                    <IconButton label="打开原页面" size="sm" onClick={() => window.open(row.page_url, '_blank', 'noopener')}>
+                      <ExternalLink className="size-3.5" />
+                    </IconButton>
+                  </div>
+                ) : null}
               </CardFooter>
             </Card>
           </RowContextMenu>

@@ -1,12 +1,13 @@
 import * as React from 'react'
+import { createPortal } from 'react-dom'
 import {
   ChevronLeft,
   Camera,
+  Check,
   ChevronRight,
   Copy,
   Download,
   ExternalLink,
-  Pause,
   Play,
   Star,
   X,
@@ -16,11 +17,11 @@ import { cn, copyText, formatCount, formatDate, mediaUrl, rowTitle, statusOf } f
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { post } from '@/lib/api'
+import { confirmAction } from '@/store/confirm'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogClose, DialogContent } from '@/components/ui/dialog'
 import { IconButton } from '@/components/ui/icon-button'
-import { Badge } from '@/components/ui/badge'
-import { Stars } from '@/components/stars'
+import { RatingInput } from '@/components/rating-input'
 import { StatusBadge } from '@/components/status-badge'
 import { CoverImage } from '@/components/cover-image'
 
@@ -43,6 +44,7 @@ export function PreviewDialog({ rows, token, autoplay = false, media, onClose, o
   const [copied, setCopied] = React.useState(false)
   const [seek, setSeek] = React.useState<number | null>(null)
   const [busySnap, setBusySnap] = React.useState(false)
+  const [downloading, setDownloading] = React.useState(false)
   const [volumeHint, setVolumeHint] = React.useState('')
   const videoRef = React.useRef<HTMLVideoElement>(null)
   const qc = useQueryClient()
@@ -57,6 +59,16 @@ export function PreviewDialog({ rows, token, autoplay = false, media, onClose, o
     staleTime: 3_000,
   })
   const snapshots = snapshotsQuery.data?.items || []
+  const collectionsQuery = useQuery<{ items: Array<{ id: number; name: string; color: string; has: boolean }> }>({
+    queryKey: ['collections', token],
+    queryFn: async () => {
+      const res = await fetch(`/api/collections?token=${encodeURIComponent(token || '')}`, { cache: 'no-store' })
+      if (!res.ok) throw new Error('读取合集失败')
+      return res.json()
+    },
+    enabled: !!token,
+    staleTime: 3_000,
+  })
   const canPlay = Boolean(row?.file_name && media?.base && media?.key)
 
   React.useEffect(() => {
@@ -133,6 +145,23 @@ export function PreviewDialog({ rows, token, autoplay = false, media, onClose, o
         if (e.key === 'ArrowDown') { v.volume = Math.max(0, v.volume - 0.05); showVolume(v) }
         return
       }
+      if (/^[1-5]$/.test(e.key)) {
+        e.preventDefault()
+        const value = Number(e.key)
+        void post<{ ok: boolean; error?: string }>('/api/rate', { tokens: [token], value }).then(r => {
+          if (r.ok) { toast.success(`已评分 ${value} 星`); qc.invalidateQueries({ queryKey: ['state'] }) }
+          else toast.error(r.error || '评分失败')
+        })
+        return
+      }
+      if (e.key === '0') {
+        e.preventDefault()
+        void post<{ ok: boolean; error?: string }>('/api/rate', { tokens: [token], value: 0 }).then(r => {
+          if (r.ok) { toast.success('已清除评分'); qc.invalidateQueries({ queryKey: ['state'] }) }
+          else toast.error(r.error || '评分失败')
+        })
+        return
+      }
       const v = videoRef.current
       if (!v) return
       if (e.key === 'm' || e.key === 'M') { v.muted = !v.muted; showVolume(v) }
@@ -158,12 +187,13 @@ export function PreviewDialog({ rows, token, autoplay = false, media, onClose, o
       window.removeEventListener('keyup', onKeyUp)
       window.clearTimeout(hintTimer)
     }
-  }, [token, canPlay])
+  }, [token, canPlay, qc])
 
   if (!row) return null
 
   const videoSrc = canPlay ? mediaUrl(media!.base, media!.key, row.token, Number(row.last_seen?.replace(/\D/g, '').slice(-9)) || 0) : ''
   const source = statusOf(row.status)
+  const memberships = collectionsQuery.data?.items || []
 
   const copy = async () => {
     if (await copyText(row.page_url || row.url)) {
@@ -188,7 +218,51 @@ export function PreviewDialog({ rows, token, autoplay = false, media, onClose, o
     }
   }
 
+  const setRating = async (value: number) => {
+    try {
+      const r = await post<{ ok: boolean; error?: string }>('/api/rate', { tokens: [row.token], value })
+      if (!r.ok) throw new Error(r.error || '评分失败')
+      toast.success(value ? `已评分 ${value} 星` : '已清除评分')
+      qc.invalidateQueries({ queryKey: ['state'] })
+    } catch (e) {
+      toast.error((e as Error).message)
+    }
+  }
+
+  const download = async () => {
+    if (downloading) return
+    if (!(await confirmAction({ title: '开始下载', description: `把「${rowTitle(row)}」加入下载队列？`, confirmText: '开始下载' }))) return
+    setDownloading(true)
+    try {
+      const r = await post<{ ok: boolean; error?: string }>('/api/download', { tokens: [row.token], status: 'new' })
+      if (!r.ok) throw new Error(r.error || '开始下载失败')
+      toast.success('已加入下载队列')
+      qc.invalidateQueries({ queryKey: ['state'] })
+    } catch (e) {
+      toast.error((e as Error).message)
+    } finally {
+      setDownloading(false)
+    }
+  }
+
+  const toggleCollection = async (col: { id: number; name: string; has: boolean }) => {
+    try {
+      const r = await post<{ ok: boolean; error?: string }>('/api/collections', {
+        action: col.has ? 'remove' : 'add',
+        id: col.id,
+        tokens: [row.token],
+      })
+      if (!r.ok) throw new Error(r.error || '操作失败')
+      toast.success(col.has ? `已移出「${col.name}」` : `已加入「${col.name}」`)
+      qc.invalidateQueries({ queryKey: ['collections'] })
+      qc.invalidateQueries({ queryKey: ['state'] })
+    } catch (e) {
+      toast.error((e as Error).message)
+    }
+  }
+
   return (
+    <>
     <Dialog open={!!token} onOpenChange={open => { if (!open) onClose() }}>
       <DialogContent
         title="条目详情"
@@ -207,9 +281,11 @@ export function PreviewDialog({ rows, token, autoplay = false, media, onClose, o
               <Button size="sm" variant="outline" disabled title="下一批接入">
                 画中画
               </Button>
-              <Button size="sm" variant="outline" disabled title="下一批接入">
-                <Download className="size-3.5" /> 下载
-              </Button>
+              {!row.file_name ? (
+                <Button size="sm" variant="outline" onClick={download} disabled={downloading}>
+                  <Download className="size-3.5" /> {downloading ? '提交中…' : '下载'}
+                </Button>
+              ) : null}
               <DialogClose asChild>
                 <Button size="sm" variant="ghost">
                   关闭
@@ -220,7 +296,7 @@ export function PreviewDialog({ rows, token, autoplay = false, media, onClose, o
         }
       >
         <div className="relative flex min-h-[480px] flex-1 items-center justify-center overflow-hidden bg-[#05080c]">
-          <CoverImage token={row.token} full fit="contain" alt={rowTitle(row)} className="absolute inset-0 h-full w-full" />
+          <CoverImage token={row.token} full fit="contain" alt={rowTitle(row)} className={cn('absolute inset-0 h-full w-full transition-opacity', videoReady ? 'opacity-0' : 'opacity-100')} />
 
           {playing && !videoError ? (
             <video
@@ -253,13 +329,27 @@ export function PreviewDialog({ rows, token, autoplay = false, media, onClose, o
                 <Play className="size-4 fill-current" /> 播放
               </Button>
             ) : null}
-            {!playing && !canPlay ? (
-              <Badge tone="default" className="border-white/15 bg-black/55 text-white">本地还没有这个文件</Badge>
-            ) : null}
             {playing && !videoReady && !videoError ? (
               <span className="rounded-full border border-white/15 bg-black/55 px-3 py-1 text-[10px] text-white/80 backdrop-blur">加载视频…</span>
             ) : null}
           </div>
+
+          {snapshots.length && Number(row.seconds) > 0 ? (
+            <div className="absolute inset-x-3 bottom-[42px] z-20 h-4">
+              <div className="absolute inset-x-0 top-1/2 h-px bg-white/20" />
+              {snapshots.map(s => (
+                <button
+                  key={s.name}
+                  type="button"
+                  title={`快照 ${s.time.toFixed(1)}s`}
+                  aria-label={`跳转到快照 ${s.time.toFixed(1)} 秒`}
+                  onClick={() => { setSeek(s.time); setPlaying(true) }}
+                  className="absolute top-1/2 size-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/80 bg-[color:var(--warning)] shadow-[0_0_0_3px_rgba(227,179,65,.18)] transition-transform hover:scale-125"
+                  style={{ left: `${Math.min(100, Math.max(0, (s.time / Number(row.seconds)) * 100))}%` }}
+                />
+              ))}
+            </div>
+          ) : null}
 
           {volumeHint ? (
             <div className="absolute left-1/2 top-3 z-30 -translate-x-1/2 rounded-full border border-white/15 bg-black/60 px-3 py-1 text-[10px] text-white backdrop-blur">
@@ -267,27 +357,7 @@ export function PreviewDialog({ rows, token, autoplay = false, media, onClose, o
             </div>
           ) : null}
 
-          <div className="absolute left-2 top-1/2 z-30 -translate-y-1/2">
-            <IconButton label="上一项" onClick={() => prev && onNavigate(prev.token)} disabled={!prev}>
-              <ChevronLeft className="size-4" />
-            </IconButton>
-          </div>
-          <div className="absolute right-2 top-1/2 z-30 -translate-y-1/2">
-            <IconButton label="下一项" onClick={() => next && onNavigate(next.token)} disabled={!next}>
-              <ChevronRight className="size-4" />
-            </IconButton>
-          </div>
 
-          {playing && !videoError ? (
-            <Button
-              size="sm"
-              variant="outline"
-              className="absolute right-2 top-2 z-30 border-white/20 bg-black/55 text-white backdrop-blur"
-              onClick={() => setPlaying(false)}
-            >
-              <Pause className="size-3.5" /> 收起视频
-            </Button>
-          ) : null}
         </div>
 
         <aside className="w-[320px] shrink-0 overflow-auto border-l border-[color:var(--border)] p-4">
@@ -299,7 +369,7 @@ export function PreviewDialog({ rows, token, autoplay = false, media, onClose, o
           </div>
           <div className="mt-1 flex items-center gap-2">
             <StatusBadge status={row.status} />
-            <Stars value={row.rating} />
+            <RatingInput value={row.rating} onChange={setRating} />
           </div>
 
           <div className="mt-4 grid grid-cols-2 gap-2">
@@ -337,40 +407,57 @@ export function PreviewDialog({ rows, token, autoplay = false, media, onClose, o
             <Button size="sm" variant="outline" onClick={copy}>
               <Copy className="size-3.5" /> {copied ? '已复制' : '复制链接'}
             </Button>
-            <Button size="sm" variant="outline" asChild>
-              <a href={row.page_url} target="_blank" rel="noreferrer">
-                <ExternalLink className="size-3.5" /> 原页面
-              </a>
-            </Button>
+            {row.source !== 'local' && row.page_url ? (
+              <Button size="sm" variant="outline" asChild>
+                <a href={row.page_url} target="_blank" rel="noreferrer">
+                  <ExternalLink className="size-3.5" /> 原页面
+                </a>
+              </Button>
+            ) : null}
           </div>
 
           <div className="mt-4 border-t border-[color:var(--border)] pt-3">
             <div className="flex items-center justify-between">
-              <span className="ui-field-label">进度快照</span>
-              <span className="text-[9px] text-[color:var(--subtle)]">{snapshots.length} 张</span>
+              <span className="ui-field-label">合集</span>
+              <span className="text-[9px] text-[color:var(--subtle)]">{memberships.filter(c => c.has).length} 个</span>
             </div>
-            {snapshots.length ? (
-              <div className="mt-2 grid grid-cols-3 gap-1.5">
-                {snapshots.slice(0, 9).map(s => (
-                  <button
-                    key={s.name}
-                    type="button"
-                    title={`跳转到 ${s.time.toFixed(1)}s`}
-                    onClick={() => { setSeek(s.time); setPlaying(true) }}
-                    className="group relative overflow-hidden rounded-md border border-[color:var(--border)] bg-black"
-                  >
-                    <img src={s.url} alt={`快照 ${s.time.toFixed(1)} 秒`} className="aspect-video w-full object-cover opacity-80 transition-opacity group-hover:opacity-100" loading="lazy" />
-                    <span className="absolute inset-x-0 bottom-0 bg-black/65 px-1 py-0.5 text-[8px] text-white">{s.time.toFixed(1)}s</span>
-                  </button>
-                ))}
-              </div>
-            ) : (
-              <div className="mt-2 text-[9px] leading-4 text-[color:var(--subtle)]">播放时点「快照」记录当前进度和画面，存在项目 data/snapshots。</div>
-            )}
+            <div className="mt-2 flex flex-wrap gap-1">
+              {memberships.map(col => (
+                <button
+                  key={col.id}
+                  type="button"
+                  onClick={() => toggleCollection(col)}
+                  className={cn(
+                    'inline-flex items-center gap-1 rounded-md border px-1.5 py-1 text-[9px] transition-colors',
+                    col.has
+                      ? 'border-[color:color-mix(in_srgb,var(--primary)_35%,var(--border))] bg-[color:color-mix(in_srgb,var(--primary)_8%,transparent)] text-[color:var(--primary-2)]'
+                      : 'border-[color:var(--border)] bg-[color:var(--surface-2)] text-[color:var(--muted)] hover:border-[color:var(--border-strong)]',
+                  )}
+                >
+                  <span className="size-1.5 rounded-full" style={{ background: col.color }} />
+                  {col.name}
+                  {col.has ? <Check className="size-2.5" /> : null}
+                </button>
+              ))}
+              {!memberships.length ? <span className="text-[9px] text-[color:var(--subtle)]">还没有合集</span> : null}
+            </div>
+            <div className="mt-1.5 text-[8.5px] text-[color:var(--subtle)]">点击合集加入 / 移出；快照显示在播放时间轴上。</div>
           </div>
         </aside>
       </DialogContent>
     </Dialog>
+    {createPortal(
+      <div className="pointer-events-none fixed inset-y-0 left-2 right-2 z-[75] flex items-center justify-between">
+        <IconButton label="上一项" className="pointer-events-auto size-11 border-white/20 bg-black/60 text-white backdrop-blur hover:bg-black/75" onClick={() => prev && onNavigate(prev.token)} disabled={!prev}>
+          <ChevronLeft className="size-5" />
+        </IconButton>
+        <IconButton label="下一项" className="pointer-events-auto size-11 border-white/20 bg-black/60 text-white backdrop-blur hover:bg-black/75" onClick={() => next && onNavigate(next.token)} disabled={!next}>
+          <ChevronRight className="size-5" />
+        </IconButton>
+      </div>,
+      document.body,
+    )}
+    </>
   )
 }
 

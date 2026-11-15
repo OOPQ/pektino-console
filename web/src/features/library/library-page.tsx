@@ -266,7 +266,7 @@ export function LibraryPage() {
   const flagLabel = FLAG_OPTIONS.find(f => f.value === flag)?.label || '不限标记'
 
   return (
-    <div className="space-y-3 p-4">
+    <div className="flex h-full min-h-0 flex-col gap-3 p-4">
       <div className="grid grid-cols-[repeat(auto-fit,minmax(130px,1fr))] gap-2">
         <StatCard icon={Library} label="总数" value={formatCount(stats?.total || 0)} active={status === 'all' && flag === 'none'} onClick={() => { setStatus('all'); setFlag('none') }} />
         <StatCard icon={Download} label="待下载" value={formatCount(stats?.new || 0)} active={status === 'new'} onClick={() => { setStatus('new'); setFlag('none') }} />
@@ -403,25 +403,27 @@ export function LibraryPage() {
         </div>
       </div>
 
-      {view === 'table' ? (
-        <LibraryTable
-          rows={visible}
-          selected={selected}
-          onToggle={toggleSelected}
-          onTogglePage={togglePage}
-          onOpen={openPreview}
-          onFav={onFav}
-          multi={multi}
-          menu={menu}
-          sortKey={sortKey}
-          sortDir={sortDir}
-          onSort={sort}
-        />
-      ) : (
-        <LibraryGallery rows={visible} selected={selected} onToggle={toggleSelected} onOpen={openPreview} onFav={onFav} onRate={menu.rate} onDownload={menu.download} menu={menu} />
-      )}
+      <div className="ui-scroll min-h-0 flex-1 overflow-auto pr-0.5">
+        {view === 'table' ? (
+          <LibraryTable
+            rows={visible}
+            selected={selected}
+            onToggle={toggleSelected}
+            onTogglePage={togglePage}
+            onOpen={openPreview}
+            onFav={onFav}
+            multi={multi}
+            menu={menu}
+            sortKey={sortKey}
+            sortDir={sortDir}
+            onSort={sort}
+          />
+        ) : (
+          <LibraryGallery rows={visible} selected={selected} onToggle={toggleSelected} onOpen={openPreview} onFav={onFav} onRate={menu.rate} onDownload={menu.download} menu={menu} />
+        )}
+      </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[color:var(--border)] pt-3">
+      <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-[color:var(--border)] pt-3">
         <div className="text-[10px] text-[color:var(--subtle)]">
           {sorted.length ? `${(safePage - 1) * (per || sorted.length) + 1}-${Math.min(safePage * (per || sorted.length), sorted.length)} / ${sorted.length}` : '0 / 0'}
         </div>
@@ -481,7 +483,7 @@ function pageNumbers(page: number, pages: number) {
 
 function LibrarySkeleton() {
   return (
-    <div className="space-y-3 p-4">
+    <div className="flex h-full min-h-0 flex-col gap-3 p-4">
       <div className="grid grid-cols-[repeat(auto-fit,minmax(130px,1fr))] gap-2">
         {Array.from({ length: 7 }, (_, i) => <Skeleton key={i} className="h-[68px] rounded-[12px]" />)}
       </div>

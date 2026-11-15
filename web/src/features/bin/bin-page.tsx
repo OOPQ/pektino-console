@@ -1,6 +1,6 @@
 import * as React from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { RotateCcw, Search, Trash2, Undo2 } from 'lucide-react'
+import { ChevronDown, RotateCcw, Search, Trash2, Undo2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAppState } from '@/features/use-app-state'
 import { confirmAction } from '@/store/confirm'
@@ -27,6 +27,16 @@ export function BinPage() {
     return !q || [r.token, r.title, r.source].join(' ').toLowerCase().includes(q)
   })
   const totalBytes = rows.reduce((sum, r) => sum + (Number(r.file_size) || 0), 0)
+  const groups = React.useMemo(() => {
+    const map = new Map<string, Row[]>()
+    for (const row of visible) {
+      const raw = row.file_date || row.last_seen || row.first_seen || ''
+      const date = raw.slice(0, 10) || '未知日期'
+      if (!map.has(date)) map.set(date, [])
+      map.get(date)!.push(row)
+    }
+    return [...map.entries()].sort((a, b) => b[0].localeCompare(a[0]))
+  }, [visible])
 
   const after = () => qc.invalidateQueries({ queryKey: ['state'] })
 
@@ -111,33 +121,20 @@ export function BinPage() {
         </div>
       ) : (
         <div className="space-y-2">
-          {visible.map(row => (
-            <Card key={row.token} className="flex items-center gap-2.5 p-2.5">
-              <CoverImage token={row.token} className="h-[72px] w-[54px] shrink-0 rounded-lg" alt={rowTitle(row)} />
-              <div className="min-w-0 flex-1">
-                <div className="flex min-w-0 items-center gap-2">
-                  <div className="truncate text-[11.5px] font-medium">{rowTitle(row)}</div>
-                  <StatusBadge status={row.status} />
-                </div>
-                <div className="mt-0.5 truncate text-[9.5px] text-[color:var(--subtle)]">
-                  <span className="ui-mono">{row.token}</span>
-                  {row.source ? <span> · {row.source}</span> : null}
-                  {row.file_size ? <span> · {formatBytes(row.file_size)}</span> : null}
-                </div>
-                <div className="mt-0.5 truncate text-[9.5px] text-[color:var(--subtle)]">
-                  {row.title ? `${row.duration || '—'} · ${row.res || '—'} · ` : ''}
-                  最后入库 {formatDate(row.first_seen)}
-                </div>
+          {groups.map(([date, items]) => (
+            <details key={date} open className="group overflow-hidden rounded-[var(--radius-card)] border border-[color:var(--border)] bg-[color:var(--surface)]">
+              <summary className="flex cursor-pointer list-none items-center gap-2 px-3 py-2 text-[10.5px] text-[color:var(--muted)] [&::-webkit-details-marker]:hidden">
+                <ChevronDown className="size-3.5 -rotate-90 text-[color:var(--subtle)] transition-transform group-open:rotate-0" />
+                <span className="font-medium text-[color:var(--foreground)]">{date}</span>
+                <span className="text-[color:var(--subtle)]">{items.length} 条</span>
+                <span className="ml-auto text-[9.5px] text-[color:var(--subtle)]">{formatBytes(items.reduce((sum, r) => sum + (Number(r.file_size) || 0), 0))}</span>
+              </summary>
+              <div className="space-y-2 border-t border-[color:var(--border)] p-2.5">
+                {items.map(row => (
+                  <BinRow key={row.token} row={row} busy={busy === row.token} onRestore={() => restore([row.token])} onPurge={() => purge([row.token], row)} />
+                ))}
               </div>
-              <div className="flex shrink-0 items-center gap-1">
-                <Button size="sm" variant="outline" onClick={() => restore([row.token])} disabled={busy === row.token}>
-                  <Undo2 className="size-3.5" /> 恢复
-                </Button>
-                <IconButton label="彻底删除" size="sm" tone="danger" onClick={() => purge([row.token], row)} disabled={busy === row.token}>
-                  <Trash2 className="size-3.5" />
-                </IconButton>
-              </div>
-            </Card>
+            </details>
           ))}
         </div>
       )}
@@ -145,6 +142,36 @@ export function BinPage() {
   )
 }
 
+function BinRow({ row, busy, onRestore, onPurge }: { row: Row; busy: boolean; onRestore: () => void; onPurge: () => void }) {
+  return (
+    <Card className="flex items-center gap-2.5 p-2.5">
+      <CoverImage token={row.token} className="h-[72px] w-[54px] shrink-0 rounded-lg" alt={rowTitle(row)} />
+      <div className="min-w-0 flex-1">
+        <div className="flex min-w-0 items-center gap-2">
+          <div className="truncate text-[11.5px] font-medium">{rowTitle(row)}</div>
+          <StatusBadge status={row.status} />
+        </div>
+        <div className="mt-0.5 truncate text-[9.5px] text-[color:var(--subtle)]">
+          <span className="ui-mono">{row.token}</span>
+          {row.source ? <span> · {row.source}</span> : null}
+          {row.file_size ? <span> · {formatBytes(row.file_size)}</span> : null}
+        </div>
+        <div className="mt-0.5 truncate text-[9.5px] text-[color:var(--subtle)]">
+          {row.title ? `${row.duration || '—'} · ${row.res || '—'} · ` : ''}
+          最后入库 {formatDate(row.first_seen)}
+        </div>
+      </div>
+      <div className="flex shrink-0 items-center gap-1">
+        <Button size="sm" variant="outline" onClick={onRestore} disabled={busy}>
+          <Undo2 className="size-3.5" /> 恢复
+        </Button>
+        <IconButton label="彻底删除" size="sm" tone="danger" onClick={onPurge} disabled={busy}>
+          <Trash2 className="size-3.5" />
+        </IconButton>
+      </div>
+    </Card>
+  )
+}
 function BinSkeleton() {
   return (
     <div className="space-y-3 p-4">

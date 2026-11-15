@@ -390,7 +390,7 @@ if (e.key === 'f' || e.key === 'F') { e.preventDefault(); e.stopImmediatePropaga
 
   return (
     <>
-<Dialog open={!!token} modal={false} onOpenChange={open => { if (!open) onClose() }}>
+<Dialog open={!!token} onOpenChange={open => { if (!open) onClose() }}>
       <DialogContent
         onOpenAutoFocus={e => e.preventDefault()}
         onFocus={e => { if (e.target === e.currentTarget) e.currentTarget.blur() }}

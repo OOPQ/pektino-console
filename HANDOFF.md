@@ -112,11 +112,34 @@ c4cf594 feat(player): 自动续播 + 音量记忆（v2.1.0 tag）
 - 播放器本地续播/音量记忆在 `localStorage`；全库此前审计均为 H.264/AAC
 - 多选：表格勾选、画廊滑动勾选；Esc 退出多选
 
+## 2026-11-15 优化进展
+
+`ce27711` + `e0799be` 完成了三批（正确性/安全 → 性能 → 边界修正），隔离项目冒烟 25/25：
+
+- 修复：HLS 截断视频被记 done、增量抓取标题被裸 token 覆盖、`test.ps1` 端口占用不退出、
+  qise Cookie 被“保存设置”清空、标题/日志/备注的存储型 XSS、脏数值让 `/api/state` 500、
+  切筛选后 Shift 选择误选整个区间。
+- 性能：扫描/刷新/任务收尾/失效复核只落库变化行；项目概况复用扫描索引；空闲不再枚举进程；
+  缩略图编码器缓存；前端 load single-flight、队列抽屉按需渲染、KPI 与表格共用一次筛选排序。
+- 清理：`console.log`/`.scrape.csv.log` 超 5MB 轮转，下载成功后清 `.dl-*` 临时文件；
+  缺封面统计按 token 去重。
+- 回归验证：HLS 失败不产生 `.mp4`、标题保护、脏数值容错、qise Cookie 回填/保存、
+  XSS 不执行、队列 200 条完成项渲染、Shift 区间、`start.cmd` 不杀运行中实例。
+
+### 下一批候选（尚未做）
+
+- `/api/refresh-url`、`/api/covers/repair`、`/api/import/local` 仍是同步长任务，主循环会被卡住：建议 job 化。
+- qise/hsex 抓取失败会静默返回“成功 0 条”，需要终态非 0 校验。
+- “全部”页大小会一次渲染几千行，建议分批或虚拟滚动。
+- SSE 慢客户端写入最长阻塞 8 秒；`/api/state` 仍会每 2 秒携带完整下载队列 items，可做按需下发。
+
 ## 已知问题 / 风险
 
-1. **控制台被测试/后台 job 终止**
-   - `app\dev\test.ps1 -Start` 和旧的 stop 逻辑可能把正在运行的控制台一起停掉。
-   - 跑测试前先确认能否接受中断；跑完重新 `start.cmd`。
+1. **测试与正在运行的控制台**
+   - `app\dev\test.ps1 -Start` 现在遇到端口占用会直接退出（exit 2），启动后还会硬校验 `/api/state` 的项目根；
+     不会再像以前那样在端口冲突时对真实项目跑 `/api/config`、`/api/download/reset` 等写操作。
+   - `start.cmd` 只有带 `-Restart` 才会先停旧实例；普通双击交给 `console.ps1` 判活后直接开浏览器，
+     不会中断正在进行的下载。
 
 2. **PowerShell 文件必须是 UTF-8 BOM + CRLF**
    - 曾经因为 `console.ps1` 丢 BOM，PowerShell 5.1 按 ANSI 解析，报一堆假语法错误。
@@ -172,7 +195,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File app\dev\test.ps1 -Start -Por
 
 ## 交接时状态
 
-- 控制台当前可能未运行（最后一个后台 job 被 DSH 杀掉）
-- 代码在 `main`，领先远端 4 个提交
+- 控制台当前未运行（本轮测试都在 8674/8677-8682 等临时端口 + 临时项目，跑完已清理）
+- 代码在 `main`，领先远端 2 个提交（`ce27711`、`e0799be`）
 - 没有进行中的下载/抓取任务需要保留
-- 下一步由新会话按用户新指令决定，不要擅自发版或重构
+- 下一批候选见上面「2026-11-15 优化进展」，不要擅自发版或大重构

@@ -518,7 +518,6 @@ const [per, setPer] = React.useState(Number(searchParams.get('per')) || 50)
       <div className="ui-scroll min-h-0 flex-1 overflow-auto pr-0.5">
         {view === 'table' ? (
           <LibraryTable
-            downloads={downloadMap}
             rows={visible}
             selected={selected}
             onToggle={toggleSelected}

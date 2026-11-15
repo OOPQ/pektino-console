@@ -32,7 +32,8 @@ import { Button } from '@/components/ui/button'
 import { Dialog, DialogClose, DialogContent } from '@/components/ui/dialog'
 import { IconButton } from '@/components/ui/icon-button'
 import { RatingInput } from '@/components/rating-input'
-import { DownloadStatus } from './download-status'
+import { downloadButtonLabel, isDownloadBusy } from './download-status'
+import { StatusBadge } from '@/components/status-badge'
 import { CoverImage } from '@/components/cover-image'
 
 type Props = {
@@ -502,8 +503,8 @@ if (e.key === 'f' || e.key === 'F') { e.preventDefault(); e.stopImmediatePropaga
                 画中画
               </Button>
               {!row.file_name ? (
-                <Button size="sm" variant="outline" onClick={download} disabled={downloading}>
-                  <Download className="size-3.5" /> {downloading ? '提交中…' : '下载'}
+                <Button size="sm" variant="outline" onClick={download} disabled={downloading || (!!downloadItem && isDownloadBusy(row, downloadItem))} title={downloadItem?.error || downloadButtonLabel(row, downloadItem)}>
+                  <Download className="size-3.5" /> {downloading ? '提交中…' : downloadButtonLabel(row, downloadItem)}
                 </Button>
               ) : null}
               <DialogClose asChild>
@@ -664,7 +665,7 @@ onPlay={() => { setIsPlaying(true); if (videoRef.current) videoRef.current.playb
             <span className="text-[10px] text-[color:var(--subtle)]">{row.res || '—'}</span>
           </div>
           <div className="mt-1 flex items-center gap-2">
-<DownloadStatus row={row} item={downloadItem} />
+            <StatusBadge status={row.status} />
             <RatingInput value={row.rating} onChange={setRating} />
           </div>
 

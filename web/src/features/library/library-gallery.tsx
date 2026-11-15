@@ -8,7 +8,8 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { IconButton } from '@/components/ui/icon-button'
 import { RatingInput } from '@/components/rating-input'
 import { CoverImage } from '@/components/cover-image'
-import { DownloadStatus } from './download-status'
+import { downloadButtonLabel, isDownloadBusy } from './download-status'
+import { Button } from '@/components/ui/button'
 import { RowContextMenu, type RowMenuActions } from './row-context-menu'
 
 type Props = {
@@ -59,9 +60,6 @@ export function LibraryGallery({ rows, downloads, selected, onToggle, onOpen, on
                   </div>
                 ) : null}
 
-                {row.status === 'new' && dl ? (
-                  <span className="absolute right-2 top-2 z-10"><DownloadStatus row={row} item={dl} /></span>
-                ) : null}
                 <span className="absolute bottom-2 left-2 z-10 rounded-md border border-white/15 bg-black/55 px-2 py-0.5 text-[12px] font-semibold text-white/90 backdrop-blur">
                   {row.duration || '—'}
                 </span>
@@ -89,9 +87,16 @@ export function LibraryGallery({ rows, downloads, selected, onToggle, onOpen, on
                       <Check className="size-3.5" />
                     </IconButton>
                   ) : (
-                    <IconButton label="下载" size="sm" onClick={() => onDownload(row)}>
-                      <Download className="size-3.5" />
-                    </IconButton>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-7 gap-1 px-1.5 text-[9px]"
+                      disabled={!!dl && isDownloadBusy(row, dl)}
+                      title={dl?.error || downloadButtonLabel(row, dl)}
+                      onClick={() => onDownload(row)}
+                    >
+                      <Download className="size-3.5" /> {downloadButtonLabel(row, dl)}
+                    </Button>
                   )}
                   <IconButton
                     label={row.fav === '1' ? '取消收藏' : '收藏'}
@@ -100,7 +105,7 @@ export function LibraryGallery({ rows, downloads, selected, onToggle, onOpen, on
                     onClick={() => onFav(row)}
                   >
                     <Heart className={cn('size-3.5', row.fav === '1' && 'fill-current')} />
-                  </IconButton>
+                    </IconButton>
                 </div>
               </CardFooter>
             </Card>

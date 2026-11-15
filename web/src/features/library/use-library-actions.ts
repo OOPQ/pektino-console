@@ -78,7 +78,7 @@ export function useLibraryActions() {
 
   const recycle = async (tokens: string[]) => {
     try {
-      const r = await post<{ ok: boolean; error?: string }>('/api/delete', { tokens, purge: false, permanent: false })
+      const r = await post<{ ok: boolean; error?: string }>('/api/mark', { tokens, status: 'recycled' })
       if (!r.ok) throw new Error(r.error || '移入回收站失败')
       toast.success(`已移入回收站 · ${tokens.length} 条`)
       invalidate()

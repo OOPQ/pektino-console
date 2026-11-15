@@ -22,6 +22,7 @@ export function filterRows(rows: Row[], f: LibraryFilters) {
   const todayStr = today()
 
   return rows.filter(row => {
+    if (row.status === 'recycled') return false
     if (f.status !== 'all' && row.status !== f.status) return false
     if (f.source !== 'all' && row.source !== f.source) return false
 

@@ -828,7 +828,11 @@ function Handle-Request {
             '/api/delete' {
                 $tokens = @()
                 if ($body.tokens) { $tokens = @($body.tokens | ForEach-Object { [string]$_ }) }
-                Send-Json -Stream $Stream -Object (Invoke-DeleteFiles -Tokens $tokens -Purge:([bool]$body.purge) -Permanent:([bool]$body.permanent))
+                if (-not [bool]$body['purge']) {
+                    Send-Json -Stream $Stream -Object (Invoke-Mark -Tokens $tokens -Status 'recycled')
+                    return
+                }
+                Send-Json -Stream $Stream -Object (Invoke-DeleteFiles -Tokens $tokens -Purge:$true -Permanent:([bool]$body['permanent']))
                 return
             }
             '/api/import/local' {

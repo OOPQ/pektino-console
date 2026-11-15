@@ -64,7 +64,7 @@ function Get-Stats {
     if ($State.Scan) { $orphans = @($State.Scan.orphans) }
 
     [pscustomobject]@{
-        total       = $rows.Count
+        total       = $rows.Count - $counts['recycled']
         new         = $counts['new']
         done        = $counts['done']
         recycled    = $counts['recycled']

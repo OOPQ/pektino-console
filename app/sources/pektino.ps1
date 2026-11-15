@@ -29,6 +29,18 @@ function Get-PektinoHttpClient {
     return $client
 }
 
+function Get-PektinoPage {
+    param($Client, [string]$Url, [int]$Attempts = 3)
+    for ($i = 1; $i -le $Attempts; $i++) {
+        try {
+            $html = $Client.GetStringAsync($Url).GetAwaiter().GetResult()
+            if ($html -and $html -match '/zh-CN/movie/') { return $html }
+        } catch { }
+        if ($i -lt $Attempts) { Start-Sleep -Milliseconds (250 * $i) }
+    }
+    return ''
+}
+
 function Get-PektinoLdJson {
     param([string]$Html)
     $out = New-Object System.Collections.ArrayList
@@ -184,7 +196,7 @@ function Invoke-PektinoScrape {
             if ($p -lt 1) { continue }
             $url = $script:PektinoBase + $script:PektinoRankPath[$rank]
             if ($p -gt 1) { $url += "?page=$p" }
-            try { $html = $client.GetStringAsync($url).GetAwaiter().GetResult() } catch { continue }
+            $html = Get-PektinoPage -Client $client -Url $url
             $i = 0
             foreach ($m in [regex]::Matches($html, '/zh-CN/movie/([A-Za-z0-9_\-]+)')) {
                 $tk = $m.Groups[1].Value
@@ -199,9 +211,10 @@ function Invoke-PektinoScrape {
             Write-SourceProgress -Path $progress -Phase 'list' -Done $pi -Total $pages.Count -Started $started
         }
         if ($targets.Count -eq 0 -and $rank -eq 'daily') {
-            # 日榜根路径已改为文章列表；用周榜的 SSR 榜单页作为兼容回退，避免抓到失效外链。
-            try {
-                $html = $client.GetStringAsync("$script:PektinoBase/zh-CN/weekly").GetAwaiter().GetResult()
+            # 日榜根路径已改为文章列表；依次用榜单 SSR 页兼容回退。
+            foreach ($candidate in @('weekly', 'monthly', 'all')) {
+                $html = Get-PektinoPage -Client $client -Url "$script:PektinoBase/zh-CN/$candidate"
+                if (-not $html) { continue }
                 $i = 0
                 foreach ($m in [regex]::Matches($html, '/zh-CN/movie/([A-Za-z0-9_\-]+)')) {
                     $tk = $m.Groups[1].Value
@@ -213,7 +226,8 @@ function Invoke-PektinoScrape {
                             id = $tk; page = 1; rank = $i; detail_url = ''; title = ''; cover_url = ''
                         })
                 }
-            } catch { }
+                if ($targets.Count -gt 0) { break }
+            }
         }
         if ($targets.Count -eq 0) { throw '没能从榜单页拿到任何条目，站点结构可能变了' }
         if ($Options.limit -and [int]$Options.limit -gt 0) {

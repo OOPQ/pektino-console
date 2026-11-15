@@ -488,6 +488,11 @@ function Invoke-Mark {
     foreach ($r in @($State.Ledger)) {
         if ($Tokens -contains $r.token) { [void]$changed.Add($r) }
     }
+    $nowStamp = (Get-Date).ToString('yyyy-MM-dd HH:mm:ss')
+    foreach ($r in @($changed)) {
+        if ($Status -eq 'recycled') { if (-not $r.recycled_at) { $r.recycled_at = $nowStamp } }
+        else { $r.recycled_at = '' }
+    }
     $n = Set-LedgerStatus -Rows @($changed) -Tokens $Tokens -Status $Status -Note $Note
     if ($n -gt 0) { Save-Ledger -Rows @($changed) -NoSnapshot; Touch-State }
     Write-Log 'mark' "标记 $n 条为 $Status"

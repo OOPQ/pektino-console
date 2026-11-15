@@ -90,7 +90,8 @@ CREATE TABLE IF NOT EXISTS items (
   file_date  TEXT DEFAULT '',
   play_count TEXT DEFAULT '',
   last_play  TEXT DEFAULT '',
-  rating     TEXT DEFAULT ''
+  rating     TEXT DEFAULT '',
+  recycled_at TEXT DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS idx_items_status ON items(status);
 CREATE INDEX IF NOT EXISTS idx_items_fav ON items(fav);
@@ -146,7 +147,7 @@ CREATE INDEX IF NOT EXISTS idx_collection_items_token ON collection_items(token)
     $r = $cmd.ExecuteReader()
     while ($r.Read()) { $have[[string]$r.GetValue(1)] = $true }
     $r.Close()
-    foreach ($col in @('play_count', 'last_play', 'rating', 'fav', 'file_name', 'file_path', 'file_size', 'file_date',
+    foreach ($col in @('play_count', 'last_play', 'rating', 'recycled_at', 'fav', 'file_name', 'file_path', 'file_size', 'file_date',
             'source', 'source_id', 'title', 'cover_url', 'download_kind', 'download_headers', 'extra')) {
         if (-not $have.ContainsKey($col)) {
             $cmd.CommandText = "ALTER TABLE items ADD COLUMN $col TEXT DEFAULT ''"
@@ -205,7 +206,7 @@ function Get-StoreConnection {
 function Get-StoreItems {
     $conn = Get-StoreConnection
     $cmd = $conn.CreateCommand()
-    $cmd.CommandText = 'SELECT token,status,fav,rank,page,duration,seconds,res,views,likes,uploaded,url,page_url,site,source,source_id,title,cover_url,download_kind,download_headers,extra,first_seen,last_seen,sent_at,note,file_name,file_path,file_size,file_date,play_count,last_play,rating FROM items ORDER BY CAST(rank AS INTEGER) ASC, token ASC'
+    $cmd.CommandText = 'SELECT token,status,fav,rank,page,duration,seconds,res,views,likes,uploaded,url,page_url,site,source,source_id,title,cover_url,download_kind,download_headers,extra,first_seen,last_seen,sent_at,note,file_name,file_path,file_size,file_date,play_count,last_play,rating,recycled_at FROM items ORDER BY CAST(rank AS INTEGER) ASC, token ASC'
     $r = $cmd.ExecuteReader()
     $rows = New-Object System.Collections.ArrayList
     while ($r.Read()) {
@@ -224,7 +225,7 @@ function Save-StoreItems {
     param($Rows)
 
     $conn = Get-StoreConnection
-    $cols = 'token','status','fav','rank','page','duration','seconds','res','views','likes','uploaded','url','page_url','site','source','source_id','title','cover_url','download_kind','download_headers','extra','first_seen','last_seen','sent_at','note','file_name','file_path','file_size','file_date','play_count','last_play','rating'
+    $cols = 'token','status','fav','rank','page','duration','seconds','res','views','likes','uploaded','url','page_url','site','source','source_id','title','cover_url','download_kind','download_headers','extra','first_seen','last_seen','sent_at','note','file_name','file_path','file_size','file_date','play_count','last_play','rating','recycled_at'
     $sql = "INSERT OR REPLACE INTO items ($($cols -join ',')) VALUES ($(($cols | ForEach-Object { '@' + $_ }) -join ','))"
 
     $tx = $conn.BeginTransaction()
@@ -496,7 +497,7 @@ function Write-CsvSnapshot {
     if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
     $tmp = "$Path.tmp"
 
-    $cols = 'token','status','fav','rank','page','duration','seconds','res','views','likes','uploaded','url','page_url','site','source','source_id','title','cover_url','download_kind','download_headers','extra','first_seen','last_seen','sent_at','note','file_name','file_path','file_size','file_date','play_count','last_play','rating'
+    $cols = 'token','status','fav','rank','page','duration','seconds','res','views','likes','uploaded','url','page_url','site','source','source_id','title','cover_url','download_kind','download_headers','extra','first_seen','last_seen','sent_at','note','file_name','file_path','file_size','file_date','play_count','last_play','rating','recycled_at'
     @($Rows) | Select-Object $cols | Export-Csv -Path $tmp -NoTypeInformation -Encoding UTF8
 
     # 每日备份一份

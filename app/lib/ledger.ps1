@@ -14,7 +14,7 @@
 $script:LedgerColumns = @(
     'token', 'status', 'fav', 'rank', 'page', 'duration', 'seconds', 'res', 'views', 'likes',
     'uploaded', 'url', 'page_url', 'first_seen', 'last_seen', 'sent_at', 'note',
-    'file_name', 'file_path', 'file_size', 'file_date', 'play_count', 'last_play', 'rating'
+    'file_name', 'file_path', 'file_size', 'file_date', 'play_count', 'last_play', 'rating', 'recycled_at'
 )
 
 # 存储层（SQLite）。ledger.ps1 只保留业务语义：合并、状态、配置、扫盘。

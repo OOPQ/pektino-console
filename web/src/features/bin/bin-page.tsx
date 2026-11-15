@@ -30,8 +30,8 @@ export function BinPage() {
   const groups = React.useMemo(() => {
     const map = new Map<string, Row[]>()
     for (const row of visible) {
-      const raw = row.file_date || row.last_seen || row.first_seen || ''
-      const date = raw.slice(0, 10) || '未知日期'
+      const raw = row.recycled_at || ''
+      const date = raw.slice(0, 10) || '历史记录'
       if (!map.has(date)) map.set(date, [])
       map.get(date)!.push(row)
     }
@@ -158,7 +158,7 @@ function BinRow({ row, busy, onRestore, onPurge }: { row: Row; busy: boolean; on
         </div>
         <div className="mt-0.5 truncate text-[9.5px] text-[color:var(--subtle)]">
           {row.title ? `${row.duration || '—'} · ${row.res || '—'} · ` : ''}
-          最后入库 {formatDate(row.first_seen)}
+          进入回收站 {row.recycled_at ? formatDate(row.recycled_at) : '历史记录'}
         </div>
       </div>
       <div className="flex shrink-0 items-center gap-1">

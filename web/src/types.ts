@@ -31,6 +31,7 @@ export type Row = {
   play_count: string
   last_play: string
   rating: string
+  recycled_at?: string
 }
 
 export type Stats = {

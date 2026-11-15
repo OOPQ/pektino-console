@@ -7,7 +7,10 @@ export function useAppState(refetchMs = 15_000) {
     queryKey: ['state'],
     queryFn: ({ signal }) => fetchState(signal),
     staleTime: 5_000,
-    refetchInterval: refetchMs,
+    refetchInterval: query => {
+      const state = query.state.data as AppState | undefined
+      return state?.job?.running ? 1_500 : refetchMs
+    },
     refetchOnWindowFocus: false,
   })
 }

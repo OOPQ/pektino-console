@@ -16,6 +16,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { useAppState } from '@/features/use-app-state'
 import { useUiStore } from '@/store/ui'
 import { cn, formatCount } from '@/lib/utils'
+import { toast } from 'sonner'
 import { IconButton } from '@/components/ui/icon-button'
 import { Button } from '@/components/ui/button'
 
@@ -198,10 +199,38 @@ function Topbar() {
 export function AppShell() {
   const theme = useUiStore(s => s.theme)
   const setTheme = useUiStore(s => s.setTheme)
+  const { data } = useAppState()
+  const wasRunning = React.useRef(false)
+  const lastResult = React.useRef('')
 
   React.useEffect(() => {
     setTheme(theme)
   }, [theme, setTheme])
+
+  React.useEffect(() => {
+    const job = data?.job
+    if (!job) return
+    if (job.running) { wasRunning.current = true; return }
+    let pending = false
+    try { pending = sessionStorage.getItem('pektino.scrapePending') === '1' } catch { }
+    let pendingAt = 0
+    try { pendingAt = Number(sessionStorage.getItem('pektino.scrapePendingAt') || 0) } catch { }
+    if (!wasRunning.current && !pending) return
+    const p = job.progress
+    if (!p || (p.phase !== 'done' && p.phase !== 'failed')) return
+    const key = `${p.at || ''}|${p.phase}|${p.added || 0}|${p.updated || 0}|${p.count || 0}`
+    if (key === lastResult.current) return
+    if (pending && p.finishedAt && pendingAt && p.finishedAt < pendingAt - 3000) return
+    lastResult.current = key
+    wasRunning.current = false
+    try { sessionStorage.removeItem('pektino.scrapePending'); sessionStorage.removeItem('pektino.scrapePendingAt') } catch { }
+    if (p.phase === 'failed') {
+      toast.error('抓取失败', { description: p.error || '任务没有正常完成', duration: 7000 })
+      return
+    }
+    const title = p.kind === 'import' ? '导入完成' : '抓取完成'
+    toast.success(`${title}：新增 ${p.added || 0}，更新 ${p.updated || 0}`, { description: p.count ? `本轮共处理 ${p.count} 条` : undefined, duration: 7000 })
+  }, [data?.job, data?.job?.running, data?.job?.progress?.phase, data?.job?.progress?.at])
 
   return (
     <div className="flex h-screen overflow-hidden">

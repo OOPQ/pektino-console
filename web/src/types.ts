@@ -85,6 +85,29 @@ export type Snapshot = {
   url: string
 }
 
+export type JobProgress = {
+  phase?: string
+  done?: number
+  total?: number
+  elapsed?: number
+  speed?: number
+  eta?: number
+  at?: string
+  added?: number
+  updated?: number
+  count?: number
+  kind?: string
+  error?: string
+  finishedAt?: number
+}
+
+export type Job = {
+  running?: boolean
+  elapsed?: number
+  rank?: string
+  progress?: JobProgress | null
+}
+
 export type AppState = {
   ok: boolean
   api: number
@@ -119,7 +142,7 @@ export type AppState = {
       history?: boolean
     }>
   }
-  job?: unknown
+  job?: Job
   log?: unknown
   project?: unknown
   resume?: unknown

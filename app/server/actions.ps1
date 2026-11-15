@@ -383,6 +383,20 @@ function Start-Import {
     return @{ ok = $true; started = $true }
 }
 
+function Write-JobResult {
+    param([string]$Phase = 'done', [int]$Added = 0, [int]$Updated = 0, [int]$Count = 0, [double]$Elapsed = 0, [string]$Kind = '', [string]$ErrorText = '')
+    if (-not $ProgressFile) { return }
+    try {
+        $speed = if ($Elapsed -gt 0) { [math]::Round($Count / $Elapsed, 2) } else { 0 }
+        $obj = [pscustomobject]@{
+            phase = $Phase; done = $Count; total = $Count; elapsed = [math]::Round($Elapsed, 1)
+            speed = $speed; eta = 0; at = (Get-Date -Format 'HH:mm:ss')
+            added = $Added; updated = $Updated; count = $Count; kind = $Kind; error = $ErrorText; finishedAt = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
+        }
+        $obj | ConvertTo-Json -Compress | Set-Content -LiteralPath $ProgressFile -Encoding UTF8
+    } catch { }
+}
+
 function Update-Job {
     if (-not $State.Job) { return }
     $j = $State.Job.handle
@@ -413,22 +427,27 @@ function Update-Job {
                 $mergeOk = $true
                 if ($kind -eq 'import') {
                     Write-Log 'import' "本地入库完成（$secs s）：新增 $($merged.Added)，更新 $($merged.Updated)，可识别 $($scraped.Count) 个文件"
+                Write-JobResult -Phase 'done' -Added ([int]$merged.Added) -Updated ([int]$merged.Updated) -Count ([int]$scraped.Count) -Elapsed $secs -Kind $kind
                 } else {
                     Write-Log 'scrape' "抓取完成（$secs s）：新增 $($merged.Added)，更新 $($merged.Updated)，共 $($scraped.Count) 条"
+                Write-JobResult -Phase 'done' -Added ([int]$merged.Added) -Updated ([int]$merged.Updated) -Count ([int]$scraped.Count) -Elapsed $secs -Kind $kind
                 }
             } catch {
                 Write-Log 'error' "导入结果失败（保留 CSV 待重试）: $($_.Exception.Message)"
+            Write-JobResult -Phase 'failed' -Elapsed $secs -Kind $kind -ErrorText $_.Exception.Message
             }
             # 合并/落盘失败时保留抓取结果，别把整轮数据删掉
             if ($mergeOk) { Remove-Item $TmpCsv -Force -ErrorAction SilentlyContinue }
         } else {
             Write-Log 'error' "$kind 结束但没有产出 CSV"
+            Write-JobResult -Phase 'failed' -Elapsed $secs -Kind $kind -ErrorText '没有产出 CSV'
             try { Write-FileLog "$kind finished without CSV" } catch { }
         }
     } else {
         $detail = ''
         try { $detail = (@($j.ChildJobs[0].Error) | Select-Object -First 1).ToString() } catch { }
         Write-Log 'error' "$kind 任务失败（$($j.State)）：$detail"
+        Write-JobResult -Phase 'failed' -Elapsed $secs -Kind $kind -ErrorText $detail
         try { Write-FileLog "$kind job failed ($($j.State)): $detail" } catch { }
     }
 

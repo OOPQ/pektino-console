@@ -66,6 +66,7 @@ export function ScrapeDialog({
         toast.success('已开始获取数据')
       }
       qc.invalidateQueries({ queryKey: ['state'] })
+      try { sessionStorage.setItem('pektino.scrapePending', '1'); sessionStorage.setItem('pektino.scrapePendingAt', String(Date.now())) } catch { }
       onOpenChange(false)
     } catch (e) {
       toast.error((e as Error).message)
@@ -171,6 +172,7 @@ export function LinkScrapeDialog({
       const r = await post<{ ok: boolean; error?: string }>('/api/scrape', { url: value })
       if (!r.ok) throw new Error(r.error || '抓取失败')
       toast.success('已开始抓取链接')
+      try { sessionStorage.setItem('pektino.scrapePending', '1'); sessionStorage.setItem('pektino.scrapePendingAt', String(Date.now())) } catch { }
       qc.invalidateQueries({ queryKey: ['state'] })
       setUrl('')
       onOpenChange(false)

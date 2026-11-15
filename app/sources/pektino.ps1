@@ -210,25 +210,6 @@ function Invoke-PektinoScrape {
             }
             Write-SourceProgress -Path $progress -Phase 'list' -Done $pi -Total $pages.Count -Started $started
         }
-        if ($targets.Count -eq 0 -and $rank -eq 'daily') {
-            # 日榜根路径已改为文章列表；依次用榜单 SSR 页兼容回退。
-            foreach ($candidate in @('weekly', 'monthly', 'all')) {
-                $html = Get-PektinoPage -Client $client -Url "$script:PektinoBase/zh-CN/$candidate"
-                if (-not $html) { continue }
-                $i = 0
-                foreach ($m in [regex]::Matches($html, '/zh-CN/movie/([A-Za-z0-9_\-]+)')) {
-                    $tk = $m.Groups[1].Value
-                    if ($seen.ContainsKey($tk)) { continue }
-                    $seen[$tk] = $true
-                    $i++
-                    if ($i -gt $pageSize) { break }
-                    [void]$targets.Add([pscustomobject]@{
-                            id = $tk; page = 1; rank = $i; detail_url = ''; title = ''; cover_url = ''
-                        })
-                }
-                if ($targets.Count -gt 0) { break }
-            }
-        }
         if ($targets.Count -eq 0) { throw '没能从榜单页拿到任何条目，站点结构可能变了' }
         if ($Options.limit -and [int]$Options.limit -gt 0) {
             $targets = @($targets | Select-Object -First ([int]$Options.limit))

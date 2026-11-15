@@ -147,6 +147,7 @@ export function PreviewDialog({ rows, token, autoplay = false, media, onClose, o
       window.clearTimeout(hintTimer)
       hintTimer = window.setTimeout(() => setVolumeHint(''), 1200)
     }
+    const blurActive = () => { const a = document.activeElement as HTMLElement | null; if (a && a !== document.body) a.blur() }
     const onKeyDown = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement | null
       if (target instanceof Element && target.closest('input,textarea,select,[contenteditable]')) return
@@ -162,6 +163,7 @@ export function PreviewDialog({ rows, token, autoplay = false, media, onClose, o
           return
         }
         if (!v.paused) v.playbackRate = longPressRate
+        blurActive()
         return
       }
       if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)) {
@@ -173,12 +175,14 @@ export function PreviewDialog({ rows, token, autoplay = false, media, onClose, o
         if (e.key === 'ArrowRight') v.currentTime = Math.min(v.duration || Infinity, v.currentTime + 5)
         if (e.key === 'ArrowUp') { v.volume = Math.min(1, v.volume + 0.05); showVolume(v) }
         if (e.key === 'ArrowDown') { v.volume = Math.max(0, v.volume - 0.05); showVolume(v) }
+        blurActive()
         return
       }
       if (/^[1-5]$/.test(e.key)) {
         e.preventDefault()
         e.stopImmediatePropagation()
         const value = Number(e.key)
+        blurActive()
         void post<{ ok: boolean; error?: string }>('/api/rate', { tokens: [token], value }).then(r => {
           if (r.ok) { toast.success(`已评分 ${value} 星`); qc.invalidateQueries({ queryKey: ['state'] }) }
           else toast.error(r.error || '评分失败')
@@ -188,6 +192,7 @@ export function PreviewDialog({ rows, token, autoplay = false, media, onClose, o
       if (e.key === '0') {
         e.preventDefault()
         e.stopImmediatePropagation()
+        blurActive()
         void post<{ ok: boolean; error?: string }>('/api/rate', { tokens: [token], value: 0 }).then(r => {
           if (r.ok) { toast.success('已清除评分'); qc.invalidateQueries({ queryKey: ['state'] }) }
           else toast.error(r.error || '评分失败')
@@ -196,8 +201,8 @@ export function PreviewDialog({ rows, token, autoplay = false, media, onClose, o
       }
       const v = videoRef.current
       if (!v) return
-      if (e.key === 'm' || e.key === 'M') { v.muted = !v.muted; showVolume(v) }
-      if (e.key === 'f' || e.key === 'F') { e.preventDefault(); e.stopImmediatePropagation(); toggleStageFullscreen(); }
+if (e.key === 'm' || e.key === 'M') { v.muted = !v.muted; showVolume(v); blurActive() }
+if (e.key === 'f' || e.key === 'F') { e.preventDefault(); e.stopImmediatePropagation(); toggleStageFullscreen(); blurActive() }
     }
     const onKeyUp = (e: KeyboardEvent) => {
       if (e.key !== ' ') return
@@ -207,6 +212,7 @@ export function PreviewDialog({ rows, token, autoplay = false, media, onClose, o
       if (!v) return
       const held = performance.now() - spaceAt
       v.playbackRate = 1
+      blurActive()
       if (held < 250) {
         if (v.paused) { void v.play().catch(() => {}); setPlaying(true) }
         else v.pause()
@@ -228,6 +234,13 @@ export function PreviewDialog({ rows, token, autoplay = false, media, onClose, o
     document.addEventListener('fullscreenchange', onChange)
     return () => document.removeEventListener('fullscreenchange', onChange)
   }, [])
+
+  React.useEffect(() => {
+    if (!token) return
+    const timer = window.setTimeout(() => { const a = document.activeElement as HTMLElement | null; if (a && a !== document.body) a.blur() }, 80)
+    const guard = window.setInterval(() => { const a = document.activeElement as HTMLElement | null; if (a && a.getAttribute('role') === 'dialog') a.blur() }, 120)
+    return () => { window.clearTimeout(timer); window.clearInterval(guard) }
+  }, [token])
 
   if (!row) return null
 
@@ -391,6 +404,7 @@ export function PreviewDialog({ rows, token, autoplay = false, media, onClose, o
     <>
     <Dialog open={!!token} onOpenChange={open => { if (!open) onClose() }}>
       <DialogContent
+        onOpenAutoFocus={e => e.preventDefault()}
         title="条目详情"
         description={`${index + 1} / ${rows.length} · ${row.token}`}
         bodyClassName="flex min-h-0 p-0"
@@ -683,6 +697,7 @@ function TimelineDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
+        onOpenAutoFocus={e => e.preventDefault()}
         title="播放时间轴"
         description={`${snapshots.length} 个进度快照 · 按时间串联`}
         className="w-[min(700px,calc(100vw-40px))]"

@@ -245,9 +245,11 @@ export function LibraryPage() {
   }
 
   const gacha = () => {
-    const pool = (data?.rows || []).filter(r => r.file_name)
-    if (!pool.length) { toast.error('没有可播放的本地条目'); return }
-    openPreview(pool[Math.floor(Math.random() * pool.length)].token, true)
+    const all = (data?.rows || []).filter(r => r.file_name)
+    if (!all.length) { toast.error('没有可播放的本地条目'); return }
+    const pool = previewToken ? all.filter(r => r.token !== previewToken) : all
+    const list = pool.length ? pool : all
+    openPreview(list[Math.floor(Math.random() * list.length)].token, true)
   }
 
   React.useEffect(() => {
@@ -255,9 +257,12 @@ export function LibraryPage() {
       if (e.ctrlKey || e.metaKey || e.altKey || e.key.toLowerCase() !== 'r') return
       const target = e.target as HTMLElement | null
       if (target instanceof Element && target.closest('input,textarea,select,[contenteditable]')) return
-      if (previewToken || document.querySelector('[role="dialog"]')) return
+      const dialogs = document.querySelectorAll('[role="dialog"]').length
+      if (previewToken ? dialogs > 1 : dialogs > 0) return
       e.preventDefault()
       gacha()
+      const active = document.activeElement as HTMLElement | null
+      if (active && active !== document.body) active.blur()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)

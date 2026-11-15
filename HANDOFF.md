@@ -14,7 +14,7 @@
 - 台账事实来源：`data\data.db`（SQLite），`data\ledger.csv` 是导出快照
 - 媒体布局：`media\<source>\<token>.mp4`
 - 当前版本：`VERSION=2.2.0`
-- 当前分支：`main`；发布点见 `v2.2.0` tag
+- 当前分支：`main`，已推送；发布点 `v2.2.0`（tag 指向 `4027f3f`）
 
 ## 启动方式
 
@@ -147,6 +147,12 @@ c4cf594 feat(player): 自动续播 + 音量记忆（v2.1.0 tag）
 - 合集编辑支持改名 / 改色 / 删除 / 移出当前条目；Esc 优先关闭合集编辑/选择/确认弹窗，不会误关预览。
 - 验证：临时项目 UI 测试覆盖已下载/未下载/合集编辑/颜色同步/抽卡/Esc；真实页面 1217 行正常。
 
+### v2.2.0 发布（2026-11-15）
+
+- `v2.2.0` tag 指向 `4027f3f`；`release/2.2` 维护线已从该点创建并推送。
+- 发布包：`dist\pektino-console-v2.2.0.zip`（1.6 MB）+ `.sha256`；解压后冒烟 25/25。
+- GitHub Release 附件尚未上传（本机没有 `gh` / token），需要手动上传 zip 和 sha256。
+
 ### 下一批候选（尚未做）
 
 - `/api/refresh-url`、`/api/covers/repair`、`/api/import/local` 仍是同步长任务，主循环会被卡住：建议 job 化。
@@ -217,7 +223,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File app\dev\test.ps1 -Start -Por
 ## 交接时状态
 
 - 控制台当前在 `127.0.0.1:8791` 运行（媒体服务 8831），数据库已迁移 `collections.color`
-- 测试都在 8674/8685 等临时端口 + 临时项目，跑完已清理
-- 代码在 `main`，领先远端 7 个提交（最新 `c7ebd98`）
+- 测试都在 8674/8685/8720/8722 等临时端口 + 临时项目，跑完已清理
+- 代码在 `main`，已推送；`v2.2.0` tag 与 `release/2.2` 已推送
+- 发布包在 `dist\pektino-console-v2.2.0.zip`，解压后冒烟 25/25
 - 没有进行中的下载/抓取任务需要保留
-- 下一批候选见上面「2026-11-15 优化进展」，不要擅自发版或大重构
+- GitHub Release 附件待手动上传；下一批候选见上面「2026-11-15 优化进展」

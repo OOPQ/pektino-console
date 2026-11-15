@@ -192,7 +192,10 @@
 <!-- ===== 抓取设置弹窗 ===== -->
 <div class="modal" id="scrapeModal">
   <div class="modal-box">
-    <h3>获取数据</h3>
+    <div class="ui-head">
+      <div class="ui-title"><span class="ui-kicker">IMPORT</span><h3>获取数据</h3></div>
+      <button type="button" class="ui-x" id="scrapeX" data-ui-close="#btnScrapeCancel" title="关闭">×</button>
+    </div>
     <div class="seg" id="fetchMode" style="margin-bottom:12px">
       <button type="button" data-mode="online" class="on">在线榜单</button>
       <button type="button" data-mode="local">本地视频</button>
@@ -232,7 +235,10 @@
 <!-- ===== 链接抓取弹窗 ===== -->
 <div class="modal" id="urlModal">
   <div class="modal-box">
-    <h3>通过链接抓取</h3>
+    <div class="ui-head">
+      <div class="ui-title"><span class="ui-kicker">URL</span><h3>通过链接抓取</h3></div>
+      <button type="button" class="ui-x" id="urlX" data-ui-close="#btnUrlCancel" title="关闭">×</button>
+    </div>
     <div class="field">
       <label>视频链接</label>
       <input type="text" id="urlInput" placeholder="视频页，或 .m3u8 / .mp4 直链；自动识别来源">
@@ -249,7 +255,10 @@
 <!-- ===== 通用确认弹窗 ===== -->
 <div class="modal" id="confirmModal">
   <div class="modal-box confirm-box">
-    <h3 id="confirmTitle">请确认</h3>
+    <div class="ui-head">
+      <div class="ui-title"><span class="ui-kicker">CONFIRM</span><h3 id="confirmTitle">请确认</h3></div>
+      <button type="button" class="ui-x" id="confirmX" data-ui-close="#confirmCancel" title="关闭">×</button>
+    </div>
     <div class="confirm-msg" id="confirmMsg"></div>
     <div class="modal-actions">
       <button class="primary" id="confirmOk">确认</button>
@@ -337,7 +346,10 @@
 <!-- ===== 设置抽屉 ===== -->
 <div class="drawer" id="drawer">
   <div class="sheet">
-    <h3>设置</h3>
+    <div class="ui-head">
+      <div class="ui-title"><span class="ui-kicker">SETTINGS</span><h3>设置</h3></div>
+      <button type="button" class="ui-x" id="setClose" data-ui-hide="drawer" title="关闭">×</button>
+    </div>
     <div class="sub" id="wsInfo" style="margin-bottom:10px">–</div>
     <div style="display:flex;gap:8px;margin-bottom:14px">
       <button class="ghost" id="btnWsOpen">打开数据目录</button>
@@ -403,11 +415,8 @@
 <div class="drawer" id="dlDrawer" data-qtab="active">
   <div class="sheet">
     <div class="dq-head">
-      <div>
-        <h3>下载队列</h3>
-        <div class="sub" id="dlHead">–</div>
-      </div>
-      <button class="ghost" id="dlClose">关闭</button>
+      <div class="ui-title"><span class="ui-kicker">DOWNLOADS</span><h3>下载队列</h3><div class="sub" id="dlHead">–</div></div>
+      <button type="button" class="ui-x" id="dlClose" title="关闭">×</button>
     </div>
     <div class="dq-tabs" id="dqTabs">
       <button class="dq-tab on" data-qtab="active">进行中 <em id="dqTabActive">0</em></button>
@@ -449,7 +458,10 @@
 <!-- ===== 回收站 ===== -->
 <div class="drawer" id="binDrawer">
   <div class="sheet">
-    <h3>回收站</h3>
+    <div class="ui-head">
+      <div class="ui-title"><span class="ui-kicker">RECYCLE</span><h3>回收站</h3></div>
+      <button type="button" class="ui-x" id="binCloseX" data-ui-close="#binClose" title="关闭">×</button>
+    </div>
     <div class="sub" id="binHead" style="margin-bottom:12px">–</div>
     <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;align-items:center">
       <button class="ghost danger" id="binEmpty" disabled title="彻底删除回收站里的全部条目（含本地文件）">清空回收站</button>
@@ -464,10 +476,10 @@
 <div class="lightbox" id="colBrowser">
   <div class="colb-box">
     <div class="colb-head">
-      <h3>合集</h3>
+      <div class="ui-title"><span class="ui-kicker">COLLECTIONS</span><h3>合集</h3></div>
       <div class="colb-tabs" id="colbTabs"></div>
       <span class="spacer"></span>
-      <button class="ghost" id="colbClose">关闭</button>
+      <button type="button" class="ui-x" id="colbClose" title="关闭">×</button>
     </div>
     <div class="colb-tools">
       <input id="colbNew" placeholder="新合集名称" maxlength="60" style="width:130px">
@@ -491,7 +503,10 @@
 <!-- ===== 下载确认 ===== -->
 <div class="lightbox" id="dlConfirm">
   <div class="dlc-box">
-    <h3>开始下载</h3>
+    <div class="ui-head">
+      <div class="ui-title"><span class="ui-kicker">DOWNLOAD</span><h3>开始下载</h3></div>
+      <button type="button" class="ui-x" id="dlcX" data-ui-close="#dlcCancel" title="关闭">×</button>
+    </div>
     <div class="sub" id="dlcInfo" style="line-height:1.9">–</div>
     <div style="display:flex;align-items:center;gap:8px;margin-top:12px">
       <span class="sub">本次下载</span>
@@ -508,7 +523,10 @@
 
 <div class="lightbox" id="colPick">
   <div class="colpick-box">
-    <h3>加入合集 <span class="sub" id="colPickCount"></span></h3>
+    <div class="ui-head">
+      <div class="ui-title"><span class="ui-kicker">COLLECTIONS</span><h3>加入合集 <span class="sub" id="colPickCount"></span></h3></div>
+      <button type="button" class="ui-x" id="colPickX" data-ui-close="#colPickCancel" title="关闭">×</button>
+    </div>
     <div class="col-list" id="colPickList"></div>
     <div style="display:flex;gap:6px;margin-top:12px">
       <input id="colPickNew" placeholder="新建合集名称" style="flex:1" maxlength="60">
@@ -524,7 +542,7 @@
 <div class="lightbox" id="colEdit">
   <div class="coledit-box">
     <div class="cedit-head">
-      <h3>合集编辑 <span class="sub" id="colEditCount"></span></h3>
+      <div class="ui-title"><span class="ui-kicker">COLLECTIONS</span><h3>合集编辑 <span class="sub" id="colEditCount"></span></h3></div>
       <button class="pmeta-x" id="colEditX" type="button" title="关闭">×</button>
     </div>
     <div class="field">

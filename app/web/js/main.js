@@ -1317,6 +1317,17 @@ function initBulk() {
 }
 
 /* ================= 初始化 ================= */
+function initUiClose() {
+  document.querySelectorAll('[data-ui-close],[data-ui-hide]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const sel = btn.dataset.uiClose;
+      if (sel) { const el = $(sel); if (el) el.click(); }
+      const id = btn.dataset.uiHide;
+      if (id) { const el = document.getElementById(id); if (el) el.classList.remove('on'); }
+    });
+  });
+}
+
 function initSidebar() {
   const side = $('#sidebar');
   if (!side) return;
@@ -1449,6 +1460,7 @@ initDownloadQueue();
 initBin();
 initCollections();
 initSidebar();
+initUiClose();
 
 // reload 事件做短防抖：一次动作/SSE 连续触发时只发一轮 /api/state
 let _reloadTimer = 0;

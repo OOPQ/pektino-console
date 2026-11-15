@@ -16,6 +16,7 @@ import {
   Heart,
   LayoutGrid,
   Library,
+  ListChecks,
   Link2,
   Plus,
   RotateCcw,
@@ -101,6 +102,8 @@ export function LibraryPage() {
 
   const view = useUiStore(s => s.view)
   const setView = useUiStore(s => s.setView)
+  const multi = useUiStore(s => s.multi)
+  const setMulti = useUiStore(s => s.setMulti)
   const selected = useUiStore(s => s.selected)
   const setSelected = useUiStore(s => s.setSelected)
   const clearSelected = useUiStore(s => s.clearSelected)
@@ -353,13 +356,16 @@ export function LibraryPage() {
         <Button size="sm" variant="ghost" onClick={() => navigate('/collections')}>
           <Library className="size-3.5" /> 合集
         </Button>
+        <Button size="sm" variant={multi ? 'outline' : 'ghost'} onClick={() => setMulti(!multi)}>
+          <ListChecks className="size-3.5" /> 多选
+        </Button>
         <Button size="sm" variant="ghost" onClick={gacha}>
           <Sparkles className="size-3.5" /> 抽一卡
         </Button>
         <Button size="sm" variant="ghost" onClick={() => { setStatus('all'); setFlag('towatch') }}>
           <CalendarClock className="size-3.5" /> 待看
         </Button>
-        {selected.length > 0 ? (
+        {multi && selected.length > 0 ? (
           <div className="ml-auto flex items-center gap-2 text-[10px] text-[color:var(--muted)]">
             <span>已选 {selected.length}</span>
             <Button size="sm" variant="ghost" className="h-7" onClick={clearSelected}>清空</Button>
@@ -405,13 +411,14 @@ export function LibraryPage() {
           onTogglePage={togglePage}
           onOpen={openPreview}
           onFav={onFav}
+          multi={multi}
           menu={menu}
           sortKey={sortKey}
           sortDir={sortDir}
           onSort={sort}
         />
       ) : (
-        <LibraryGallery rows={visible} selected={selected} onToggle={toggleSelected} onOpen={openPreview} onFav={onFav} onCollection={menu.collection} onDownload={menu.download} menu={menu} />
+        <LibraryGallery rows={visible} selected={selected} onToggle={toggleSelected} onOpen={openPreview} onFav={onFav} onRate={menu.rate} onDownload={menu.download} menu={menu} />
       )}
 
       <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[color:var(--border)] pt-3">
@@ -442,7 +449,7 @@ export function LibraryPage() {
       />
 
       <SelectionBar
-        count={selected.length}
+        count={multi ? selected.length : 0}
         onDownload={bulkDownload}
         onCollection={() => setPickerTokens(selected)}
         onRecycle={bulkRecycle}

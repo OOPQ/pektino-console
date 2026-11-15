@@ -28,6 +28,7 @@ type Props = {
   sortKey: SortKey
   sortDir: SortDir
   onSort: (key: SortKey) => void
+  multi: boolean
   menu: RowMenuActions
 }
 
@@ -75,6 +76,7 @@ export function LibraryTable({
   sortKey,
   sortDir,
   onSort,
+  multi,
   menu,
 }: Props) {
   const pageTokens = rows.map(r => r.token)
@@ -96,13 +98,15 @@ export function LibraryTable({
       <table className="w-full min-w-[980px] border-collapse text-[11.5px]">
         <thead className="sticky top-0 z-10 bg-[color:var(--surface-2)]">
           <tr className="border-b border-[color:var(--border)]">
-            <th className="w-9 px-2 py-2">
-              <Checkbox
-                aria-label="全选本页"
-                checked={allSelected ? true : someSelected ? 'indeterminate' : false}
-                onCheckedChange={checked => onTogglePage(checked === true)}
-              />
-            </th>
+            {multi ? (
+              <th className="w-9 px-2 py-2">
+                <Checkbox
+                  aria-label="全选本页"
+                  checked={allSelected ? true : someSelected ? 'indeterminate' : false}
+                  onCheckedChange={checked => onTogglePage(checked === true)}
+                />
+              </th>
+            ) : null}
             <th className="w-[54px] px-2 py-2 text-left text-[9.5px] tracking-[.4px] text-[color:var(--subtle)]">封面</th>
             <SortHead label="标题" col="title" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
             <SortHead label="排名" col="rank" sortKey={sortKey} sortDir={sortDir} onSort={onSort} className="w-14" />
@@ -127,13 +131,15 @@ export function LibraryTable({
                   isSelected && 'bg-[color:color-mix(in_srgb,var(--primary)_6%,transparent)]',
                 )}
               >
-                <td className="px-2 py-1.5">
-                  <Checkbox
-                    aria-label={`选择 ${rowTitle(row)}`}
-                    checked={isSelected}
-                    onCheckedChange={() => onToggle(row.token)}
-                  />
-                </td>
+                {multi ? (
+                  <td className="px-2 py-1.5">
+                    <Checkbox
+                      aria-label={`选择 ${rowTitle(row)}`}
+                      checked={isSelected}
+                      onCheckedChange={() => onToggle(row.token)}
+                    />
+                  </td>
+                ) : null}
                 <td className="px-2 py-1.5">
                   <button type="button" onClick={() => onOpen(row.token, true)} className="block" aria-label="打开预览">
                     <CoverImage token={row.token} alt={rowTitle(row)} className="h-[54px] w-10 rounded-[7px]" />

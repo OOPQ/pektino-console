@@ -136,6 +136,7 @@ $DlPause = Join-Path $WS.DataDir '.dl-pause'
 $DlPauseItems = Join-Path $WS.DataDir '.dl-pause-items.json'
 $DlAdd = Join-Path $WS.DataDir '.dl-add.json'
 $DeletedPath = Join-Path $WS.DataDir 'deleted.json'
+$SnapshotDir = Join-Path $WS.DataDir 'snapshots'
 
 # ---------- 内存态 ----------
 # 配置只管代理/并发；内容目录固定在项目里（$WS.Content），不再可配置
@@ -289,6 +290,45 @@ function Handle-Request {
             }
         }
         Send-Bytes -Stream $Stream -Bytes ([byte[]]@()) -ContentType 'text/plain' -Status '404 Not Found'
+        return
+    }
+
+    if ($method -eq 'GET' -and $path -eq '/api/snapshots') {
+        $tk = [string]$Req.Query['token']
+        $items = @()
+        if ($tk -match '^[A-Za-z0-9_\-]+$' -and (Test-Path $SnapshotDir)) {
+            $items = @(Get-ChildItem -LiteralPath $SnapshotDir -File -Filter ($tk + '_*.jpg') -ErrorAction SilentlyContinue |
+                Sort-Object LastWriteTime -Descending |
+                Select-Object -First 80 |
+                ForEach-Object {
+                    $m = [regex]::Match($_.Name, '^' + [regex]::Escape($tk) + '_(?<time>\d+(?:\.\d+)?)_\d+\.jpg$')
+                    if ($m.Success) {
+                        [pscustomobject]@{
+                            name = $_.Name
+                            time = [double]$m.Groups['time'].Value
+                            createdAt = $_.LastWriteTime.ToString('yyyy-MM-dd HH:mm:ss')
+                            url = '/api/snapshot/image?token=' + [uri]::EscapeDataString($tk) + '&name=' + [uri]::EscapeDataString($_.Name)
+                        }
+                    }
+                })
+        }
+        Send-Json -Stream $Stream -Object @{ ok = $true; items = $items; dir = $SnapshotDir }
+        return
+    }
+
+    if ($method -eq 'GET' -and $path -eq '/api/snapshot/image') {
+        $tk = [string]$Req.Query['token']
+        $name = [string]$Req.Query['name']
+        if ($tk -notmatch '^[A-Za-z0-9_\-]+$' -or $name -notmatch '^[A-Za-z0-9_.\-]+\.jpg$' -or $name -notlike ($tk + '_*')) {
+            Send-Bytes -Stream $Stream -Bytes ([byte[]]@()) -ContentType 'text/plain' -Status '404 Not Found'
+            return
+        }
+        $file = Join-Path $SnapshotDir $name
+        if (-not (Test-Path -LiteralPath $file)) {
+            Send-Bytes -Stream $Stream -Bytes ([byte[]]@()) -ContentType 'text/plain' -Status '404 Not Found'
+            return
+        }
+        Send-Bytes -Stream $Stream -Bytes ([System.IO.File]::ReadAllBytes($file)) -ContentType 'image/jpeg' -ExtraHeaders @{ 'Cache-Control' = 'no-store' }
         return
     }
 
@@ -511,6 +551,59 @@ function Handle-Request {
             }
             '/api/download/reset' {
                 Send-Json -Stream $Stream -Object (Reset-DownloadState)
+                return
+            }
+            '/api/snapshot' {
+                $tk = ([string]$body.token).Trim()
+                if ($tk -notmatch '^[A-Za-z0-9_\-]+$') {
+                    Send-Json -Stream $Stream -Object @{ ok = $false; error = 'token 不合法' }
+                    return
+                }
+                $captureTime = 0.0
+                try { $captureTime = [Math]::Max(0, [double]$body.time) } catch { $captureTime = 0 }
+                $row = $State.Ledger | Where-Object { $_.token -eq $tk } | Select-Object -First 1
+                if (-not $row -or -not $row.file_path -or -not (Test-Path -LiteralPath $row.file_path)) {
+                    Send-Json -Stream $Stream -Object @{ ok = $false; error = '本地没有这个文件，无法快照' }
+                    return
+                }
+                $ff = [string]$Config.ffmpegPath
+                if (-not $ff -or -not (Test-Path -LiteralPath $ff)) {
+                    $cmd = Get-Command ffmpeg -ErrorAction SilentlyContinue
+                    if ($cmd) { $ff = $cmd.Source } else { $ff = '' }
+                }
+                if (-not $ff) {
+                    Send-Json -Stream $Stream -Object @{ ok = $false; error = '没有找到 FFmpeg，请在设置里填写路径' }
+                    return
+                }
+                if (-not (Test-Path -LiteralPath $SnapshotDir)) { [void](New-Item -ItemType Directory -Path $SnapshotDir -Force) }
+                $timeText = ([Math]::Round($captureTime, 3)).ToString([Globalization.CultureInfo]::InvariantCulture)
+                $name = $tk + '_' + $timeText + '_' + (Get-Date -Format 'yyyyMMddHHmmssfff') + '.jpg'
+                $out = Join-Path $SnapshotDir $name
+                try {
+                    $p = Start-Process -FilePath $ff -ArgumentList @(
+                        '-hide_banner', '-loglevel', 'error',
+                        '-ss', $timeText,
+                        '-i', [string]$row.file_path,
+                        '-frames:v', '1',
+                        '-q:v', '3',
+                        '-y', $out
+                    ) -NoNewWindow -Wait -PassThru
+                    if ($p.ExitCode -ne 0 -or -not (Test-Path -LiteralPath $out)) {
+                        Send-Json -Stream $Stream -Object @{ ok = $false; error = "FFmpeg 退出码 $($p.ExitCode)" }
+                        return
+                    }
+                } catch {
+                    Send-Json -Stream $Stream -Object @{ ok = $false; error = $_.Exception.Message }
+                    return
+                }
+                Send-Json -Stream $Stream -Object @{
+                    ok = $true
+                    name = $name
+                    token = $tk
+                    time = $captureTime
+                    path = $out
+                    url = '/api/snapshot/image?token=' + [uri]::EscapeDataString($tk) + '&name=' + [uri]::EscapeDataString($name)
+                }
                 return
             }
             '/api/scrape' {

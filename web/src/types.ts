@@ -76,6 +76,13 @@ export type AppSettings = {
   qiseCookie?: string
 }
 
+export type Snapshot = {
+  name: string
+  time: number
+  createdAt: string
+  url: string
+}
+
 export type AppState = {
   ok: boolean
   api: number

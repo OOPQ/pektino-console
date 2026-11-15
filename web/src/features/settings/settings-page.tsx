@@ -9,6 +9,7 @@ import {
   FolderOpen,
   Gauge,
   Image,
+  LayoutGrid,
   RefreshCw,
   RotateCcw,
   Save,
@@ -17,6 +18,7 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAppState } from '@/features/use-app-state'
+import { useUiStore } from '@/store/ui'
 import { confirmAction } from '@/store/confirm'
 import { post } from '@/lib/api'
 import { cn, formatBytes, formatCount } from '@/lib/utils'
@@ -30,6 +32,8 @@ import { Badge } from '@/components/ui/badge'
 export function SettingsPage() {
   const qc = useQueryClient()
   const { data, isLoading, refetch, isFetching } = useAppState(5_000)
+  const density = useUiStore(s => s.density)
+  const setDensity = useUiStore(s => s.setDensity)
   const [proxy, setProxy] = React.useState('')
   const [cookie, setCookie] = React.useState('')
   const [ffmpeg, setFfmpeg] = React.useState('')
@@ -150,6 +154,23 @@ export function SettingsPage() {
         <Button className="mt-3" size="sm" onClick={save} disabled={busy === 'save'}>
           <Save className="size-3.5" /> {busy === 'save' ? '保存中…' : '保存下载设置'}
         </Button>
+      </Card>
+
+      <Card className="p-4">
+        <SectionTitle icon={LayoutGrid} title="界面" sub="只影响本地显示偏好" />
+        <div className="mt-3">
+          <div className="ui-field-label mb-1.5">卡片密度</div>
+          <div className="flex items-center gap-1 rounded-[9px] border border-[color:var(--border)] bg-[color:var(--surface-2)] p-0.5">
+            {([
+              ['compact', '紧凑'],
+              ['cozy', '标准'],
+              ['large', '宽松'],
+            ] as const).map(([value, label]) => (
+              <Button key={value} size="sm" variant={density === value ? 'outline' : 'ghost'} className="h-7 flex-1 px-2" onClick={() => setDensity(value)}>{label}</Button>
+            ))}
+          </div>
+          <div className="mt-2 text-[9.5px] leading-5 text-[color:var(--subtle)]">宽松会放大画廊卡片和封面，适合大屏浏览；紧凑适合一次看更多。</div>
+        </div>
       </Card>
 
       <Card className="p-4">

@@ -3,17 +3,22 @@ import { persist } from 'zustand/middleware'
 
 export type ViewMode = 'table' | 'gallery'
 export type Theme = 'dark' | 'light'
+export type Density = 'compact' | 'cozy' | 'large'
 
 type UiState = {
   sidebarCollapsed: boolean
   view: ViewMode
   theme: Theme
+  density: Density
+  multi: boolean
   selected: string[]
   previewToken: string | null
   previewAutoplay: boolean
   toggleSidebar: () => void
   setView: (view: ViewMode) => void
   setTheme: (theme: Theme) => void
+  setDensity: (density: Density) => void
+  setMulti: (multi: boolean) => void
   toggleSelected: (token: string) => void
   setSelected: (tokens: string[]) => void
   clearSelected: () => void
@@ -34,6 +39,8 @@ export const useUiStore = create<UiState>()(
       sidebarCollapsed: false,
       view: 'table',
       theme: 'dark',
+      density: 'large',
+      multi: false,
       selected: [],
       previewToken: null,
       previewAutoplay: false,
@@ -43,6 +50,8 @@ export const useUiStore = create<UiState>()(
         applyTheme(theme)
         set({ theme })
       },
+      setDensity: density => set({ density }),
+      setMulti: multi => set(multi ? { multi } : { multi, selected: [] }),
       toggleSelected: token => set(s => ({
         selected: s.selected.includes(token) ? s.selected.filter(t => t !== token) : [...s.selected, token],
       })),
@@ -53,7 +62,7 @@ export const useUiStore = create<UiState>()(
     }),
     {
       name: 'pektino.ui',
-      partialize: s => ({ sidebarCollapsed: s.sidebarCollapsed, view: s.view, theme: s.theme }),
+      partialize: s => ({ sidebarCollapsed: s.sidebarCollapsed, view: s.view, theme: s.theme, density: s.density }),
       onRehydrateStorage: () => state => {
         if (state) applyTheme(state.theme)
       },

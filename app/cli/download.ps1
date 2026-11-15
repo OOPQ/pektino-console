@@ -58,7 +58,7 @@ function Get-QiseVideosMp4 {
     $handler = New-Object System.Net.Http.HttpClientHandler
     # qise 直连经常超时：有代理时必须走代理，否则刷新签名 URL 这一步会先失败
     $handler.UseProxy = $false
-    if ($script:proxyArg) { $handler.Proxy = New-Object System.Net.WebProxy([string]$script:proxyArg); $handler.UseProxy = $true }
+if ($script:proxyArg) { $handler.UseProxy = $true; $handler.Proxy = New-Object System.Net.WebProxy([string]$script:proxyArg) }
     $client = New-Object System.Net.Http.HttpClient($handler)
     $client.Timeout = [TimeSpan]::FromSeconds(20)
     $client.DefaultRequestHeaders.UserAgent.ParseAdd('Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/157.0.0.0')
@@ -103,7 +103,7 @@ function Get-QiseSdM3u8 {
     $handler = New-Object System.Net.Http.HttpClientHandler
     # 同 Get-QiseVideosMp4：qise 刷新必须能走代理
     $handler.UseProxy = $false
-    if ($script:proxyArg) { $handler.Proxy = New-Object System.Net.WebProxy([string]$script:proxyArg); $handler.UseProxy = $true }
+if ($script:proxyArg) { $handler.UseProxy = $true; $handler.Proxy = New-Object System.Net.WebProxy([string]$script:proxyArg) }
     $client = New-Object System.Net.Http.HttpClient($handler)
     $client.Timeout = [TimeSpan]::FromSeconds(20)
     $client.DefaultRequestHeaders.UserAgent.ParseAdd('Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/157.0.0.0')
@@ -194,8 +194,8 @@ function New-HeadClient {
     $h.MaxConnectionsPerServer = 16
     $h.AutomaticDecompression = [System.Net.DecompressionMethods]::GZip -bor [System.Net.DecompressionMethods]::Deflate
     if ($script:proxyArg) {
-        $h.Proxy = New-Object System.Net.WebProxy($script:proxyArg)
         $h.UseProxy = $true
+        $h.Proxy = New-Object System.Net.WebProxy($script:proxyArg)
     }
     $c = New-Object System.Net.Http.HttpClient($h)
     $c.Timeout = [TimeSpan]::FromSeconds(20)
@@ -765,6 +765,19 @@ $states[$tk] = @{ state = 'queued'; bytes = 0; expected = 0; error = ''; addedAt
     exit 0
 }
 catch {
-    Write-ProgressFile @{ running = $false; phase = 'error'; total = $queue.Count; startedAt = $startAt; errors = @(@{ token = '-'; error = $_.Exception.Message }) }
+    $errMsg = $_.Exception.Message
+    $fallbackItems = @()
+    try {
+        if (Test-Path -LiteralPath $ProgressFile) {
+            $oldFallback = Get-Content -LiteralPath $ProgressFile -Raw -Encoding UTF8 | ConvertFrom-Json
+            $fallbackItems = @($oldFallback.items | Where-Object { $_ })
+        }
+    } catch { }
+    if (-not $fallbackItems.Count) {
+        $fallbackItems = @($queue | ForEach-Object {
+            [pscustomobject]@{ token = $_.token; state = 'failed'; bytes = 0; expected = 0; error = $errMsg; addedAt = [string]$_.addedAt }
+        })
+    }
+    Write-ProgressFile @{ running = $false; paused = $false; phase = 'error'; total = $fallbackItems.Count; startedAt = $startAt; errors = @(@{ token = '-'; error = $errMsg }); items = $fallbackItems }
     exit 1
 }

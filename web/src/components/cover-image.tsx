@@ -40,7 +40,7 @@ export function CoverImage({
         </div>
       ) : (
         <img
-          src={`${coverUrl(token, full)}&v=${coverRev}`}
+          src={`${coverUrl(token, full)}&c=${coverRev}`}
           alt={alt}
           loading={eager ? 'eager' : 'lazy'}
           decoding="async"

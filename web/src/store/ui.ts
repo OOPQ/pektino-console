@@ -70,7 +70,7 @@ export const useUiStore = create<UiState>()(
     }),
     {
       name: 'pektino.ui',
-      partialize: s => ({ sidebarCollapsed: s.sidebarCollapsed, view: s.view, theme: s.theme, density: s.density, longPressRate: s.longPressRate }),
+      partialize: s => ({ sidebarCollapsed: s.sidebarCollapsed, view: s.view, theme: s.theme, density: s.density, longPressRate: s.longPressRate, coverRev: s.coverRev }),
       onRehydrateStorage: () => state => {
         if (state) applyTheme(state.theme)
       },

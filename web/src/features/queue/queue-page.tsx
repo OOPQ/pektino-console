@@ -3,6 +3,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import {
   Ban,
   Check,
+  ChevronDown,
   Download,
   FolderOpen,
   LoaderCircle,
@@ -66,6 +67,17 @@ export function QueuePage() {
   }, [isLoading, groups.active.length, groups.done.length])
 
   const list = groups[tab]
+  const queueGroups = React.useMemo(() => {
+    const map = new Map<string, DItem[]>()
+    for (const item of list) {
+      const row = rowMap.get(item.token)
+      const raw = row?.file_date || row?.last_seen || row?.first_seen || ''
+      const date = raw.slice(0, 10) || '未知日期'
+      if (!map.has(date)) map.set(date, [])
+      map.get(date)!.push(item)
+    }
+    return [...map.entries()].sort((a, b) => b[0].localeCompare(a[0]))
+  }, [list, rowMap])
   const failedTokens = groups.failed.map(i => i.token)
   const concurrency = data?.settings?.concurrent || 3
 
@@ -178,7 +190,16 @@ export function QueuePage() {
           </div>
         ) : null}
 
-        {list.map(item => {
+        {queueGroups.map(([date, groupItems]) => (
+          <details key={date} open className="group overflow-hidden rounded-[var(--radius-card)] border border-[color:var(--border)] bg-[color:var(--surface)]">
+            <summary className="flex cursor-pointer list-none items-center gap-2 px-3 py-2 text-[10.5px] text-[color:var(--muted)] [&::-webkit-details-marker]:hidden">
+              <ChevronDown className="size-3.5 -rotate-90 text-[color:var(--subtle)] transition-transform group-open:rotate-0" />
+              <span className="font-medium text-[color:var(--foreground)]">{date}</span>
+              <span className="text-[color:var(--subtle)]">{groupItems.length} 条</span>
+              <span className="ml-auto text-[9.5px] text-[color:var(--subtle)]">{formatBytes(groupItems.reduce((sum, item) => sum + (Number(item.bytes) || 0), 0))}</span>
+            </summary>
+            <div className="space-y-2 border-t border-[color:var(--border)] p-2.5">
+        {groupItems.map(item => {
           const row = rowMap.get(item.token)
           const expected = Number(row?.file_size) || 0
           const pct = item.state === 'done' ? 100 : expected ? Math.min(99, Math.round((item.bytes / expected) * 100)) : 0
@@ -235,6 +256,9 @@ export function QueuePage() {
             </Card>
           )
         })}
+            </div>
+          </details>
+        ))}
       </div>
 
       <PreviewDialog

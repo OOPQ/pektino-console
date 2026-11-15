@@ -11,6 +11,7 @@ type UiState = {
   theme: Theme
   density: Density
   multi: boolean
+  longPressRate: number
   selected: string[]
   previewToken: string | null
   previewAutoplay: boolean
@@ -18,6 +19,7 @@ type UiState = {
   setView: (view: ViewMode) => void
   setTheme: (theme: Theme) => void
   setDensity: (density: Density) => void
+  setLongPressRate: (rate: number) => void
   setMulti: (multi: boolean) => void
   toggleSelected: (token: string) => void
   setSelected: (tokens: string[]) => void
@@ -41,6 +43,7 @@ export const useUiStore = create<UiState>()(
       theme: 'dark',
       density: 'large',
       multi: false,
+      longPressRate: 2,
       selected: [],
       previewToken: null,
       previewAutoplay: false,
@@ -51,6 +54,7 @@ export const useUiStore = create<UiState>()(
         set({ theme })
       },
       setDensity: density => set({ density }),
+      setLongPressRate: longPressRate => set({ longPressRate }),
       setMulti: multi => set(multi ? { multi } : { multi, selected: [] }),
       toggleSelected: token => set(s => ({
         selected: s.selected.includes(token) ? s.selected.filter(t => t !== token) : [...s.selected, token],
@@ -62,7 +66,7 @@ export const useUiStore = create<UiState>()(
     }),
     {
       name: 'pektino.ui',
-      partialize: s => ({ sidebarCollapsed: s.sidebarCollapsed, view: s.view, theme: s.theme, density: s.density }),
+      partialize: s => ({ sidebarCollapsed: s.sidebarCollapsed, view: s.view, theme: s.theme, density: s.density, longPressRate: s.longPressRate }),
       onRehydrateStorage: () => state => {
         if (state) applyTheme(state.theme)
       },

@@ -587,6 +587,18 @@ function Handle-Request {
                 Send-Json -Stream $Stream -Object (Reset-DownloadState)
                 return
             }
+            '/api/snapshot/delete' {
+                $tk = ([string]$body.token).Trim()
+                $name = ([string]$body.name).Trim()
+                if ($tk -notmatch '^[A-Za-z0-9_\-]+$' -or $name -notmatch '^[A-Za-z0-9_.\-]+\.jpg$' -or $name -notlike ($tk + '_*')) {
+                    Send-Json -Stream $Stream -Object @{ ok = $false; error = '参数不合法' }
+                    return
+                }
+                $file = Join-Path $SnapshotDir $name
+                if (Test-Path -LiteralPath $file) { Remove-Item -LiteralPath $file -Force }
+                Send-Json -Stream $Stream -Object @{ ok = $true; name = $name }
+                return
+            }
             '/api/snapshot' {
                 $tk = ([string]$body.token).Trim()
                 if ($tk -notmatch '^[A-Za-z0-9_\-]+$') {

@@ -4,20 +4,23 @@ import {
   ChevronLeft,
   Camera,
   Check,
+  Pencil,
   ChevronRight,
   Copy,
   Download,
   ExternalLink,
+  List,
   Play,
   Star,
   X,
 } from 'lucide-react'
 import type { MediaConfig, Row, Snapshot } from '@/types'
-import { cn, copyText, formatCount, formatDate, mediaUrl, rowTitle, statusOf } from '@/lib/utils'
+import { cn, copyText, formatCount, formatDate, formatTime, mediaUrl, rowTitle, statusOf } from '@/lib/utils'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { post } from '@/lib/api'
 import { confirmAction } from '@/store/confirm'
+import { useUiStore } from '@/store/ui'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogClose, DialogContent } from '@/components/ui/dialog'
 import { IconButton } from '@/components/ui/icon-button'
@@ -45,7 +48,11 @@ export function PreviewDialog({ rows, token, autoplay = false, media, onClose, o
   const [seek, setSeek] = React.useState<number | null>(null)
   const [busySnap, setBusySnap] = React.useState(false)
   const [downloading, setDownloading] = React.useState(false)
+  const [collectionsEditing, setCollectionsEditing] = React.useState(false)
+  const [hoverSnap, setHoverSnap] = React.useState<Snapshot | null>(null)
+  const [timelineOpen, setTimelineOpen] = React.useState(false)
   const [volumeHint, setVolumeHint] = React.useState('')
+  const longPressRate = useUiStore(s => s.longPressRate)
   const videoRef = React.useRef<HTMLVideoElement>(null)
   const qc = useQueryClient()
   const snapshotsQuery = useQuery<{ items: Snapshot[] }>({
@@ -132,7 +139,7 @@ export function PreviewDialog({ rows, token, autoplay = false, media, onClose, o
           if (canPlay) setPlaying(true)
           return
         }
-        if (!v.paused) v.playbackRate = 2
+        if (!v.paused) v.playbackRate = longPressRate
         return
       }
       if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)) {
@@ -173,6 +180,7 @@ export function PreviewDialog({ rows, token, autoplay = false, media, onClose, o
       const v = videoRef.current
       if (!v) return
       const held = performance.now() - spaceAt
+      v.playbackRate = 1
       if (held < 250) {
         if (v.paused) { void v.play().catch(() => {}); setPlaying(true) }
         else v.pause()
@@ -187,7 +195,7 @@ export function PreviewDialog({ rows, token, autoplay = false, media, onClose, o
       window.removeEventListener('keyup', onKeyUp)
       window.clearTimeout(hintTimer)
     }
-  }, [token, canPlay, qc])
+  }, [token, canPlay, qc, longPressRate])
 
   if (!row) return null
 
@@ -209,12 +217,24 @@ export function PreviewDialog({ rows, token, autoplay = false, media, onClose, o
       const time = videoRef.current?.currentTime || 0
       const r = await post<{ ok: boolean; error?: string; time?: number }>('/api/snapshot', { token: row.token, time })
       if (!r.ok) throw new Error(r.error || '快照失败')
-      toast.success(`快照已保存${r.time != null ? ` · ${r.time.toFixed(1)}s` : ''}`)
+      toast.success(`快照已保存${r.time != null ? ` · ${formatTime(r.time)}` : ''}`)
       qc.invalidateQueries({ queryKey: ['snapshots', row.token] })
     } catch (e) {
       toast.error((e as Error).message)
     } finally {
       setBusySnap(false)
+    }
+  }
+
+  const deleteSnapshot = async (name: string) => {
+    if (!(await confirmAction({ title: '删除快照', description: '删除这张进度快照？只删除图片，不删除视频。', confirmText: '删除', danger: true }))) return
+    try {
+      const r = await post<{ ok: boolean; error?: string }>('/api/snapshot/delete', { token: row.token, name })
+      if (!r.ok) throw new Error(r.error || '删除失败')
+      toast.success('快照已删除')
+      qc.invalidateQueries({ queryKey: ['snapshots', row.token] })
+    } catch (e) {
+      toast.error((e as Error).message)
     }
   }
 
@@ -272,9 +292,12 @@ export function PreviewDialog({ rows, token, autoplay = false, media, onClose, o
         footer={
           <div className="flex w-full items-center justify-between gap-3">
             <span className="hidden text-[9.5px] text-[color:var(--subtle)] md:inline">
-              空格 播放/暂停 · 长按加速 · ←→ 5s · ↑↓ 音量 · F 全屏 · M 静音
+              空格 播放/暂停 · 长按 {longPressRate}× · ←→ 5s · ↑↓ 音量 · F 全屏 · M 静音
             </span>
             <div className="ml-auto flex items-center gap-1.5">
+              <Button size="sm" variant="outline" onClick={() => setTimelineOpen(true)}>
+                <List className="size-3.5" /> 时间轴
+              </Button>
               <Button size="sm" variant="outline" onClick={takeSnapshot} disabled={!canPlay || busySnap}>
                 <Camera className="size-3.5" /> {busySnap ? '保存中…' : '快照'}
               </Button>
@@ -312,7 +335,7 @@ export function PreviewDialog({ rows, token, autoplay = false, media, onClose, o
               onPlaying={() => setVideoReady(true)}
               onError={() => { setVideoError(true); setPlaying(false) }}
               className={cn(
-                'absolute inset-0 z-10 h-full w-full object-contain transition-opacity duration-200',
+                'absolute inset-0 z-10 h-full w-full object-contain outline-none transition-opacity duration-200',
                 videoReady ? 'opacity-100' : 'opacity-0',
               )}
             />
@@ -341,13 +364,21 @@ export function PreviewDialog({ rows, token, autoplay = false, media, onClose, o
                 <button
                   key={s.name}
                   type="button"
-                  title={`快照 ${s.time.toFixed(1)}s`}
-                  aria-label={`跳转到快照 ${s.time.toFixed(1)} 秒`}
+                  title={`快照 ${formatTime(s.time)}`}
+                  aria-label={`跳转到快照 ${formatTime(s.time)}`}
+                  onMouseEnter={() => setHoverSnap(s)}
+                  onMouseLeave={() => setHoverSnap(null)}
                   onClick={() => { setSeek(s.time); setPlaying(true) }}
                   className="absolute top-1/2 size-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/80 bg-[color:var(--warning)] shadow-[0_0_0_3px_rgba(227,179,65,.18)] transition-transform hover:scale-125"
                   style={{ left: `${Math.min(100, Math.max(0, (s.time / Number(row.seconds)) * 100))}%` }}
                 />
               ))}
+              {hoverSnap ? (
+                <div className="pointer-events-none absolute bottom-7 z-30 w-[150px] -translate-x-1/2 overflow-hidden rounded-lg border border-white/20 bg-black shadow-2xl" style={{ left: `${Math.min(90, Math.max(10, (hoverSnap.time / Number(row.seconds)) * 100))}%` }}>
+                  <img src={hoverSnap.url} alt="" className="aspect-video w-full object-cover" />
+                  <div className="flex items-center justify-between px-1.5 py-1 text-[9px] text-white/80"><span>{formatTime(hoverSnap.time)}</span><span className="text-[8px] text-white/45">快照</span></div>
+                </div>
+              ) : null}
             </div>
           ) : null}
 
@@ -370,6 +401,37 @@ export function PreviewDialog({ rows, token, autoplay = false, media, onClose, o
           <div className="mt-1 flex items-center gap-2">
             <StatusBadge status={row.status} />
             <RatingInput value={row.rating} onChange={setRating} />
+          </div>
+
+          <div className="mt-2">
+            <div className="flex items-center gap-2">
+              <span className="ui-field-label">合集</span>
+              <span className="text-[9px] text-[color:var(--subtle)]">{memberships.filter(c => c.has).length} 个</span>
+              <Button size="sm" variant="ghost" className="ml-auto h-6 px-1.5" onClick={() => setCollectionsEditing(v => !v)}>
+                <Pencil className="size-3" /> {collectionsEditing ? '完成' : '编辑'}
+              </Button>
+            </div>
+            <div className="mt-1 flex flex-wrap gap-1">
+              {(collectionsEditing ? memberships : memberships.filter(c => c.has)).map(col => (
+                <button
+                  key={col.id}
+                  type="button"
+                  onClick={() => toggleCollection(col)}
+                  className={cn(
+                    'inline-flex items-center gap-1 rounded-md border px-1.5 py-1 text-[9px] transition-colors',
+                    col.has
+                      ? 'border-[color:color-mix(in_srgb,var(--primary)_35%,var(--border))] bg-[color:color-mix(in_srgb,var(--primary)_8%,transparent)] text-[color:var(--primary-2)]'
+                      : 'border-[color:var(--border)] bg-[color:var(--surface-2)] text-[color:var(--muted)] hover:border-[color:var(--border-strong)]',
+                  )}
+                >
+                  <span className="size-1.5 rounded-full" style={{ background: col.color }} />
+                  {col.name}
+                  {col.has ? <Check className="size-2.5" /> : null}
+                </button>
+              ))}
+              {!memberships.length ? <span className="text-[9px] text-[color:var(--subtle)]">还没有合集</span> : null}
+              {!collectionsEditing && memberships.length && !memberships.some(c => c.has) ? <span className="text-[9px] text-[color:var(--subtle)]">未加入合集</span> : null}
+            </div>
           </div>
 
           <div className="mt-4 grid grid-cols-2 gap-2">
@@ -416,36 +478,16 @@ export function PreviewDialog({ rows, token, autoplay = false, media, onClose, o
             ) : null}
           </div>
 
-          <div className="mt-4 border-t border-[color:var(--border)] pt-3">
-            <div className="flex items-center justify-between">
-              <span className="ui-field-label">合集</span>
-              <span className="text-[9px] text-[color:var(--subtle)]">{memberships.filter(c => c.has).length} 个</span>
-            </div>
-            <div className="mt-2 flex flex-wrap gap-1">
-              {memberships.map(col => (
-                <button
-                  key={col.id}
-                  type="button"
-                  onClick={() => toggleCollection(col)}
-                  className={cn(
-                    'inline-flex items-center gap-1 rounded-md border px-1.5 py-1 text-[9px] transition-colors',
-                    col.has
-                      ? 'border-[color:color-mix(in_srgb,var(--primary)_35%,var(--border))] bg-[color:color-mix(in_srgb,var(--primary)_8%,transparent)] text-[color:var(--primary-2)]'
-                      : 'border-[color:var(--border)] bg-[color:var(--surface-2)] text-[color:var(--muted)] hover:border-[color:var(--border-strong)]',
-                  )}
-                >
-                  <span className="size-1.5 rounded-full" style={{ background: col.color }} />
-                  {col.name}
-                  {col.has ? <Check className="size-2.5" /> : null}
-                </button>
-              ))}
-              {!memberships.length ? <span className="text-[9px] text-[color:var(--subtle)]">还没有合集</span> : null}
-            </div>
-            <div className="mt-1.5 text-[8.5px] text-[color:var(--subtle)]">点击合集加入 / 移出；快照显示在播放时间轴上。</div>
-          </div>
         </aside>
       </DialogContent>
     </Dialog>
+    <TimelineDialog
+      open={timelineOpen}
+      onOpenChange={setTimelineOpen}
+      snapshots={snapshots}
+      onSeek={time => { setSeek(time); setPlaying(true); setTimelineOpen(false) }}
+      onDelete={deleteSnapshot}
+    />
     {createPortal(
       <div className="pointer-events-none fixed inset-y-0 left-2 right-2 z-[75] flex items-center justify-between">
         <IconButton label="上一项" className="pointer-events-auto size-11 border-white/20 bg-black/60 text-white backdrop-blur hover:bg-black/75" onClick={() => prev && onNavigate(prev.token)} disabled={!prev}>
@@ -461,6 +503,51 @@ export function PreviewDialog({ rows, token, autoplay = false, media, onClose, o
   )
 }
 
+function TimelineDialog({
+  open,
+  onOpenChange,
+  snapshots,
+  onSeek,
+  onDelete,
+}: {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  snapshots: Snapshot[]
+  onSeek: (time: number) => void
+  onDelete: (name: string) => void
+}) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent
+        title="播放时间轴"
+        description={`${snapshots.length} 个进度快照`}
+        className="w-[min(620px,calc(100vw-40px))]"
+        footer={
+          <div className="flex w-full items-center justify-between gap-2">
+            <span className="text-[9.5px] text-[color:var(--subtle)]">快照保存在项目 data/snapshots</span>
+            <Button size="sm" variant="outline" onClick={() => onOpenChange(false)}>关闭</Button>
+          </div>
+        }
+      >
+        <div className="max-h-[460px] space-y-2 overflow-auto p-4">
+          {!snapshots.length ? (
+            <div className="py-10 text-center text-[11px] text-[color:var(--subtle)]">还没有快照，播放时点「快照」记录当前进度。</div>
+          ) : snapshots.map(s => (
+            <div key={s.name} className="flex items-center gap-2.5 rounded-lg border border-[color:var(--border)] bg-[color:var(--surface-2)] p-2">
+              <img src={s.url} alt="" className="aspect-video w-[136px] shrink-0 rounded-md object-cover" loading="lazy" />
+              <div className="min-w-0 flex-1">
+                <div className="font-mono text-[14px] font-semibold text-[color:var(--foreground)]">{formatTime(s.time)}</div>
+                <div className="mt-0.5 text-[9px] text-[color:var(--subtle)]">{s.createdAt}</div>
+              </div>
+              <Button size="sm" variant="outline" onClick={() => onSeek(s.time)}>跳转</Button>
+              <Button size="sm" variant="ghost" className="text-[color:var(--danger)]" onClick={() => onDelete(s.name)}>删除</Button>
+            </div>
+          ))}
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
 function Stat({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-[9px] border border-[color:var(--border)] bg-[color:var(--surface-2)] px-2.5 py-1.5">

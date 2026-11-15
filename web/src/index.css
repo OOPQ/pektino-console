@@ -179,3 +179,10 @@ html.light .ui-popover { box-shadow: 0 20px 60px rgba(30, 50, 80, .18); }
 .ui-field-label { font-size: 10px; color: var(--subtle); letter-spacing: .25px; }
 
 .ui-scroll-area { scrollbar-width: thin; scrollbar-color: var(--border-strong) transparent; }
+
+video,
+video:focus,
+video:focus-visible,
+video::-webkit-media-controls-panel {
+  outline: none !important;
+}

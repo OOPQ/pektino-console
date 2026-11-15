@@ -34,6 +34,8 @@ export function SettingsPage() {
   const { data, isLoading, refetch, isFetching } = useAppState(5_000)
   const density = useUiStore(s => s.density)
   const setDensity = useUiStore(s => s.setDensity)
+  const longPressRate = useUiStore(s => s.longPressRate)
+  const setLongPressRate = useUiStore(s => s.setLongPressRate)
   const [proxy, setProxy] = React.useState('')
   const [cookie, setCookie] = React.useState('')
   const [ffmpeg, setFfmpeg] = React.useState('')
@@ -170,6 +172,15 @@ export function SettingsPage() {
             ))}
           </div>
           <div className="mt-2 text-[9.5px] leading-5 text-[color:var(--subtle)]">宽松会放大画廊卡片和封面，适合大屏浏览；紧凑适合一次看更多。</div>
+          <div className="mt-4">
+            <div className="ui-field-label mb-1.5">长按空格倍速</div>
+            <div className="flex items-center gap-1 rounded-[9px] border border-[color:var(--border)] bg-[color:var(--surface-2)] p-0.5">
+              {[1.5, 2, 2.5, 3].map(rate => (
+                <Button key={rate} size="sm" variant={longPressRate === rate ? 'outline' : 'ghost'} className="h-7 flex-1 px-2" onClick={() => setLongPressRate(rate)}>{rate}×</Button>
+              ))}
+            </div>
+            <div className="mt-2 text-[9.5px] text-[color:var(--subtle)]">预览里长按空格按这个倍速播放，松开恢复 1×。</div>
+          </div>
         </div>
       </Card>
 

@@ -159,6 +159,7 @@ c4cf594 feat(player): 自动续播 + 音量记忆（v2.1.0 tag）
   `index.html` 只加载 `styles/layers.css`、`styles/themes/default.css` 和 `webawesome.loader.js`；没有加载会重置原生控件的 `native.css`。
 - 顶栏新增 `wa-switch` 明暗切换：`PREFS.theme` 持久化，`<head>` 内联脚本在 CSS 前定 `wa-dark` / `wa-light`，避免刷新闪屏；
   `app.css` 末尾增加 `html.wa-light` 整套变量和主要硬编码颜色的覆盖（表格、菜单、灯箱、抽屉、合集、队列）。
+- 通用控件：输入框 / 下拉 / 勾选框统一高度、圆角、焦点环；下拉自定义箭头，勾选框支持选中 / 半选 / 禁用；工具栏里的复选框不再被 `.bar input{height}` 拉高。
 - 浮层统一：`ui-head`（kicker + 标题 + 关闭 X）、表单卡片、圆角面板、渐变主按钮；已覆盖合集浏览/选择/编辑、设置、回收站、获取数据、链接抓取、下载确认、确认框、队列和预览。
 - 主框架：左侧主菜单（媒体库 / 下载队列 / 合集 / 回收站 / 设置）+ 标题栏收起按钮（216 ↔ 64px，`PREFS.sidebarCollapsed`）；
   菜单通过 MutationObserver 同步当前抽屉/弹窗，关闭后回到媒体库；下载/合集/回收站数量从原角标同步。

@@ -2,6 +2,15 @@
 
 更新时间：2026-11-15
 
+## React 前端重做（进行中）
+
+- 分支：`web-redo`，新工程在 `web/`，旧 `app/web` 保留回退
+- 开发：`cd web; pnpm dev` → `http://127.0.0.1:5173/`，`/api` 代理到 `8791`
+- 技术栈：Vite + React 19 + TS + Tailwind 4 + Radix + Lucide + TanStack Query + Zustand
+- 已完成：应用壳、台账表格/画廊、预览、右键菜单、多选浮条、收藏/复制/评分/已看/回收站、获取数据/链接抓取、任务进度
+- 下一批：下载队列 Drawer、合集页、设置/回收站/抓取完整页、构建接入 8791、旧前端清理
+- 旧 `ui-refactor` 分支只作历史参考，不再继续
+
 ## 项目定位
 
 `D:\project\agent-browser` 是一个 Windows 本机单用户影片抓取 / 下载 / 台账 / 播放控制台。

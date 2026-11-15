@@ -25,7 +25,7 @@ export const DialogContent = React.forwardRef<
     <DialogPrimitive.Overlay className="ui-overlay" />
     <DialogPrimitive.Content
       ref={ref}
-      className={cn('ui-dialog', className)}
+      className={cn('ui-dialog w-[min(1100px,calc(100vw-48px))]', className)}
       {...props}
     >
       <div className="flex shrink-0 items-center justify-between gap-4 border-b border-[color:var(--border)] px-4 py-[11px]">

@@ -1,5 +1,6 @@
 import * as React from 'react'
 import { useNavigate } from 'react-router-dom'
+import { toast } from 'sonner'
 import {
   Archive,
   CalendarClock,
@@ -22,9 +23,13 @@ import {
   Sparkles,
   Table2,
 } from 'lucide-react'
-import { useAppState, useToggleFav } from '@/features/use-app-state'
+import { useAppState } from '@/features/use-app-state'
+import { confirmAction } from '@/store/confirm'
+import { useLibraryActions } from './use-library-actions'
 import { useUiStore } from '@/store/ui'
 import { cn, formatCount } from '@/lib/utils'
+import { post } from '@/lib/api'
+import { Progress } from '@/components/ui/progress'
 import type { Row } from '@/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -36,6 +41,10 @@ import { LibraryTable } from './library-table'
 import { LibraryGallery } from './library-gallery'
 import { PreviewDialog } from './preview-dialog'
 import { filterRows, sortRows, type LibraryFilters, type SortDir, type SortKey } from './library-filters'
+import { SelectionBar } from './selection-bar'
+import { CollectionPicker } from './collection-picker'
+import { ScrapeDialog, LinkScrapeDialog } from './scrape-dialog'
+import type { RowMenuActions } from './row-context-menu'
 
 const STATUS_OPTIONS = [
   { value: 'all', label: '全部状态' },
@@ -84,7 +93,7 @@ const PER_OPTIONS = [
 
 export function LibraryPage() {
   const { data, isLoading, error, refetch, isFetching } = useAppState()
-  const toggleFav = useToggleFav()
+  const actions = useLibraryActions()
   const navigate = useNavigate()
 
   const view = useUiStore(s => s.view)
@@ -94,6 +103,7 @@ export function LibraryPage() {
   const clearSelected = useUiStore(s => s.clearSelected)
   const toggleSelected = useUiStore(s => s.toggleSelected)
   const previewToken = useUiStore(s => s.previewToken)
+  const previewAutoplay = useUiStore(s => s.previewAutoplay)
   const openPreview = useUiStore(s => s.openPreview)
   const closePreview = useUiStore(s => s.closePreview)
 
@@ -109,6 +119,9 @@ export function LibraryPage() {
   const [per, setPer] = React.useState(50)
   const [page, setPage] = React.useState(1)
   const [filterOpen, setFilterOpen] = React.useState(false)
+  const [pickerTokens, setPickerTokens] = React.useState<string[] | null>(null)
+  const [scrapeOpen, setScrapeOpen] = React.useState(false)
+  const [linkOpen, setLinkOpen] = React.useState(false)
 
   const filters: LibraryFilters = { q: deferredQuery, status, source, flag, res, minDur }
   const filtered = React.useMemo(() => filterRows(data?.rows || [], filters), [data?.rows, deferredQuery, status, source, flag, res, minDur])
@@ -156,7 +169,47 @@ export function LibraryPage() {
   }
 
   const onFav = (row: Row) => {
-    toggleFav.mutate({ token: row.token, on: row.fav !== '1' })
+    actions.fav([row.token], row.fav !== '1')
+  }
+
+  const selectedRows = (data?.rows || []).filter(r => selected.includes(r.token))
+
+  const menu: RowMenuActions = {
+    open: openPreview,
+    download: async row => {
+      if (await confirmAction({ title: '开始下载', description: `把「${row.title?.trim() || row.token}」加入下载队列？`, confirmText: '开始下载' })) {
+        actions.download([row.token])
+      }
+    },
+    fav: row => actions.fav([row.token], row.fav !== '1'),
+    collection: row => setPickerTokens([row.token]),
+    watched: row => actions.watched([row.token], !row.last_play),
+    rate: (row, value) => actions.rate([row.token], value),
+    recycle: async row => {
+      if (await confirmAction({ title: '移入回收站', description: `删除「${row.title?.trim() || row.token}」？可在回收站恢复。`, confirmText: '移入回收站', danger: true })) {
+        actions.recycle([row.token])
+      }
+    },
+    copy: row => actions.copy([row.token], data?.rows || []),
+    reveal: row => actions.reveal(row.token),
+    markDone: row => actions.mark([row.token], 'done'),
+  }
+
+  const bulkDownload = async () => {
+    if (await confirmAction({ title: '批量下载', description: `把已选 ${selected.length} 条加入下载队列？`, confirmText: '开始下载' })) {
+      actions.download(selected)
+    }
+  }
+  const bulkRecycle = async () => {
+    if (await confirmAction({ title: '移入回收站', description: `把已选 ${selected.length} 条移入回收站？可在回收站恢复。`, confirmText: '移入回收站', danger: true })) {
+      actions.recycle(selected)
+    }
+  }
+
+  const gacha = () => {
+    const pool = (data?.rows || []).filter(r => r.file_name)
+    if (!pool.length) { toast.error('没有可播放的本地条目'); return }
+    openPreview(pool[Math.floor(Math.random() * pool.length)].token, true)
   }
 
   if (isLoading) return <LibrarySkeleton />
@@ -179,6 +232,7 @@ export function LibraryPage() {
   }
 
   const stats = data?.stats
+  const job = data?.job as { running?: boolean; rank?: string; progress?: { phase?: string; done?: number; total?: number } } | undefined
   const sourceLabel = source === 'all' ? '全部来源' : (data?.sources || []).find(s => s.key === source)?.name || source
   const flagLabel = FLAG_OPTIONS.find(f => f.value === flag)?.label || '不限标记'
 
@@ -186,11 +240,11 @@ export function LibraryPage() {
     <div className="space-y-3 p-4">
       <div className="grid grid-cols-[repeat(auto-fit,minmax(130px,1fr))] gap-2">
         <StatCard icon={Library} label="总数" value={formatCount(stats?.total || 0)} active={status === 'all' && flag === 'none'} onClick={() => { setStatus('all'); setFlag('none') }} />
-        <StatCard icon={Download} label="待下载" value={formatCount(stats?.new || 0)} tone="primary" active={status === 'new'} onClick={() => { setStatus('new'); setFlag('none') }} />
-        <StatCard icon={FolderCheck} label="已完成" value={formatCount(stats?.done || 0)} tone="primary" active={status === 'done'} onClick={() => { setStatus('done'); setFlag('none') }} />
+        <StatCard icon={Download} label="待下载" value={formatCount(stats?.new || 0)} active={status === 'new'} onClick={() => { setStatus('new'); setFlag('none') }} />
+        <StatCard icon={FolderCheck} label="已完成" value={formatCount(stats?.done || 0)} active={status === 'done'} onClick={() => { setStatus('done'); setFlag('none') }} />
         <StatCard icon={Archive} label="在磁盘" value={formatCount(stats?.downloaded || 0)} active={flag === 'have'} onClick={() => { setStatus('all'); setFlag('have') }} />
-        <StatCard icon={FolderX} label="未下载" value={formatCount(stats?.missing || 0)} tone="warning" active={flag === 'miss'} onClick={() => { setStatus('all'); setFlag('miss') }} />
-        <StatCard icon={Heart} label="收藏" value={formatCount(stats?.favorites || 0)} active={flag === 'fav'} onClick={() => { setStatus('all'); setFlag('fav') }} />
+        <StatCard icon={FolderX} label="未下载" value={formatCount(stats?.missing || 0)} active={flag === 'miss'} onClick={() => { setStatus('all'); setFlag('miss') }} />
+        <StatCard icon={Heart} label="收藏" value={formatCount(stats?.favorites || 0)} tone="warning" active={flag === 'fav'} onClick={() => { setStatus('all'); setFlag('fav') }} />
         <StatCard icon={Clock3} label="总时长(h)" value={Number(stats?.hours || 0).toFixed(1)} sub={`今日 +${stats?.todayAdded || 0}`} />
       </div>
 
@@ -261,10 +315,10 @@ export function LibraryPage() {
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
-        <Button size="sm" variant="default" disabled title="下一批接入">
+        <Button size="sm" variant="default" onClick={() => setScrapeOpen(true)}>
           <Plus className="size-3.5" /> 获取数据
         </Button>
-        <Button size="sm" variant="outline" disabled title="下一批接入">
+        <Button size="sm" variant="outline" onClick={() => setLinkOpen(true)}>
           <Link2 className="size-3.5" /> 链接抓取
         </Button>
         <Button size="sm" variant="outline" onClick={() => navigate('/queue')}>
@@ -273,10 +327,10 @@ export function LibraryPage() {
         <Button size="sm" variant="ghost" onClick={() => navigate('/collections')}>
           <Library className="size-3.5" /> 合集
         </Button>
-        <Button size="sm" variant="ghost" disabled title="下一批接入">
+        <Button size="sm" variant="ghost" onClick={gacha}>
           <Sparkles className="size-3.5" /> 抽一卡
         </Button>
-        <Button size="sm" variant="ghost" disabled title="下一批接入">
+        <Button size="sm" variant="ghost" onClick={() => { setStatus('all'); setFlag('towatch') }}>
           <CalendarClock className="size-3.5" /> 待看
         </Button>
         {selected.length > 0 ? (
@@ -286,6 +340,19 @@ export function LibraryPage() {
           </div>
         ) : null}
       </div>
+
+      {job?.running ? (
+        <div className="flex items-center gap-3 rounded-[10px] border border-[color:color-mix(in_srgb,var(--primary)_35%,var(--border))] bg-[color:color-mix(in_srgb,var(--primary)_6%,var(--surface))] px-3 py-2">
+          <span className="shrink-0 text-[10px] text-[color:var(--primary-2)]">
+            {job.progress?.phase || '抓取中'}{job.rank ? ` · ${job.rank}` : ''}
+          </span>
+          <Progress value={job.progress?.total ? Math.round(((job.progress.done || 0) / job.progress.total) * 100) : 0} className="max-w-[360px]" />
+          <span className="text-[9.5px] text-[color:var(--subtle)]">
+            {job.progress?.done || 0}/{job.progress?.total || 0}
+          </span>
+          <Button size="sm" variant="ghost" className="ml-auto h-7" onClick={async () => { await post('/api/job/cancel', {}); toast.success('已请求取消'); refetch() }}>取消任务</Button>
+        </div>
+      ) : null}
 
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="text-[10px] text-[color:var(--subtle)]">
@@ -308,12 +375,13 @@ export function LibraryPage() {
           onTogglePage={togglePage}
           onOpen={openPreview}
           onFav={onFav}
+          menu={menu}
           sortKey={sortKey}
           sortDir={sortDir}
           onSort={sort}
         />
       ) : (
-        <LibraryGallery rows={visible} selected={selected} onToggle={toggleSelected} onOpen={openPreview} onFav={onFav} />
+        <LibraryGallery rows={visible} selected={selected} onToggle={toggleSelected} onOpen={openPreview} onFav={onFav} onCollection={menu.collection} onDownload={menu.download} menu={menu} />
       )}
 
       <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[color:var(--border)] pt-3">
@@ -336,11 +404,32 @@ export function LibraryPage() {
       <PreviewDialog
         rows={sorted}
         token={previewToken}
+        autoplay={previewAutoplay}
         media={data?.media}
         onClose={closePreview}
         onNavigate={openPreview}
         onFav={onFav}
       />
+
+      <SelectionBar
+        count={selected.length}
+        onDownload={bulkDownload}
+        onCollection={() => setPickerTokens(selected)}
+        onRecycle={bulkRecycle}
+        onFav={() => actions.fav(selected, true)}
+        onWatched={() => actions.watched(selected, true)}
+        onMarkDone={() => actions.mark(selected, 'done')}
+        onCopy={() => actions.copy(selected, data?.rows || [])}
+        onClear={clearSelected}
+      />
+
+      <CollectionPicker
+        open={pickerTokens !== null}
+        tokens={pickerTokens || []}
+        onOpenChange={open => { if (!open) setPickerTokens(null) }}
+      />
+      <ScrapeDialog open={scrapeOpen} onOpenChange={setScrapeOpen} sources={data?.sources || []} />
+      <LinkScrapeDialog open={linkOpen} onOpenChange={setLinkOpen} />
     </div>
   )
 }

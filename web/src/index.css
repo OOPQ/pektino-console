@@ -105,8 +105,8 @@ html.light {
 .ui-dialog[data-state="closed"] { animation: ui-pop-out .12s ease; }
 .ui-drawer[data-state="open"] { animation: ui-slide-in .22s cubic-bezier(.2,.8,.2,1); }
 .ui-drawer[data-state="closed"] { animation: ui-slide-out .16s ease; }
-.ui-popover[data-state="open"] { animation: ui-pop-in .14s ease; }
-.ui-popover[data-state="closed"] { animation: ui-pop-out .1s ease; }
+.ui-popover[data-state="open"] { animation: ui-fade-in .12s ease; }
+.ui-popover[data-state="closed"] { animation: ui-fade-out .08s ease; }
 
 @keyframes ui-fade-in { from { opacity: 0 } to { opacity: 1 } }
 @keyframes ui-fade-out { from { opacity: 1 } to { opacity: 0 } }
@@ -128,7 +128,6 @@ html.light {
   top: 50%;
   transform: translate(-50%, -50%);
   z-index: 60;
-  width: min(1100px, calc(100vw - 48px));
   max-height: calc(100vh - 48px);
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-dialog);
@@ -147,7 +146,6 @@ html.light .ui-dialog { box-shadow: 0 30px 90px rgba(30, 50, 80, .22); }
   right: 0;
   bottom: 0;
   z-index: 60;
-  width: min(480px, calc(100vw - 28px));
   border-left: 1px solid var(--border-strong);
   background: linear-gradient(180deg, var(--surface), var(--background-2));
   box-shadow: -24px 0 70px rgba(0, 0, 0, .45);

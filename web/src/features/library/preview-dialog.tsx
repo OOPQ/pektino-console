@@ -23,24 +23,28 @@ import { CoverImage } from '@/components/cover-image'
 type Props = {
   rows: Row[]
   token: string | null
+  autoplay?: boolean
   media?: MediaConfig
   onClose: () => void
   onNavigate: (token: string) => void
   onFav: (row: Row) => void
 }
 
-export function PreviewDialog({ rows, token, media, onClose, onNavigate, onFav }: Props) {
+export function PreviewDialog({ rows, token, autoplay = false, media, onClose, onNavigate, onFav }: Props) {
   const index = React.useMemo(() => rows.findIndex(r => r.token === token), [rows, token])
   const row = index >= 0 ? rows[index] : null
   const [playing, setPlaying] = React.useState(false)
+  const [videoReady, setVideoReady] = React.useState(false)
   const [videoError, setVideoError] = React.useState(false)
   const [copied, setCopied] = React.useState(false)
+  const canPlay = Boolean(row?.file_name && media?.base && media?.key)
 
   React.useEffect(() => {
-    setPlaying(false)
+    setPlaying(Boolean(autoplay && canPlay))
+    setVideoReady(false)
     setVideoError(false)
     setCopied(false)
-  }, [token])
+  }, [token, autoplay, canPlay])
 
   const prev = index > 0 ? rows[index - 1] : null
   const next = index >= 0 && index < rows.length - 1 ? rows[index + 1] : null
@@ -64,7 +68,6 @@ export function PreviewDialog({ rows, token, media, onClose, onNavigate, onFav }
 
   if (!row) return null
 
-  const canPlay = Boolean(row.file_name && media?.base && media?.key)
   const videoSrc = canPlay ? mediaUrl(media!.base, media!.key, row.token, Number(row.last_seen?.replace(/\D/g, '').slice(-9)) || 0) : ''
   const source = statusOf(row.status)
 
@@ -103,7 +106,9 @@ export function PreviewDialog({ rows, token, media, onClose, onNavigate, onFav }
           </div>
         }
       >
-        <div className="relative flex min-h-[420px] flex-1 items-center justify-center overflow-hidden bg-[#05080c] p-3">
+        <div className="relative flex min-h-[420px] flex-1 items-center justify-center overflow-hidden bg-[#05080c]">
+          <CoverImage token={row.token} full fit="contain" alt={rowTitle(row)} className="absolute inset-0 h-full w-full" />
+
           {playing && !videoError ? (
             <video
               key={row.token}
@@ -112,51 +117,57 @@ export function PreviewDialog({ rows, token, media, onClose, onNavigate, onFav }
               controls
               autoPlay
               playsInline
+              preload="auto"
+              onCanPlay={() => setVideoReady(true)}
+              onPlaying={() => setVideoReady(true)}
               onError={() => { setVideoError(true); setPlaying(false) }}
-              className="max-h-full max-w-full rounded-lg object-contain"
-            />
-          ) : (
-            <>
-              <CoverImage token={row.token} full fit="contain" alt={rowTitle(row)} className="absolute inset-0 h-full w-full" />
-              {canPlay ? (
-                <Button
-                  size="md"
-                  variant="outline"
-                  className="relative z-10 border-white/20 bg-black/55 text-white backdrop-blur hover:bg-black/70"
-                  onClick={() => { setVideoError(false); setPlaying(true) }}
-                >
-                  <Play className="size-4 fill-current" /> 播放
-                </Button>
-              ) : (
-                <Badge tone="default" className="relative z-10 border-white/15 bg-black/55 text-white">
-                  本地还没有这个文件
-                </Badge>
+              className={cn(
+                'absolute inset-0 z-10 h-full w-full object-contain transition-opacity duration-200',
+                videoReady ? 'opacity-100' : 'opacity-0',
               )}
-            </>
-          )}
+            />
+          ) : null}
 
-          <div className="pointer-events-none absolute inset-x-2 bottom-2 flex items-center justify-between">
-            <div className="pointer-events-auto">
-              <IconButton label="上一项" onClick={() => prev && onNavigate(prev.token)} disabled={!prev}>
-                <ChevronLeft className="size-4" />
-              </IconButton>
-            </div>
-            {playing && !videoError ? (
+          <div className="pointer-events-none absolute inset-0 z-20 grid place-items-center">
+            {!playing && canPlay ? (
               <Button
-                size="sm"
+                size="md"
                 variant="outline"
-                className="pointer-events-auto border-white/20 bg-black/55 text-white backdrop-blur"
-                onClick={() => setPlaying(false)}
+                className="pointer-events-auto border-white/20 bg-black/55 text-white backdrop-blur hover:bg-black/70"
+                onClick={() => { setVideoError(false); setVideoReady(false); setPlaying(true) }}
               >
-                <Pause className="size-3.5" /> 收起
+                <Play className="size-4 fill-current" /> 播放
               </Button>
             ) : null}
-            <div className="pointer-events-auto">
-              <IconButton label="下一项" onClick={() => next && onNavigate(next.token)} disabled={!next}>
-                <ChevronRight className="size-4" />
-              </IconButton>
-            </div>
+            {!playing && !canPlay ? (
+              <Badge tone="default" className="border-white/15 bg-black/55 text-white">本地还没有这个文件</Badge>
+            ) : null}
+            {playing && !videoReady && !videoError ? (
+              <span className="rounded-full border border-white/15 bg-black/55 px-3 py-1 text-[10px] text-white/80 backdrop-blur">加载视频…</span>
+            ) : null}
           </div>
+
+          <div className="absolute left-2 top-1/2 z-30 -translate-y-1/2">
+            <IconButton label="上一项" onClick={() => prev && onNavigate(prev.token)} disabled={!prev}>
+              <ChevronLeft className="size-4" />
+            </IconButton>
+          </div>
+          <div className="absolute right-2 top-1/2 z-30 -translate-y-1/2">
+            <IconButton label="下一项" onClick={() => next && onNavigate(next.token)} disabled={!next}>
+              <ChevronRight className="size-4" />
+            </IconButton>
+          </div>
+
+          {playing && !videoError ? (
+            <Button
+              size="sm"
+              variant="outline"
+              className="absolute right-2 top-2 z-30 border-white/20 bg-black/55 text-white backdrop-blur"
+              onClick={() => setPlaying(false)}
+            >
+              <Pause className="size-3.5" /> 收起视频
+            </Button>
+          ) : null}
         </div>
 
         <aside className="w-[320px] shrink-0 overflow-auto border-l border-[color:var(--border)] p-4">

@@ -16,17 +16,19 @@ import { Stars } from '@/components/stars'
 import { StatusBadge } from '@/components/status-badge'
 import { CoverImage } from '@/components/cover-image'
 import type { SortDir, SortKey } from './library-filters'
+import { RowContextMenu, type RowMenuActions } from './row-context-menu'
 
 type Props = {
   rows: Row[]
   selected: string[]
   onToggle: (token: string) => void
   onTogglePage: (checked: boolean) => void
-  onOpen: (token: string) => void
+  onOpen: (token: string, autoplay?: boolean) => void
   onFav: (row: Row) => void
   sortKey: SortKey
   sortDir: SortDir
   onSort: (key: SortKey) => void
+  menu: RowMenuActions
 }
 
 function SortHead({
@@ -73,6 +75,7 @@ export function LibraryTable({
   sortKey,
   sortDir,
   onSort,
+  menu,
 }: Props) {
   const pageTokens = rows.map(r => r.token)
   const selectedOnPage = pageTokens.filter(t => selected.includes(t)).length
@@ -117,8 +120,8 @@ export function LibraryTable({
             const status = statusOf(row.status)
             const isSelected = selected.includes(row.token)
             return (
+              <RowContextMenu key={row.token} row={row} actions={menu}>
               <tr
-                key={row.token}
                 className={cn(
                   'group border-b border-[color:color-mix(in_srgb,var(--border)_65%,transparent)] transition-colors last:border-0 hover:bg-[color:color-mix(in_srgb,var(--primary)_4%,transparent)]',
                   isSelected && 'bg-[color:color-mix(in_srgb,var(--primary)_6%,transparent)]',
@@ -132,7 +135,7 @@ export function LibraryTable({
                   />
                 </td>
                 <td className="px-2 py-1.5">
-                  <button type="button" onClick={() => onOpen(row.token)} className="block" aria-label="打开预览">
+                  <button type="button" onClick={() => onOpen(row.token, true)} className="block" aria-label="打开预览">
                     <CoverImage token={row.token} alt={rowTitle(row)} className="h-[54px] w-10 rounded-[7px]" />
                   </button>
                 </td>
@@ -157,7 +160,7 @@ export function LibraryTable({
                 <td className="px-2 py-1.5"><StatusBadge status={row.status} /></td>
                 <td className="px-2 py-1.5">
                   <div className="flex items-center justify-end gap-0.5 opacity-70 transition-opacity group-hover:opacity-100">
-                    <IconButton label="预览 / 播放" size="sm" onClick={() => onOpen(row.token)}>
+                    <IconButton label="预览 / 播放" size="sm" onClick={() => onOpen(row.token, true)}>
                       <Play className="size-3.5" />
                     </IconButton>
                     <IconButton
@@ -175,6 +178,7 @@ export function LibraryTable({
                   </div>
                 </td>
               </tr>
+              </RowContextMenu>
             )
           })}
         </tbody>

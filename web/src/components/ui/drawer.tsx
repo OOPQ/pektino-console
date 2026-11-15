@@ -22,7 +22,7 @@ export const DrawerContent = React.forwardRef<
 >(({ title, description, footer, children, className, bodyClassName, ...props }, ref) => (
   <DialogPrimitive.Portal>
     <DialogPrimitive.Overlay className="ui-overlay" />
-    <DialogPrimitive.Content ref={ref} className={cn('ui-drawer', className)} {...props}>
+    <DialogPrimitive.Content ref={ref} className={cn('ui-drawer w-[min(480px,calc(100vw-28px))]', className)} {...props}>
       <div className="flex shrink-0 items-center justify-between gap-4 border-b border-[color:var(--border)] px-4 py-[11px]">
         <div className="min-w-0">
           <DialogPrimitive.Title className="truncate text-[12px] font-semibold tracking-[.2px]">

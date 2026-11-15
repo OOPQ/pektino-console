@@ -59,6 +59,7 @@ export type Stats = {
 export type Source = {
   key: string
   name: string
+  pageSize?: number
   capabilities?: string[]
   ranks?: Array<{ key: string; label: string; group?: string }>
 }

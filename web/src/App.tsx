@@ -1,6 +1,9 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
+import { Toaster } from 'sonner'
 import { TooltipProvider } from '@/components/ui/tooltip'
+import { ConfirmDialog } from '@/components/confirm-dialog'
+import { useUiStore } from '@/store/ui'
 import { AppShell, PlaceholderPage } from '@/components/app-shell'
 import { LibraryPage } from '@/features/library/library-page'
 
@@ -12,6 +15,11 @@ const queryClient = new QueryClient({
     },
   },
 })
+
+function ToasterHost() {
+  const theme = useUiStore(s => s.theme)
+  return <Toaster theme={theme} position="bottom-right" richColors closeButton />
+}
 
 export default function App() {
   return (
@@ -29,6 +37,8 @@ export default function App() {
             </Route>
           </Routes>
         </BrowserRouter>
+        <ConfirmDialog />
+        <ToasterHost />
       </TooltipProvider>
     </QueryClientProvider>
   )

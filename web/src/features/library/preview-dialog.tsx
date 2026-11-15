@@ -9,6 +9,7 @@ import {
   Copy,
   Download,
   ExternalLink,
+  FastForward,
   List,
   Maximize,
   Minimize,
@@ -58,6 +59,7 @@ export function PreviewDialog({ rows, token, autoplay = false, media, onClose, o
   const [hoverSnap, setHoverSnap] = React.useState<Snapshot | null>(null)
   const [timelineOpen, setTimelineOpen] = React.useState(false)
   const [volumeHint, setVolumeHint] = React.useState('')
+  const [accelerating, setAccelerating] = React.useState(false)
   const [currentTime, setCurrentTime] = React.useState(0)
   const [duration, setDuration] = React.useState(0)
   const [isPlaying, setIsPlaying] = React.useState(false)
@@ -105,9 +107,11 @@ export function PreviewDialog({ rows, token, autoplay = false, media, onClose, o
       toast.success('快照已生成')
       qc.invalidateQueries({ queryKey: ['snapshots', token] })
       setPendingSnap(null)
+    setAccelerating(false)
     } else if (job.status === 'failed') {
       toast.error(job.error || '快照生成失败')
       setPendingSnap(null)
+    setAccelerating(false)
     }
   }, [snapshotJobsQuery.data, pendingSnap, qc, token])
   const collectionsQuery = useQuery<{ items: Array<{ id: number; name: string; color: string; has: boolean }> }>({
@@ -135,6 +139,7 @@ export function PreviewDialog({ rows, token, autoplay = false, media, onClose, o
     setIsMuted(false)
     setHoverSnap(null)
     setPendingSnap(null)
+    setAccelerating(false)
   }, [token, autoplay, canPlay, row?.seconds])
 
   const prev = index > 0 ? rows[index - 1] : null
@@ -174,6 +179,7 @@ export function PreviewDialog({ rows, token, autoplay = false, media, onClose, o
       const pct = Math.round(v.volume * 100)
       setVolumeHint(v.muted ? '静音' : `音量 ${pct}%`)
       window.clearTimeout(hintTimer)
+      setAccelerating(false)
       hintTimer = window.setTimeout(() => setVolumeHint(''), 1200)
     }
     const blurActive = () => { const a = document.activeElement as HTMLElement | null; if (a && a !== document.body) a.blur() }
@@ -191,7 +197,7 @@ export function PreviewDialog({ rows, token, autoplay = false, media, onClose, o
           if (canPlay) setPlaying(true)
           return
         }
-        if (!v.paused) v.playbackRate = longPressRate
+        if (!v.paused) { v.playbackRate = longPressRate; setAccelerating(true) }
         blurActive()
         return
       }
@@ -241,6 +247,7 @@ if (e.key === 'f' || e.key === 'F') { e.preventDefault(); e.stopImmediatePropaga
       if (!v) return
       const held = performance.now() - spaceAt
       v.playbackRate = playbackRate
+      setAccelerating(false)
       blurActive()
       if (held < 250) {
         if (v.paused) { void v.play().catch(() => {}); setPlaying(true) }
@@ -255,6 +262,7 @@ if (e.key === 'f' || e.key === 'F') { e.preventDefault(); e.stopImmediatePropaga
       window.removeEventListener('keydown', onKeyDown, true)
       window.removeEventListener('keyup', onKeyUp, true)
       window.clearTimeout(hintTimer)
+      setAccelerating(false)
     }
   }, [token, canPlay, qc, longPressRate, playbackRate])
 
@@ -552,6 +560,13 @@ onPlay={() => { setIsPlaying(true); if (videoRef.current) videoRef.current.playb
           {volumeHint ? (
             <div className="absolute left-1/2 top-3 z-30 -translate-x-1/2 rounded-full border border-white/15 bg-black/60 px-3 py-1 text-[10px] text-white backdrop-blur">
               {volumeHint}
+            </div>
+          ) : null}
+
+          {accelerating ? (
+            <div className="pointer-events-none absolute left-1/2 top-3 z-40 flex -translate-x-1/2 items-center gap-1.5 rounded-full border border-white/20 bg-black/70 px-2.5 py-1 text-[10px] font-medium text-white shadow-lg backdrop-blur" aria-live="polite">
+              <FastForward className="size-3.5 text-[color:var(--warning)]" />
+              正在加速播放 · {longPressRate}×
             </div>
           ) : null}
 

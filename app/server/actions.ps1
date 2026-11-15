@@ -855,6 +855,27 @@ function Get-FfmpegPath {
     return ''
 }
 
+function Get-DownloadHistory {
+    <#  保留上一轮下载的终态记录（完成/失败/取消）用于溯源。
+        失败记录不再随重启/新任务自动消失；只剔除本次要重下的 token，并按组限量防止 download.json 无限增长。 #>
+    param($Items, $ExcludeTokens)
+    $terminal = @('done', 'failed', 'dead', 'cancelled')
+    $keep = @(@($Items) | Where-Object { $_ -and ($terminal -contains [string]$_.state) })
+    if ($ExcludeTokens) {
+        $keep = @($keep | Where-Object { -not $ExcludeTokens.ContainsKey([string]$_.token) })
+    }
+    $done = @($keep | Where-Object { $_.state -eq 'done' } | Select-Object -Last 200)
+    $failed = @($keep | Where-Object { $_.state -eq 'failed' -or $_.state -eq 'dead' } | Select-Object -Last 200)
+    $cancelled = @($keep | Where-Object { $_.state -eq 'cancelled' } | Select-Object -Last 100)
+    $out = @(@($done) + @($failed) + @($cancelled))
+    foreach ($x in $out) {
+        if ($null -eq $x.PSObject.Properties['history']) {
+            $x | Add-Member -NotePropertyName history -NotePropertyValue $true -Force
+        }
+    }
+    return $out
+}
+
 function Start-Download {
     <#
       把选中/待下载条目交给内置下载器（独立进程，支持续传与并发）。
@@ -950,8 +971,15 @@ function Start-Download {
         if (Test-Path $DlProgress) {
             try { $pj = Get-Content $DlProgress -Raw -Encoding UTF8 | ConvertFrom-Json } catch { }
         }
+        # 只把「正在跑/排队/暂停」当作已在队列；失败/完成的历史记录允许重新加入
         $inRun = @{}
-        if ($pj -and $pj.items) { foreach ($i in @($pj.items)) { if ($i.token) { $inRun[[string]$i.token] = $true } } }
+        if ($pj -and $pj.items) {
+            foreach ($i in @($pj.items)) {
+                if ($i.token -and (@('queued', 'downloading', 'paused') -contains [string]$i.state)) {
+                    $inRun[[string]$i.token] = $true
+                }
+            }
+        }
         $add = @($queue | Where-Object { -not $inRun.ContainsKey([string]$_.token) })
         if (-not $add.Count) {
             return @{ ok = $true; appended = 0; count = 0; note = '这些条目已经在当前下载队列里' }
@@ -962,13 +990,21 @@ function Start-Download {
         if ($pj) {
             try {
                 $items = @($pj.items)
-                $merged = @($items) + @($add | ForEach-Object {
+                # 重试失败/已完成的 token：先移除旧记录，再插入 queued，避免同一 token 出现两条
+                $addTokens = @{}
+                foreach ($a in $add) { $addTokens[[string]$a.token] = $true }
+                $baseItems = @($items | Where-Object { -not $addTokens.ContainsKey([string]$_.token) })
+                $merged = @($baseItems) + @($add | ForEach-Object {
                         [pscustomobject]@{ token = $_.token; state = 'queued'; bytes = 0; expected = 0; speed = 0; error = '' }
                     })
+                $doneCount = @($merged | Where-Object { $_.state -eq 'done' }).Count
+                $failedCount = @($merged | Where-Object { $_.state -eq 'failed' -or $_.state -eq 'dead' }).Count
+                $queuedCount = @($merged | Where-Object { $_.state -eq 'queued' }).Count
+                $pausedCount = @($merged | Where-Object { $_.state -eq 'paused' }).Count
                 $obj = [ordered]@{
                     running = $true; paused = [bool]$pj.paused; phase = 'download'
-                    total = $merged.Count; done = [int]$pj.done; failed = [int]$pj.failed
-                    queued = ([int]$pj.queued + $add.Count); pausedCount = [int]$pj.pausedCount
+                    total = $merged.Count; done = $doneCount; failed = $failedCount
+                    queued = $queuedCount; pausedCount = $pausedCount
                     bytes = [int64]$pj.bytes; speed = $pj.speed; active = @($pj.active)
                     items = $merged; startedAt = $pj.startedAt
                 }
@@ -1005,21 +1041,25 @@ function Start-Download {
     Remove-Item $DlPauseItems -Force -ErrorAction SilentlyContinue
 
     # 先把「已排队」写进进度文件：前端不用等下载器第一轮 poll 才看到任务。
-    # 同时保留上一轮已完成的记录（完成项只由用户点「清理已完成」清除，不自动丢）。
+    # 同时保留上一轮完成/失败/取消的记录：失败项不自动清空，方便溯源；要重下的 token 会剔除旧记录。
     $history = @()
     if (Test-Path $DlProgress) {
         try {
             $old = Get-Content $DlProgress -Raw -Encoding UTF8 | ConvertFrom-Json
-            $history = @($old.items | Where-Object { $_.state -eq 'done' } | Select-Object -Last 200)
+            $newTokens = @{}
+            foreach ($q in $queue) { $newTokens[[string]$q.token] = $true }
+            $history = @(Get-DownloadHistory -Items @($old.items) -ExcludeTokens $newTokens)
         } catch { }
     }
+    $historyDone = @($history | Where-Object { $_.state -eq 'done' }).Count
+    $historyFailed = @($history | Where-Object { $_.state -eq 'failed' -or $_.state -eq 'dead' }).Count
     $now = (Get-Date).ToString('s')
     $initItems = @(@($history) + @($queue | ForEach-Object {
                 [pscustomobject]@{ token = $_.token; state = 'queued'; bytes = 0; expected = 0; speed = 0; error = '' }
             }))
     $init = [ordered]@{
         running = $true; paused = $false; phase = 'download'
-        total = $initItems.Count; done = @($history).Count; failed = 0
+        total = $initItems.Count; done = $historyDone; failed = $historyFailed
         queued = $queue.Count; pausedCount = 0; bytes = 0; speed = 0
         active = @(); items = $initItems; startedAt = $now
     }
@@ -1137,17 +1177,23 @@ function Reset-DownloadState {
 
 function Clean-StaleProgress {
     <#  进程已经不在了但进度文件还写着 running/queued（取消、崩溃留下的）：
-        收尾成「只剩已完成记录」，避免队列抽屉里挂着一大堆假排队条目。  #>
+        清掉假排队项，但保留完成/失败/取消的终态记录，失败项不再随重启自动消失。  #>
     if (-not (Test-Path $DlProgress)) { return }
     try {
         $p = Get-Content $DlProgress -Raw -Encoding UTF8 | ConvertFrom-Json
-        $done = @($p.items | Where-Object { $_.state -eq 'done' })
-        $others = @($p.items | Where-Object { $_.state -ne 'done' })
-        if (-not $p.running -and $others.Count -eq 0) { return }
+        $items = @($p.items)
+        $stale = @($items | Where-Object { @('queued', 'downloading', 'paused') -contains [string]$_.state })
+        # 已有终态记录但还没打 history 标记（旧版本文件）时也补一次，避免下次被当成本轮失败重查
+        $needsFlag = @($items | Where-Object { -not $_.history }).Count -gt 0
+        if (-not $p.running -and $stale.Count -eq 0 -and -not $needsFlag) { return }
+        $history = @(Get-DownloadHistory -Items $items)
+        $doneCount = @($history | Where-Object { $_.state -eq 'done' }).Count
+        $failedCount = @($history | Where-Object { $_.state -eq 'failed' -or $_.state -eq 'dead' }).Count
         $obj = [ordered]@{
             running = $false; paused = $false; phase = 'done'
-            total = $done.Count; done = $done.Count; failed = 0
-            bytes = 0; speed = 0; items = $done; updatedAt = (Get-Date).ToString('s')
+            total = $history.Count; done = $doneCount; failed = $failedCount
+            queued = 0; pausedCount = 0; bytes = 0; speed = 0
+            items = $history; updatedAt = (Get-Date).ToString('s')
         }
         (ConvertTo-Json -InputObject $obj -Depth 5) | Set-Content -Path $DlProgress -Encoding UTF8 -Force
         Touch-State
@@ -1162,13 +1208,14 @@ function Clear-DownloadDone {
     try {
         $p = Get-Content $DlProgress -Raw -Encoding UTF8 | ConvertFrom-Json
         $items = @($p.items)
-        $keep = @($items | Where-Object { $_.state -ne 'done' })
-        $removed = $items.Count - $keep.Count
+        # 只清完成项；失败/取消历史保留（Get-DownloadHistory 顺带补 history 标记并限量）
+        $keep = @(Get-DownloadHistory -Items $items | Where-Object { $_.state -ne 'done' })
+        $removed = @($items | Where-Object { $_.state -eq 'done' }).Count
         if ($removed -le 0) { return @{ ok = $true; removed = 0 } }
         $obj = [ordered]@{
             running = $false; paused = $false; phase = 'done'; total = $keep.Count;
-            done = @($keep | Where-Object { $_.state -eq 'done' }).Count;
-            failed = @($keep | Where-Object { $_.state -eq 'failed' }).Count;
+            done = 0;
+            failed = @($keep | Where-Object { $_.state -eq 'failed' -or $_.state -eq 'dead' }).Count;
             bytes = 0; speed = 0; items = @($keep); updatedAt = (Get-Date).ToString('s')
         }
         (ConvertTo-Json -InputObject $obj -Depth 5) | Set-Content -Path $DlProgress -Encoding UTF8 -Force
@@ -1311,7 +1358,8 @@ function Apply-DeadFromProgress {
         # 主循环是单线程，而这里每条都要做「复核 + 等 1.5 秒 + 再复核」的网络请求：
         # 以前一次最多 10 条，最坏能把 SSE 和页面请求卡住半分钟以上。改成 4 条 + 6 秒预算，
         # 剩下的条目下一轮继续处理（进度文件还在，不会漏）。
-        $dead = @($pj.items | Where-Object { $_.state -eq 'dead' } | Select-Object -First 4)
+        # 只复核本次运行新产生的 dead；上一轮保留的 history 失败记录不重复打网络
+        $dead = @($pj.items | Where-Object { $_.state -eq 'dead' -and -not $_.history } | Select-Object -First 4)
         $budgetMs = 6000
         $startedAt = Get-Date
         $n = 0

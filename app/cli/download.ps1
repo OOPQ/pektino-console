@@ -433,12 +433,23 @@ $jobs = @{}          # token -> @{ proc; part; final; log; expected; lastBytes; 
 $pending = New-Object System.Collections.Queue
 foreach ($it in $queue) { $pending.Enqueue($it) }
 
-# 已完成的记录跨轮次保留：只由控制台的「清理已完成」删除，下载器自己不丢
+# 完成/失败/取消记录跨轮次保留：失败项不自动清空，方便溯源；重下的 token 会剔除旧记录
 $history = @()
 try {
     if (Test-Path -LiteralPath $ProgressFile) {
         $oldProgress = Get-Content -LiteralPath $ProgressFile -Raw -Encoding UTF8 | ConvertFrom-Json
-        $history = @($oldProgress.items | Where-Object { $_.state -eq 'done' } | Select-Object -Last 200)
+        $terminal = @('done', 'failed', 'dead', 'cancelled')
+        $histAll = @($oldProgress.items | Where-Object { $_ -and ($terminal -contains [string]$_.state) })
+        $histAll = @($histAll | Where-Object { -not $queueMap.ContainsKey([string]$_.token) })
+        $histDoneItems = @($histAll | Where-Object { $_.state -eq 'done' } | Select-Object -Last 200)
+        $histFailedItems = @($histAll | Where-Object { $_.state -eq 'failed' -or $_.state -eq 'dead' } | Select-Object -Last 200)
+        $histCancelledItems = @($histAll | Where-Object { $_.state -eq 'cancelled' } | Select-Object -Last 100)
+        $history = @(@($histDoneItems) + @($histFailedItems) + @($histCancelledItems))
+        foreach ($x in $history) {
+            if ($null -eq $x.PSObject.Properties['history']) {
+                $x | Add-Member -NotePropertyName history -NotePropertyValue $true -Force
+            }
+        }
     }
 } catch { }
 
@@ -517,7 +528,19 @@ try {
         # ---- 追加队列：控制台在运行中新增的条目 ----
         foreach ($it in (Read-AddedItems)) {
             $tk = [string]$it.token
-            if (-not $tk -or $states.ContainsKey($tk)) { continue }
+            if (-not $tk) { continue }
+            # 重新加入的 token：先删掉旧的终态历史，避免 progress.items 里同一 token 出现两条
+            $history = @($history | Where-Object { [string]$_.token -ne $tk })
+            if ($states.ContainsKey($tk)) {
+                $cur = [string]$states[$tk].state
+                # 失败/失效/已取消的 token 允许原地重试
+                if (@('failed', 'dead', 'cancelled') -contains $cur) {
+                    $queueMap[$tk] = $it
+                    $states[$tk] = @{ state = 'queued'; bytes = 0; expected = 0; error = '' }
+                    $pending.Enqueue($it)
+                }
+                continue
+            }
             $queueMap[$tk] = $it
             $states[$tk] = @{ state = 'queued'; bytes = 0; expected = 0; error = '' }
             $pending.Enqueue($it)
@@ -697,14 +720,16 @@ try {
         }
         foreach ($tk in $jobs.Keys) { $speed += $jobs[$tk].speed }
 
+        $histDoneCount = @($history | Where-Object { $_.state -eq 'done' }).Count
+        $histFailedCount = @($history | Where-Object { $_.state -eq 'failed' -or $_.state -eq 'dead' }).Count
         Write-ProgressFile @{
             running   = $true
             paused    = [bool]$paused
             pausedItems = @($pausedItems)
             phase     = 'download'
             total     = ($states.Count + $history.Count)
-            done      = ($doneCount + $history.Count)
-            failed    = $failCount
+            done      = ($doneCount + $histDoneCount)
+            failed    = ($failCount + $histFailedCount)
             queued    = $queuedCount
             pausedCount = $pausedCount
             bytes     = $bytes
@@ -725,8 +750,11 @@ try {
         if ($states[$tk].state -eq 'done') { $doneCount++; $bytes += [int64]$states[$tk].bytes }
         elseif ($states[$tk].state -eq 'failed') { $failCount++; $errs += @{ token = $tk; error = $states[$tk].error } }
     }
+    $histDoneCount = @($history | Where-Object { $_.state -eq 'done' }).Count
+    $histFailedCount = @($history | Where-Object { $_.state -eq 'failed' -or $_.state -eq 'dead' }).Count
     Write-ProgressFile @{
-        running = $false; paused = $false; phase = 'done'; total = ($states.Count + $history.Count); done = ($doneCount + $history.Count); failed = $failCount;
+        running = $false; paused = $false; phase = 'done'; total = ($states.Count + $history.Count);
+        done = ($doneCount + $histDoneCount); failed = ($failCount + $histFailedCount);
         bytes = $bytes; speed = 0; errors = @($errs | Select-Object -Last 20); startedAt = $startAt;
         items = @(@($history) + @($states.Keys | ForEach-Object { [pscustomobject]@{ token = $_; state = $states[$_].state; bytes = $states[$_].bytes; error = $states[$_].error } }));
         finishedAt = (Get-Date).ToString('s')

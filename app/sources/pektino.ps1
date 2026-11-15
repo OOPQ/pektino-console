@@ -131,10 +131,18 @@ function Get-PektinoCoverUrl {
 
 function Resolve-PektinoDownload {
     param($Context, $Row)
+    # video.twimg.com 现在会拒绝第三方 Referer：带 pektino 页面地址的 HEAD/GET 直接 403，
+    # 而不带 Referer（或带 x.com）时正常 200/206。浏览器里的播放器同样不带 pektino Referer。
+    # 其它 CDN 仍保留 Referer，避免以后换域名时反而被防盗链挡住。
+    $headers = @{}
+    $u = [string]$Row.url
+    if ($u -and $u -notmatch '(?i)^https?://video\.twimg\.com/') {
+        $headers['Referer'] = [string]$Row.page_url
+    }
     return @{
-        url     = [string]$Row.url
+        url     = $u
         mode    = 'http'
-        headers = @{ Referer = [string]$Row.page_url }
+        headers = $headers
     }
 }
 

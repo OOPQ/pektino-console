@@ -1317,6 +1317,84 @@ function initBulk() {
 }
 
 /* ================= 初始化 ================= */
+function initSidebar() {
+  const side = $('#sidebar');
+  if (!side) return;
+  const body = document.body;
+  const navMeta = {
+    library: ['媒体库', '台账与媒体管理'],
+    queue: ['下载队列', '进行中 · 已完成 · 失败'],
+    collections: ['合集', '整理与筛选'],
+    bin: ['回收站', '恢复或彻底删除'],
+    settings: ['设置', '项目 · 下载 · 代理']
+  };
+  const setNav = (nav) => {
+    side.querySelectorAll('[data-nav]').forEach(b => b.classList.toggle('on', b.dataset.nav === nav));
+    const m = navMeta[nav] || navMeta.library;
+    const t = $('#pageTitle'), s = $('#pageSub');
+    if (t) t.textContent = m[0];
+    if (s) s.textContent = m[1];
+  };
+  const applyMini = (mini) => {
+    body.classList.toggle('side-mini', mini);
+    const b = $('#sideToggle');
+    if (b) { b.textContent = mini ? '»' : '«'; b.title = mini ? '展开主菜单' : '收起主菜单'; }
+  };
+  applyMini(!!PREFS.sidebarCollapsed);
+  $('#sideToggle').onclick = () => {
+    PREFS.sidebarCollapsed = !body.classList.contains('side-mini');
+    savePrefs();
+    applyMini(PREFS.sidebarCollapsed);
+  };
+
+  const closePanels = () => {
+    ['#dlDrawer', '#colBrowser', '#binDrawer', '#drawer', '#colPick', '#colEdit', '#dlConfirm', '#confirmModal']
+      .forEach(sel => { const el = $(sel); if (el) el.classList.remove('on'); });
+    if ($('#lightbox').classList.contains('on')) $('#lbClose').click();
+    if ($('#gacha').classList.contains('on')) $('#gClose').click();
+  };
+
+  side.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-nav]');
+    if (!b) return;
+    const nav = b.dataset.nav;
+    closePanels();
+    if (nav === 'library') return setNav('library');
+    if (nav === 'queue') return $('#btnDlQueue').click();
+    if (nav === 'collections') return $('#btnCollections').click();
+    if (nav === 'bin') return $('#moreMenu [data-more="recycle-bin"]').click();
+    if (nav === 'settings') return $('#btnSettings').click();
+  });
+
+  const sync = () => {
+    if ($('#dlDrawer').classList.contains('on')) return setNav('queue');
+    if ($('#colBrowser').classList.contains('on')) return setNav('collections');
+    if ($('#binDrawer').classList.contains('on')) return setNav('bin');
+    if ($('#drawer').classList.contains('on')) return setNav('settings');
+    setNav('library');
+  };
+  ['#dlDrawer', '#colBrowser', '#binDrawer', '#drawer'].forEach(sel => {
+    const el = $(sel);
+    if (el) new MutationObserver(sync).observe(el, { attributes: true, attributeFilter: ['class'] });
+  });
+  sync();
+
+  const bindCount = (srcSel, dstSel) => {
+    const src = $(srcSel), dst = $(dstSel);
+    if (!src || !dst) return;
+    const upd = () => {
+      const n = src.hidden ? '' : (src.textContent || '').replace(/[()]/g, '').trim();
+      dst.textContent = n;
+      dst.hidden = !n || n === '0';
+    };
+    new MutationObserver(upd).observe(src, { childList: true, subtree: true, attributes: true, attributeFilter: ['hidden'] });
+    upd();
+  };
+  bindCount('#dlBadge', '#sideDlCount');
+  bindCount('#colCount', '#sideColCount');
+  bindCount('#binCount', '#sideBinCount');
+}
+
 function initTheme() {
   const sw = $('#themeSwitch');
   if (!sw) return;
@@ -1370,6 +1448,7 @@ initBulk();
 initDownloadQueue();
 initBin();
 initCollections();
+initSidebar();
 
 // reload 事件做短防抖：一次动作/SSE 连续触发时只发一轮 /api/state
 let _reloadTimer = 0;

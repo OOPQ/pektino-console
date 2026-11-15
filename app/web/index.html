@@ -20,17 +20,50 @@
 </head>
 <body>
 
+<!-- ===== 主菜单 ===== -->
+<aside class="sidebar" id="sidebar">
+  <div class="side-brand">
+    <span class="logo" aria-hidden="true">p</span>
+    <div class="side-brand-text"><b>pektino</b><small>本地媒体台账</small></div>
+  </div>
+  <nav class="side-nav" aria-label="主菜单">
+    <div class="side-label">浏览</div>
+    <button type="button" class="side-item on" data-nav="library" title="媒体库">
+      <span class="si">▦</span><span class="slabel">媒体库</span>
+    </button>
+    <button type="button" class="side-item" data-nav="queue" title="下载队列">
+      <span class="si">↓</span><span class="slabel">下载队列</span>
+      <span class="side-count" id="sideDlCount" hidden></span>
+    </button>
+    <button type="button" class="side-item" data-nav="collections" title="合集">
+      <span class="si">◈</span><span class="slabel">合集</span>
+      <span class="side-count" id="sideColCount" hidden></span>
+    </button>
+    <div class="side-label">管理</div>
+    <button type="button" class="side-item" data-nav="bin" title="回收站">
+      <span class="si">♻</span><span class="slabel">回收站</span>
+      <span class="side-count" id="sideBinCount" hidden></span>
+    </button>
+    <button type="button" class="side-item" data-nav="settings" title="设置">
+      <span class="si">⚙</span><span class="slabel">设置</span>
+    </button>
+  </nav>
+  <div class="side-foot">
+    <div class="side-status"><span class="dot" id="dot"></span><span class="sub" id="sub">连接中…</span></div>
+    <div class="side-theme"><wa-switch id="themeSwitch" checked title="明暗主题">暗色</wa-switch></div>
+    <div class="side-version">本地控制台</div>
+  </div>
+</aside>
+
 <!-- ===== 顶栏 ===== -->
 <header>
-  <span class="logo" aria-hidden="true">p</span>
-  <div class="brand-text">
-    <h1>pektino <span>控制台</span></h1>
-    <span class="sub">本地媒体台账</span>
+  <button type="button" class="side-toggle-btn" id="sideToggle" title="收起主菜单">«</button>
+  <div class="page-heading">
+    <h1 id="pageTitle">媒体库</h1>
+    <span class="sub" id="pageSub">台账与媒体管理</span>
   </div>
-  <span class="status"><span class="dot" id="dot"></span><span class="sub" id="sub">连接中…</span></span>
   <span class="spacer"></span>
   <span class="sub" id="busy"></span>
-  <wa-switch id="themeSwitch" checked title="明暗主题">暗色</wa-switch>
   <button class="icon" id="btnLog" title="日志">☰</button>
   <button class="icon" id="btnSettings" title="设置">⚙</button>
   <button class="icon" id="btnRefresh" title="刷新">⟳</button>

@@ -7,6 +7,7 @@ import {
   Library,
   PanelLeftClose,
   PanelLeftOpen,
+  Search,
   RefreshCw,
   Settings,
   Sun,
@@ -21,6 +22,7 @@ import { toast } from 'sonner'
 import { IconButton } from '@/components/ui/icon-button'
 import { Button } from '@/components/ui/button'
 import { ShortcutHelp } from '@/components/shortcut-help'
+import { CommandPalette } from '@/components/command-palette'
 
 const NAV = [
   { to: '/', label: '媒体库', icon: Library, key: 'library' },
@@ -158,7 +160,7 @@ function SideLink({
   )
 }
 
-function Topbar({ onHelp }: { onHelp: () => void }) {
+function Topbar({ onHelp, onCommand }: { onHelp: () => void; onCommand: () => void }) {
   const collapsed = useUiStore(s => s.sidebarCollapsed)
   const toggleSidebar = useUiStore(s => s.toggleSidebar)
   const { kicker, title } = usePageMeta()
@@ -191,6 +193,9 @@ function Topbar({ onHelp }: { onHelp: () => void }) {
         >
           <RefreshCw className={cn('size-4', isFetching && 'animate-spin')} />
         </IconButton>
+        <IconButton label="命令面板" size="sm" onClick={onCommand}>
+          <Search className="size-4" />
+        </IconButton>
         <IconButton label="快捷键" size="sm" onClick={onHelp}>
           <CircleHelp className="size-4" />
         </IconButton>
@@ -210,9 +215,15 @@ export function AppShell() {
   const wasRunning = React.useRef(false)
   const lastResult = React.useRef('')
   const [helpOpen, setHelpOpen] = React.useState(false)
+  const [commandOpen, setCommandOpen] = React.useState(false)
 
   React.useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault()
+        setCommandOpen(true)
+        return
+      }
       if (e.key !== '?' || e.ctrlKey || e.metaKey || e.altKey) return
       const target = e.target as HTMLElement | null
       if (target instanceof Element && target.closest('input,textarea,select,[contenteditable]')) return
@@ -264,8 +275,9 @@ export function AppShell() {
     <div className="flex h-screen overflow-hidden">
       <Sidebar />
       <ShortcutHelp open={helpOpen} onOpenChange={setHelpOpen} />
+      <CommandPalette open={commandOpen} onOpenChange={setCommandOpen} />
       <div className="flex min-w-0 flex-1 flex-col">
-        <Topbar onHelp={() => setHelpOpen(true)} />
+        <Topbar onHelp={() => setHelpOpen(true)} onCommand={() => setCommandOpen(true)} />
         <main className="min-h-0 flex-1 overflow-auto">
           <Outlet />
         </main>

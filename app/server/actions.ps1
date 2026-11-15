@@ -332,6 +332,9 @@ function Start-Scrape {
         & $ps @p *>&1 | Out-File -LiteralPath ($out + ".log") -Encoding UTF8 -Append
     } -ArgumentList $ps, $src.key, $Rank, $Pages, $Limit, $out, $prog, $cov, $thm, $kn, $Threads, $proxy, $qiseCookie, $Url, $Hd
 
+    $runId = (Get-Date -Format 'yyyyMMdd-HHmmss') + '-' + $src.key + '-' + $Rank + '-' + ([guid]::NewGuid().ToString('N').Substring(0,4))
+    $runDir = Join-Path $DiagDir $runId
+    try { [void](New-Item -ItemType Directory -Path $runDir -Force) } catch { }
     $State.Job = [pscustomobject]@{
         handle  = $job
         kind    = 'scrape'
@@ -341,6 +344,7 @@ function Start-Scrape {
         pages   = $Pages
         threads = $Threads
         skipDeleted = $SkipDeleted
+        diagDir = $runDir
     }
     $ic = if ($Incremental) { "增量（跳过 $skipped 条 $FreshDays 天内已抓取的）" } else { '全量' }
     Write-Log 'scrape' "开始抓取 [$($src.name)] $Rank p$($Pages -join ',')：$ic，并发 $Threads，封面+缩略图，SQLite"
@@ -370,6 +374,9 @@ function Start-Import {
         & $script @p *> $null
     } -ArgumentList $script, $dl, $Tokens, $out, $prog, $cov, $thm, $Threads, $proxy, $qiseCookie
 
+    $runId = (Get-Date -Format 'yyyyMMdd-HHmmss') + '-' + $src.key + '-' + $Rank + '-' + ([guid]::NewGuid().ToString('N').Substring(0,4))
+    $runDir = Join-Path $DiagDir $runId
+    try { [void](New-Item -ItemType Directory -Path $runDir -Force) } catch { }
     $State.Job = [pscustomobject]@{
         handle  = $job
         kind    = 'import'
@@ -432,11 +439,38 @@ function Start-SnapshotJob {
     return $job
 }
 
+function Write-ScrapeDiagnostics {
+    param([string]$Dir, [string]$Status, [string]$ErrorText = '', [int]$Count = 0, [int]$Added = 0, [int]$Updated = 0)
+    if (-not $Dir) { return }
+    try {
+        if (-not (Test-Path -LiteralPath $Dir)) { [void](New-Item -ItemType Directory -Path $Dir -Force) }
+        if (Test-Path -LiteralPath $TmpCsv) { Copy-Item -LiteralPath $TmpCsv -Destination (Join-Path $Dir 'result.csv') -Force }
+        if (Test-Path -LiteralPath $ProgressFile) { Copy-Item -LiteralPath $ProgressFile -Destination (Join-Path $Dir 'progress.json') -Force }
+        $scrapeLog = $TmpCsv + '.log'
+        if (Test-Path -LiteralPath $scrapeLog) { Copy-Item -LiteralPath $scrapeLog -Destination (Join-Path $Dir 'scrape.log') -Force }
+        $meta = [pscustomobject]@{
+            run = Split-Path $Dir -Leaf
+            status = $Status
+            source = $(if ($State.Job) { [string]$State.Job.source } else { '' })
+            rank = $(if ($State.Job) { [string]$State.Job.rank } else { '' })
+            count = $Count
+            added = $Added
+            updated = $Updated
+            error = $ErrorText
+            finishedAt = (Get-Date -Format 'yyyy-MM-dd HH:mm:ss')
+            files = @('result.csv', 'progress.json', 'scrape.log')
+            url = '/api/diagnostics/scrape/file?run=' + [uri]::EscapeDataString((Split-Path $Dir -Leaf))
+        }
+        $meta | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath (Join-Path $Dir 'meta.json') -Encoding UTF8
+    } catch { }
+}
+
 function Update-Job {
     if (-not $State.Job) { return }
     $j = $State.Job.handle
     if ($j.State -eq 'Running' -or $j.State -eq 'NotStarted') { return }
 
+    $runDir = [string]$State.Job.diagDir
     $secs = [math]::Round(((Get-Date) - $State.Job.started).TotalSeconds, 1)
     $kind = $State.Job.kind
     if ($j.State -eq 'Completed') {
@@ -474,17 +508,24 @@ function Update-Job {
                 Write-JobResult -Phase 'done' -Added ([int]$merged.Added) -Updated ([int]$merged.Updated) -Count ([int]$scraped.Count) -Elapsed $secs -Kind $kind -AddedTokens $newTokens
                 } else {
                     Write-Log 'scrape' "抓取完成（$secs s）：新增 $($merged.Added)，更新 $($merged.Updated)，共 $($scraped.Count) 条"
+                    $runName = if ($runDir) { Split-Path $runDir -Leaf } else { '' }
+                    if ($runName) { Write-Log 'scrape' "诊断文件: /api/diagnostics/scrape/file?run=$runName&name=result.csv" }
                 Write-JobResult -Phase 'done' -Added ([int]$merged.Added) -Updated ([int]$merged.Updated) -Count ([int]$scraped.Count) -Elapsed $secs -Kind $kind -AddedTokens $newTokens
                 }
             } catch {
                 Write-Log 'error' "导入结果失败（保留 CSV 待重试）: $($_.Exception.Message)"
             Write-JobResult -Phase 'failed' -Elapsed $secs -Kind $kind -ErrorText $_.Exception.Message
+                Write-ScrapeDiagnostics -Dir $runDir -Status 'failed' -ErrorText $_.Exception.Message
+            if ($runDir) { $runName = Split-Path $runDir -Leaf; Write-Log 'scrape' "诊断文件: /api/diagnostics/scrape/file?run=$runName&name=meta.json" }
             }
             # 合并/落盘失败时保留抓取结果，别把整轮数据删掉
+            if ($mergeOk) { Write-ScrapeDiagnostics -Dir $runDir -Status 'done' -Count ([int]$scraped.Count) -Added ([int]$merged.Added) -Updated ([int]$merged.Updated) }
             if ($mergeOk) { Remove-Item $TmpCsv -Force -ErrorAction SilentlyContinue }
         } else {
             Write-Log 'error' "$kind 结束但没有产出 CSV"
             Write-JobResult -Phase 'failed' -Elapsed $secs -Kind $kind -ErrorText '没有产出 CSV'
+            Write-ScrapeDiagnostics -Dir $runDir -Status 'failed' -ErrorText '没有产出 CSV'
+            if ($runDir) { $runName = Split-Path $runDir -Leaf; Write-Log 'scrape' "诊断文件: /api/diagnostics/scrape/file?run=$runName&name=meta.json" }
             try { Write-FileLog "$kind finished without CSV" } catch { }
         }
     } else {
@@ -494,6 +535,8 @@ function Update-Job {
         if (-not $detail) { $detail = '无子任务错误信息' }
         Write-Log 'error' "$kind 任务失败（$($j.State)）：$detail"
         Write-JobResult -Phase 'failed' -Elapsed $secs -Kind $kind -ErrorText $detail
+        Write-ScrapeDiagnostics -Dir $runDir -Status 'failed' -ErrorText $detail
+            if ($runDir) { $runName = Split-Path $runDir -Leaf; Write-Log 'scrape' "诊断文件: /api/diagnostics/scrape/file?run=$runName&name=meta.json" }
         try { Write-FileLog "$kind job failed ($($j.State)): $detail" } catch { }
     }
 

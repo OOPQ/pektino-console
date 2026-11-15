@@ -225,7 +225,13 @@ export function SettingsPage() {
             <div key={i} className="flex gap-2 border-b border-[color:var(--border)] py-1 text-[9.5px] last:border-0">
               <span className="w-14 shrink-0 text-[color:var(--subtle)]">{l.time || '—'}</span>
               <span className={cn('w-16 shrink-0 truncate', (l.kind || '').includes('err') ? 'text-[color:var(--danger)]' : (l.kind || '').includes('warn') ? 'text-[color:var(--warning)]' : 'text-[color:var(--primary-2)]')}>{l.kind || 'log'}</span>
-              <span className="min-w-0 flex-1 text-[color:var(--muted)]">{l.message || ''}</span>
+              <span className="min-w-0 flex-1 whitespace-pre-wrap break-all text-[color:var(--muted)]">
+                {String(l.message || '').split(/(\/api\/diagnostics\/scrape\/file\?[^\s]+)/g).map((part, idx) =>
+                  part.startsWith('/api/diagnostics/scrape/file?')
+                    ? <a key={idx} href={part} className="text-[color:var(--primary-2)] underline underline-offset-2" download>{part}</a>
+                    : <span key={idx}>{part}</span>,
+                )}
+              </span>
             </div>
           )) : <div className="p-4 text-center text-[10px] text-[color:var(--subtle)]">暂无日志</div>}
         </div>

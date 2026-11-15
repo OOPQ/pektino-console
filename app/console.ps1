@@ -163,6 +163,7 @@ $DlPauseItems = Join-Path $WS.DataDir '.dl-pause-items.json'
 $DlAdd = Join-Path $WS.DataDir '.dl-add.json'
 $DeletedPath = Join-Path $WS.DataDir 'deleted.json'
 $SnapshotDir = Join-Path $WS.DataDir 'snapshots'
+$DiagDir = Join-Path $WS.DataDir 'diagnostics\scrape'
 $CoverMapFile = Join-Path $WS.DataDir 'cover-map.json'
 
 # ---------- 内存态 ----------
@@ -371,6 +372,39 @@ function Handle-Request {
         return
     }
 
+    if ($method -eq 'GET' -and $path -eq '/api/diagnostics/scrape') {
+        $items = @()
+        if (Test-Path -LiteralPath $DiagDir) {
+            foreach ($d in @(Get-ChildItem -LiteralPath $DiagDir -Directory | Sort-Object LastWriteTime -Descending | Select-Object -First 100)) {
+                $meta = $null
+                try { $meta = Get-Content -LiteralPath (Join-Path $d.FullName 'meta.json') -Raw -Encoding UTF8 | ConvertFrom-Json } catch { }
+                $items += [pscustomobject]@{
+                    run = $d.Name
+                    status = $(if ($meta) { $meta.status } else { '' })
+                    source = $(if ($meta) { $meta.source } else { '' })
+                    rank = $(if ($meta) { $meta.rank } else { '' })
+                    count = $(if ($meta) { $meta.count } else { 0 })
+                    error = $(if ($meta) { $meta.error } else { '' })
+                    at = $(if ($meta) { $meta.finishedAt } else { $d.LastWriteTime.ToString('yyyy-MM-dd HH:mm:ss') })
+                    url = '/api/diagnostics/scrape/file?run=' + [uri]::EscapeDataString($d.Name) + '&name=meta.json'
+                }
+            }
+        }
+        Send-Json -Stream $Stream -Object @{ ok = $true; items = $items; dir = $DiagDir }
+        return
+    }
+    if ($method -eq 'GET' -and $path -eq '/api/diagnostics/scrape/file') {
+        $run = [string]$Req.Query['run']
+        $name = [string]$Req.Query['name']
+        if ($run -notmatch '^[A-Za-z0-9_.\-]+$') { Send-Json -Stream $Stream -Object @{ ok = $false; error = 'run 不合法' } -Status '400 Bad Request'; return }
+        if (@('result.csv', 'meta.json', 'progress.json', 'scrape.log') -notcontains $name) { Send-Json -Stream $Stream -Object @{ ok = $false; error = '文件名不合法' } -Status '400 Bad Request'; return }
+        $file = Join-Path (Join-Path $DiagDir $run) $name
+        if (-not (Test-Path -LiteralPath $file)) { Send-Json -Stream $Stream -Object @{ ok = $false; error = '文件不存在' } -Status '404 Not Found'; return }
+        $ct = if ($name -like '*.json') { 'application/json; charset=utf-8' } elseif ($name -like '*.csv') { 'text/csv; charset=utf-8' } else { 'text/plain; charset=utf-8' }
+        $bytes = [IO.File]::ReadAllBytes($file)
+        Send-Bytes -Stream $Stream -Bytes $bytes -ContentType $ct -ExtraHeaders @{ 'Content-Disposition' = 'attachment; filename="' + $name + '"' }
+        return
+    }
     if ($method -eq 'GET' -and $path -eq '/api/snapshots') {
         $tk = [string]$Req.Query['token']
         $coverName = Get-SnapshotCoverName $tk

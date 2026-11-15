@@ -268,3 +268,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File app\dev\test.ps1 -Start -Por
 
 - pp\tests\run-scrape-smoke.cmd：daily/weekly/monthly/all 各 10 条，验证 token 唯一和播放地址；只写临时目录。
 - Pektino 日榜根路径已变成文章列表，日榜暂时回退到周榜 SSR 榜单，避免抓到失效外链。
+
+## 抓取诊断
+
+- 每轮保存 data\diagnostics\scrape\<run>\result.csv、meta.json、progress.json、scrape.log。
+- 日志中带 /api/diagnostics/scrape/file?... 链接，设置页可直接点击下载。

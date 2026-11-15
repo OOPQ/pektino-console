@@ -254,6 +254,23 @@ powershell -ExecutionPolicy Bypass -File app\dev\optimize-faststart.ps1
 - HTTP 服务只绑定回环地址，没有登录鉴权，也**不要**改成对外监听
 - 抓取与下载的内容来自第三方站点，使用前请自行确认合规性
 
+## 抓取诊断
+
+每轮抓取会保存到 `data\diagnostics\scrape\<时间-来源-榜单>\`：
+
+- `result.csv`：解析后的台账数据
+- `meta.json`：来源、榜单、数量、错误、完成时间
+- `progress.json`：任务进度
+- `scrape.log`：抓取输出
+
+日志里会出现可点击的诊断文件链接；也可以通过：
+
+```text
+GET /api/diagnostics/scrape
+GET /api/diagnostics/scrape/file?run=<run>&name=result.csv
+```
+
+查看和下载。
 ## 抓取冒烟测试
 
 每个榜单实际抓取一次，默认要求各 10 条、token 唯一且有播放地址：

@@ -459,7 +459,10 @@ function Update-Job {
                         try { Write-FileLog "scrape skipped recycled/deleted: $skippedDeleted" } catch { }
                     }
                 }
+                $beforeTokens = @{}
+                foreach ($br in @($State.Ledger)) { $beforeTokens[([string]$br.token)] = $true }
                 $merged = Merge-Ledger -Existing $State.Ledger -Scraped $scraped
+                $newTokens = @($merged.Rows | Where-Object { -not $beforeTokens.ContainsKey([string]$_.token) } | ForEach-Object { [string]$_.token })
                 $State.Ledger = @($merged.Rows)
                 if (@($merged.Changed).Count -gt 0) {
                     Save-Ledger -Rows @($merged.Changed) -SnapshotRows $State.Ledger -Path $LedgerPath
@@ -468,10 +471,10 @@ function Update-Job {
                 $mergeOk = $true
                 if ($kind -eq 'import') {
                     Write-Log 'import' "本地入库完成（$secs s）：新增 $($merged.Added)，更新 $($merged.Updated)，可识别 $($scraped.Count) 个文件"
-                Write-JobResult -Phase 'done' -Added ([int]$merged.Added) -Updated ([int]$merged.Updated) -Count ([int]$scraped.Count) -Elapsed $secs -Kind $kind -AddedTokens @($merged.AddedTokens)
+                Write-JobResult -Phase 'done' -Added ([int]$merged.Added) -Updated ([int]$merged.Updated) -Count ([int]$scraped.Count) -Elapsed $secs -Kind $kind -AddedTokens $newTokens
                 } else {
                     Write-Log 'scrape' "抓取完成（$secs s）：新增 $($merged.Added)，更新 $($merged.Updated)，共 $($scraped.Count) 条"
-                Write-JobResult -Phase 'done' -Added ([int]$merged.Added) -Updated ([int]$merged.Updated) -Count ([int]$scraped.Count) -Elapsed $secs -Kind $kind -AddedTokens @($merged.AddedTokens)
+                Write-JobResult -Phase 'done' -Added ([int]$merged.Added) -Updated ([int]$merged.Updated) -Count ([int]$scraped.Count) -Elapsed $secs -Kind $kind -AddedTokens $newTokens
                 }
             } catch {
                 Write-Log 'error' "导入结果失败（保留 CSV 待重试）: $($_.Exception.Message)"
@@ -486,7 +489,9 @@ function Update-Job {
         }
     } else {
         $detail = ''
-        try { $detail = (@($j.ChildJobs[0].Error) | Select-Object -First 1).ToString() } catch { }
+        try { $detail = (@($j.ChildJobs[0].Error | ForEach-Object { $_.ToString() }) -join ' | ') } catch { }
+        if (-not $detail) { try { $detail = [string]$j.ChildJobs[0].JobStateInfo.Reason } catch { } }
+        if (-not $detail) { $detail = '无子任务错误信息' }
         Write-Log 'error' "$kind 任务失败（$($j.State)）：$detail"
         Write-JobResult -Phase 'failed' -Elapsed $secs -Kind $kind -ErrorText $detail
         try { Write-FileLog "$kind job failed ($($j.State)): $detail" } catch { }

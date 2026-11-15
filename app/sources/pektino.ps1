@@ -193,10 +193,37 @@ function Invoke-PektinoScrape {
                 $i++
                 if ($i -gt $pageSize) { break }
                 [void]$targets.Add([pscustomobject]@{
-                        id = $tk; page = $p; rank = (($p - 1) * $pageSize + $i)
+                        id = $tk; page = $p; rank = (($p - 1) * $pageSize + $i); detail_url = ''; title = ''; cover_url = ''
                     })
             }
             Write-SourceProgress -Path $progress -Phase 'list' -Done $pi -Total $pages.Count -Started $started
+        }
+        if ($targets.Count -eq 0) {
+            # 新榜单页改为客户端渲染，SSR HTML 中没有 /movie/ 链接。
+            # 从站点公开的 /api/posts 里提取文章内的 movie 链接作为回退。
+            try {
+                $postsText = $client.GetStringAsync("$script:PektinoBase/api/posts").GetAwaiter().GetResult()
+                $posts = @($postsText | ConvertFrom-Json)
+                foreach ($post in $posts) {
+                    $body = [string]$post.body
+                    $cover = ''
+                    $cm = [regex]::Match($body, '<img[^>]+src="([^"]+)"')
+                    if ($cm.Success) { $cover = $cm.Groups[1].Value }
+                    foreach ($lm in [regex]::Matches($body, 'href="(https?://[^"]+/movie/([A-Za-z0-9_\-]+))"')) {
+                        $link = $lm.Groups[1].Value
+                        $tid = $lm.Groups[2].Value
+                        if ($seen.ContainsKey($tid)) { continue }
+                        $seen[$tid] = $true
+                        [void]$targets.Add([pscustomobject]@{
+                                id = $tid; page = 1; rank = $targets.Count + 1
+                                detail_url = $link
+                                title = [System.Net.WebUtility]::HtmlDecode([string]$post.title)
+                                cover_url = $cover
+                            })
+                    }
+                }
+
+            } catch { }
         }
         if ($targets.Count -eq 0) { throw '没能从榜单页拿到任何条目，站点结构可能变了' }
         if ($Options.limit -and [int]$Options.limit -gt 0) {
@@ -212,7 +239,7 @@ function Invoke-PektinoScrape {
             $tasks = @{}
             foreach ($t in @($targets[$i..$end])) {
                 if ($known.ContainsKey($t.id)) { $done++; continue }
-                try { $tasks[$t.id] = $client.GetStringAsync("$script:PektinoBase/zh-CN/movie/$($t.id)") } catch { $done++ }
+                try { $detailUrl = if ($t.detail_url) { [string]$t.detail_url } else { "$script:PektinoBase/zh-CN/movie/$($t.id)" }; $tasks[$t.id] = $client.GetStringAsync($detailUrl) } catch { $done++ }
             }
             foreach ($tk in @($tasks.Keys)) {
                 try { $htmls[$tk] = $tasks[$tk].GetAwaiter().GetResult() } catch { $htmls[$tk] = $null }
@@ -229,9 +256,9 @@ function Invoke-PektinoScrape {
             if ($html) { $row = ConvertFrom-PektinoHtml -Html $html -Id $t.id }
             if (-not $row) {
                 $row = [pscustomobject]@{
-                    source_id = $t.id; title = ''; duration = ''; seconds = 0; res = '';
-                    views = ''; likes = ''; uploaded = ''; url = ''; page_url = "$script:PektinoBase/zh-CN/movie/$($t.id)";
-                    cover_url = ''; download_kind = 'http'; download_headers = ''; extra = ''
+                    source_id = $t.id; title = [string]$t.title; duration = ''; seconds = 0; res = '';
+                    views = ''; likes = ''; uploaded = ''; url = ''; page_url = $(if ($t.detail_url) { [string]$t.detail_url } else { "$script:PektinoBase/zh-CN/movie/$($t.id)" });
+                    cover_url = [string]$t.cover_url; download_kind = 'http'; download_headers = ''; extra = ''
                 }
             }
             $row | Add-Member -NotePropertyName rank -NotePropertyValue $t.rank -Force

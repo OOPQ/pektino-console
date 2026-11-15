@@ -408,6 +408,7 @@ export function initCollections() {
 
   /* 预览/抽卡里的合集标签编辑器 */
   $('#colEditCancel').onclick = closeCollectionEditor;
+  $('#colEditX').onclick = closeCollectionEditor;
   $('#colEdit').onclick = e => { if (e.target.id === 'colEdit') closeCollectionEditor(); };
   $('#colEditSave').onclick = saveCollectionEditor;
   $('#colEditRemove').onclick = removeFromCollectionEditor;

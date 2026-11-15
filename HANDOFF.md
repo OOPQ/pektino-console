@@ -153,6 +153,21 @@ c4cf594 feat(player): 自动续播 + 音量记忆（v2.1.0 tag）
 - 发布包：`dist\pektino-console-v2.2.0.zip`（1.6 MB）+ `.sha256`；解压后冒烟 25/25。
 - GitHub Release 附件尚未上传（本机没有 `gh` / token），需要手动上传 zip 和 sha256。
 
+### UI 重构：Web Awesome 风格（2026-11-15）
+
+- 已把 **Web Awesome 3.14** 本地化到 `app\web\vendor\webawesome`（约 2.3 MB，含 LICENSE；不依赖 CDN），
+  `index.html` 只加载 `styles/layers.css`、`styles/themes/default.css` 和 `webawesome.loader.js`；没有加载会重置原生控件的 `native.css`。
+- 顶栏新增 `wa-switch` 明暗切换：`PREFS.theme` 持久化，`<head>` 内联脚本在 CSS 前定 `wa-dark` / `wa-light`，避免刷新闪屏；
+  `app.css` 末尾增加 `html.wa-light` 整套变量和主要硬编码颜色的覆盖（表格、菜单、灯箱、抽屉、合集、队列）。
+- 预览/抽卡：右侧面板 320px、顶部「条目详情 / 抽卡」+ 序号提示 + 关闭 X，面板 16px 圆角、sticky 头、34px 操作按钮；
+  `#lbCloseTop` / `#gCloseTop` 已绑定；保留 `#lbPrev` / `#lbNext`、Ctrl+←/→、视频、画中画、从头播放和全部快捷键。
+- 合集编辑：440px 弹窗式面板、顶部关闭 X、26px 色卡、34px 操作按钮；`#colEditX` 绑定关闭。
+- 下载队列：480px 抽屉 + 「进行中 / 已完成 / 失败 / 已取消」tab（带数量），打开时按队列状态自动选 tab；
+  卡片有状态胶囊、进度条；重试成功后自动切回「进行中」。
+- 验证：`tmp-ui6`（临时项目/端口）通过主题持久化、预览标题/副标题/上下条/下载按钮、合集编辑关闭与色卡保存同步；
+  `app\dev\test.ps1` 25/25；真实页面 1217 行正常。
+- demo 已保留到 `demo\ui-refresh`（入库，静态参考稿）；本地 `8731` 仍从 `tools\out\ui-demo` 提供同一份内容，不影响业务。
+
 ### 下一批候选（尚未做）
 
 - `/api/refresh-url`、`/api/covers/repair`、`/api/import/local` 仍是同步长任务，主循环会被卡住：建议 job 化。

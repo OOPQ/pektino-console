@@ -428,6 +428,8 @@ function lbPaint(tk) {
   if ($('#lbRestart')) $('#lbRestart').hidden = !(positionOf(tk) > 3);
   $('#lbCount').textContent = lbList.length ? `${lbIdx + 1} / ${lbList.length}` : '';
   const multi = lbList.length > 1;
+  const navHint = $('#lbNavHint');
+  if (navHint) navHint.textContent = multi ? `${lbIdx + 1} / ${lbList.length} · Ctrl+←/→` : '';
   if ($('#lbPrev')) $('#lbPrev').hidden = !multi;
   if ($('#lbNext')) $('#lbNext').hidden = !multi;
 
@@ -576,6 +578,7 @@ export function connectSse() {
 export function initPanels() {
   /* 灯箱 */
   $('#lbClose').onclick = closeLightbox;
+  $('#lbCloseTop').onclick = closeLightbox;
   $('#lightbox').onclick = e => { if (isBlankPreviewTarget(e.target)) closeLightbox(); };
   // 点封面/播放浮层/空白处：原地切到浏览器内播放（没下载的条目直接忽略；视频控件区域除外）
   $('#lbImg').onclick = e => {
@@ -613,6 +616,7 @@ export function initPanels() {
   $('#btnGacha').onclick = drawCard;
   $('#gAgain').onclick = drawCard;
   $('#gClose').onclick = closeGacha;
+  $('#gCloseTop').onclick = closeGacha;
   $('#gacha').onclick = e => { if (isBlankPreviewTarget(e.target)) closeGacha(); };
   const gachaCanPlay = () => {
     const r = state.ROWS.find(x => x.token === state.GACHA_TOKEN);

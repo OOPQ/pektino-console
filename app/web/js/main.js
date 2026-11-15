@@ -120,6 +120,16 @@ const DL_LABEL = {
   done: '已完成', failed: '失败', dead: '源失效', cancelled: '已取消'
 };
 const dlMb = n => ((+n || 0) / 1048576).toFixed(1);
+let dqTabSet = false;
+
+function setQueueTab(tab, manual) {
+  tab = ['active', 'done', 'failed', 'cancelled'].includes(tab) ? tab : 'active';
+  const drawer = $('#dlDrawer');
+  if (!drawer) return;
+  drawer.dataset.qtab = tab;
+  document.querySelectorAll('#dqTabs .dq-tab').forEach(b => b.classList.toggle('on', b.dataset.qtab === tab));
+  if (manual) dqTabSet = true;
+}
 const rowOf = tk => state.ROWS.find(r => r.token === tk);
 
 /* ---------- 完成提示音（Web Audio，无外部资源） ---------- */
@@ -204,7 +214,7 @@ function dlItemHtml(i, rowMap) {
       <div class="dq-top">
         <span class="tk mono" title="${etk}">${etk}</span>
         <span class="sub">${size}</span>
-        <span class="sub">${right}</span>
+        <span class="dq-state ${cls}">${right}</span>
       </div>
       <div class="dq-bar"><i style="width:${pct}%"></i></div>
       <div class="dq-actions">
@@ -245,6 +255,11 @@ function renderDownloadQueue(dl, opts = {}) {
   const downloading = active.filter(i => i.state === 'downloading').length;
   const queued = active.filter(i => i.state === 'queued').length;
   const pendingN = active.length + paused.length;
+  const setCount = (sel, n) => { const el = $(sel); if (el) el.textContent = String(n || 0); };
+  setCount('#dqTabActive', pendingN);
+  setCount('#dqTabDone', done.length);
+  setCount('#dqTabFailed', failed.length);
+  setCount('#dqTabCancelled', cancelled.length);
 
   const badge = $('#dlBadge');
   if (badge) {
@@ -378,6 +393,13 @@ function updateConcSelect() {
 function initDownloadQueue() {
   const openDrawer = () => {
     updateConcSelect();
+    if (!dqTabSet) {
+      const items = (state.DOWNLOAD && state.DOWNLOAD.items) || [];
+      const pending = items.some(i => ['downloading', 'queued', 'paused'].includes(i.state));
+      const failed = items.some(i => ['failed', 'dead'].includes(i.state));
+      const done = items.some(i => i.state === 'done');
+      setQueueTab(pending ? 'active' : failed ? 'failed' : done ? 'done' : 'active', false);
+    }
     $('#dlDrawer').classList.add('on');
     // 打开时强制重建一次：关闭期间列表没有跟着刷新
     renderDownloadQueue(state.DOWNLOAD || {}, { force: true });
@@ -388,6 +410,10 @@ function initDownloadQueue() {
   $('#prog').addEventListener('click', e => { if (!e.target.closest('button')) openDrawer(); });
   $('#dlClose').onclick = () => $('#dlDrawer').classList.remove('on');
   $('#dlDrawer').onclick = e => { if (e.target.id === 'dlDrawer') $('#dlDrawer').classList.remove('on'); };
+  $('#dqTabs').onclick = e => {
+    const b = e.target.closest('[data-qtab]');
+    if (b) setQueueTab(b.dataset.qtab, true);
+  };
   $('#dlPause').onclick = toggleDownloadPause;
   $('#dlCancelAll').onclick = cancelAllDownloads;
   $('#dlClearDone').onclick = async () => {
@@ -403,6 +429,7 @@ function initDownloadQueue() {
     if (!tokens.length) return;
     try {
       const r = await api('/api/download', { tokens });
+      if (r.ok) setQueueTab('active', true);
       toast(r.ok ? `已重新加入 ${r.count || tokens.length} 条` : (r.error || '失败'), 3500);
     } catch (e) { toast('请求失败：' + e.message, 4000); }
     load();
@@ -1290,6 +1317,24 @@ function initBulk() {
 }
 
 /* ================= 初始化 ================= */
+function initTheme() {
+  const sw = $('#themeSwitch');
+  if (!sw) return;
+  const apply = (dark) => {
+    document.documentElement.classList.toggle('wa-dark', dark);
+    document.documentElement.classList.toggle('wa-light', !dark);
+    sw.textContent = dark ? '暗色' : '亮色';
+    PREFS.theme = dark ? 'dark' : 'light';
+    savePrefs();
+  };
+  const dark = PREFS.theme !== 'light';
+  if (dark) sw.setAttribute('checked', ''); else sw.removeAttribute('checked');
+  apply(dark);
+  const sync = () => apply(!!sw.checked);
+  sw.addEventListener('change', sync);
+  sw.addEventListener('wa-change', sync);
+}
+
 function initControls() {
   $('#chkCovers').checked = state.SHOW_COVERS;
   if (state.SETTINGS) {
@@ -1317,6 +1362,7 @@ function initControls() {
 
 initTable();
 initRows();
+initTheme();
 initPanels();
 initControls();
 initToolbar();

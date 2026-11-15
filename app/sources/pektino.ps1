@@ -239,13 +239,7 @@ function Invoke-PektinoScrape {
             $html = $htmls[$t.id]
             $row = $null
             if ($html) { $row = ConvertFrom-PektinoHtml -Html $html -Id $t.id }
-            if (-not $row) {
-                $row = [pscustomobject]@{
-                    source_id = $t.id; title = [string]$t.title; duration = ''; seconds = 0; res = '';
-                    views = ''; likes = ''; uploaded = ''; url = ''; page_url = $(if ($t.detail_url) { [string]$t.detail_url } else { "$script:PektinoBase/zh-CN/movie/$($t.id)" });
-                    cover_url = [string]$t.cover_url; download_kind = 'http'; download_headers = ''; extra = ''
-                }
-            }
+            if (-not $row -or -not $row.url) { continue }
             $row | Add-Member -NotePropertyName rank -NotePropertyValue $t.rank -Force
             $row | Add-Member -NotePropertyName page -NotePropertyValue $t.page -Force
             [void]$rows.Add($row)

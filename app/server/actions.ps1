@@ -480,6 +480,12 @@ function Update-Job {
             foreach ($rr in @($State.Ledger)) { if ($rr.status -eq 'recycled') { $recycledTokens[([string]$rr.token).ToLowerInvariant()] = $true } }
             try {
                 $scraped = @(Import-Csv $TmpCsv -Encoding UTF8)
+                if ($kind -eq 'scrape') {
+                    $beforeUrl = $scraped.Count
+                    $scraped = @($scraped | Where-Object { $_.url -match '^https?://' })
+                    $dropped = $beforeUrl - $scraped.Count
+                    if ($dropped -gt 0) { Write-Log 'scrape' "丢弃 $dropped 条没有播放地址的异常数据" }
+                }
                 if ($kind -eq 'scrape' -and $State.Job.skipDeleted -ne $false -and (Get-Command Test-DeletedToken -ErrorAction SilentlyContinue)) {
                     # 回收站里的条目也不再作为新数据抓回
                     $before = $scraped.Count

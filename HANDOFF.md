@@ -273,3 +273,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File app\dev\test.ps1 -Start -Por
 
 - 每轮保存 data\diagnostics\scrape\<run>\result.csv、meta.json、progress.json、scrape.log。
 - 日志中带 /api/diagnostics/scrape/file?... 链接，设置页可直接点击下载。
+
+## 抓取质量门
+
+- 解析阶段跳过没有 url 的详情页；合并前再丢弃一遍无播放地址的数据。
+- 旧 Pektino /api/posts 回退产生的 19 条 truvaze 异常行已移入回收站，可恢复或彻底删除。

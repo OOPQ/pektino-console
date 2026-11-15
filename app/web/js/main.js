@@ -2,7 +2,7 @@
 import { $, state, PREFS, savePrefs, api, toast, onEvent, confirmDialog, escHtml } from './core.js';
 import { render, markActiveKpi, initTable, visible } from './table.js';
 import { initRows } from './rows.js';
-import { initPanels, connectSse, openLightbox } from './panels.js';
+import { initPanels, connectSse, openLightbox, refreshPreviewActions } from './panels.js';
 import { initCollections, openCollectionPicker } from './collections.js';
 import { setFav, setWatched, setStatus, setRating, reload, copyText } from './actions.js';
 
@@ -698,6 +698,7 @@ async function load() {
     $('#diag').textContent = `自检：前端 OK · API OK · 渲染 ${state.ROWS.length} 行 · 磁盘命中 ${S.downloaded}`;
 
     state.DOWNLOAD = s.download || null;
+    refreshPreviewActions();
     state.MEDIA = s.media || null;
     state.RESUME = s.resume || null;
     paintResume();

@@ -209,9 +209,28 @@ td.playable:hover{color:#cfe6ff}
 .mstats .mrow > em{font-style:normal;color:var(--val);font-weight:550;font-variant-numeric:tabular-nums;text-align:right}
 .mstats .mrow > em.gold{color:var(--gold);letter-spacing:1px}
 .mstats .mfile{margin-top:6px;font-family:ui-monospace,Consolas,monospace;font-size:11px;color:var(--faint);word-break:break-all}
+/* 预览里的文件 / 站点 / 合集：标签 + 链接式交互 */
+.mlinks{display:flex;flex-direction:column;gap:5px;margin:2px 0 6px;padding-top:6px;border-top:1px dashed rgba(255,255,255,.07)}
+.mlinkrow{display:flex;align-items:center;gap:6px;min-width:0;font-size:12px}
+.mlabel{flex:0 0 32px;color:#8b97a6}
+.mlink{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;background:none;border:0;padding:0;text-align:left;color:var(--acc);cursor:pointer;font:inherit;text-decoration:none}
+.mlink:hover{text-decoration:underline;color:#8ec5ff}
+.mlink.path{font-family:ui-monospace,Consolas,monospace;font-size:11px;color:#9fb0c3}
+.mlink.muted{color:var(--faint);cursor:default}
+.mlink.muted:hover{text-decoration:none;color:var(--faint)}
+.msub{flex:0 0 auto;color:var(--faint);font-size:10.5px}
+.micon{flex:0 0 auto;width:24px;height:22px;padding:0;border:1px solid var(--line);background:var(--chip);color:var(--text);border-radius:5px;font-size:12px;line-height:1;cursor:pointer}
+.micon:hover{border-color:var(--acc);color:#fff}
+.colchips{flex:1;min-width:0;display:flex;flex-wrap:wrap;gap:4px}
+.colchip{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;border:1px solid var(--col,#555);border-radius:999px;padding:1px 8px;font-size:11px;line-height:1.6;cursor:pointer;background:color-mix(in srgb,var(--col,#555) 20%,transparent);color:var(--col,#ddd)}
+.colchip:hover{background:color-mix(in srgb,var(--col,#555) 34%,transparent);color:#fff}
+.cdot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--col,#888);margin-right:5px;vertical-align:middle;flex:0 0 auto}
 .lightbox .box > .meta .actions{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:4px}
 .lightbox .box > .meta .actions.single{grid-template-columns:1fr}
 .lightbox .box > .meta .actions button{width:100%;padding:7px 8px;white-space:nowrap}
+.lightbox .box > .meta .actions button.accent{background:var(--acc);border-color:var(--acc);color:#07111c;font-weight:650}
+.lightbox .box > .meta .actions button.accent:hover{filter:brightness(1.08)}
+.coledit-box .field input[type=color]{width:64px;height:32px}
 .lightbox .box{animation:fadein .16s ease-out}
 @keyframes fadein{from{opacity:0}to{opacity:1}}
 
@@ -245,9 +264,10 @@ td.playable:hover{color:#cfe6ff}
 .colpop label:hover{background:#243040}
 
 /* ---------- 其它 ---------- */
-#toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:#1f2937;border:1px solid var(--line);padding:8px 15px;border-radius:9px;opacity:0;transition:.2s;z-index:70;pointer-events:none;font-size:12px}
+#toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:#1f2937;border:1px solid var(--line);padding:8px 15px;border-radius:9px;opacity:0;transition:.2s;z-index:96;pointer-events:none;font-size:12px}
 /* 从预览/抽卡里打开的合集选择器要盖在灯箱之上 */
 #colPick{z-index:85}
+#colEdit{z-index:86}
 #dlConfirm{z-index:85}
 #toast.on{opacity:1}
 .empty{padding:40px;text-align:center;color:var(--dim)}
@@ -355,6 +375,15 @@ button.danger:hover:not(:disabled){background:#3a1d1d;border-color:#7a2b2b;color
 .col-row .cnt{color:var(--dim);font-size:11px;flex:0 0 auto}
 .col-row button{padding:2px 8px;font-size:12px;flex:0 0 auto}
 .colpick-box{width:min(420px,92vw);background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;max-height:80vh;overflow:auto}
+/* 合集颜色输入 / 编辑弹窗 */
+#colbNewColor,#colbColor,#colEditColor{width:30px;height:26px;padding:0;border:1px solid var(--line);background:var(--bg);border-radius:5px;cursor:pointer}
+#colbColor:disabled{opacity:.45;cursor:default}
+.coledit-box{width:min(380px,92vw);background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px}
+.coledit-box h3{margin:0 0 10px;font-size:14px}
+.coledit-box .field{display:flex;flex-direction:column;gap:5px;margin-bottom:10px}
+.coledit-box .field input[type=text],.coledit-box .field input:not([type]){width:100%}
+.coledit-actions{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:12px}
+.coledit-actions button{padding:6px 8px;font-size:12px}
 /* 下载确认 */
 .dlc-box{width:min(440px,92vw);background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px}
 .dlc-box h3{margin:0 0 6px}
@@ -375,7 +404,8 @@ button.danger:hover:not(:disabled){background:#3a1d1d;border-color:#7a2b2b;color
 .colb-head h3{margin:0;font-size:14px}
 .colb-tabs{display:flex;gap:6px;overflow-x:auto;max-width:55%;padding-bottom:2px}
 .colb-tab{background:transparent;border:1px solid var(--line);border-radius:999px;padding:3px 10px;font-size:12px;color:var(--dim);white-space:nowrap;cursor:pointer}
-.colb-tab.on{background:#1f4f86;border-color:#2b6cb0;color:#eaf4ff}
+.colb-tab .cdot{margin-right:4px}
+.colb-tab.on{background:color-mix(in srgb,var(--col,#2b6cb0) 24%,#101820);border-color:var(--col,#2b6cb0);color:#eaf4ff}
 .colb-body{flex:1 1 auto;overflow:auto;min-height:0}
 .colb-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:14px;padding:4px 2px 12px}
 .colb-card{position:relative}
@@ -456,6 +486,6 @@ body.multi .card .foot .dlbtn { display: none; }
 .colresize:hover, .colresize.dragging { background: var(--acc, #2f81f7); opacity: .55; }
 body.resizing-col { cursor: col-resize !important; user-select: none; }
 /* ===== 通用确认弹窗 ===== */
-#confirmModal { z-index: 80; }
+#confirmModal { z-index: 95; }
 #confirmModal .confirm-box { width: min(440px, 94vw); }
 #confirmModal .confirm-msg { white-space: pre-line; color: var(--text); line-height: 1.55; max-height: 45vh; overflow: auto; margin-bottom: 16px; word-break: break-word; }

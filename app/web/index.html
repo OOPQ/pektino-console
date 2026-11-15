@@ -403,7 +403,9 @@
     </div>
     <div class="colb-tools">
       <input id="colbNew" placeholder="新合集名称" maxlength="60" style="width:130px">
+      <input type="color" id="colbNewColor" value="#4f8cff" title="新合集颜色">
       <button id="colbCreate">新建</button>
+      <input type="color" id="colbColor" value="#4f8cff" title="当前合集颜色" disabled>
       <button class="ghost" id="colbRename" title="重命名当前合集">重命名</button>
       <button class="ghost danger" id="colbDelete" title="删除当前合集（不删条目）">删除</button>
       <span class="spacer"></span>
@@ -452,6 +454,27 @@
   </div>
 </div>
 
+<!-- ===== 合集编辑（预览/抽卡里的合集标签点开） ===== -->
+<div class="lightbox" id="colEdit">
+  <div class="coledit-box">
+    <h3>合集编辑 <span class="sub" id="colEditCount"></span></h3>
+    <div class="field">
+      <label class="sub">名称</label>
+      <input id="colEditName" maxlength="60" placeholder="合集名称">
+    </div>
+    <div class="field">
+      <label class="sub">颜色</label>
+      <input type="color" id="colEditColor" value="#4f8cff">
+    </div>
+    <div class="coledit-actions">
+      <button id="colEditSave">保存</button>
+      <button class="ghost" id="colEditRemove">移出当前条目</button>
+      <button class="ghost danger" id="colEditDelete">删除合集</button>
+      <button class="ghost" id="colEditCancel">取消</button>
+    </div>
+  </div>
+</div>
+
 <!-- ===== 预览灯箱 ===== -->
 <div class="lightbox" id="lightbox">
   <div class="box">
@@ -467,17 +490,9 @@
       <h3 id="lbToken">–</h3>
       <div class="big mstats" id="lbMeta"></div>
       <div class="actions">
-        <button class="ghost" id="lbFav">☆ 收藏</button>
         <button class="ghost" id="lbRestart" hidden title="从头开始播放">从头播放</button>
-        <button class="ghost" id="lbPlay">本地播放器</button>
         <button class="ghost" id="lbPip" disabled title="画中画：切出去也能继续看">画中画</button>
-        <button class="ghost" id="lbReveal">定位</button>
-        <button class="ghost" id="lbCopy">复制链接</button>
-        <button class="ghost" id="lbCopyToken">复制 token</button>
-        <button class="ghost" id="lbCollection" title="加入 / 移出合集">📚 合集</button>
-        <button class="ghost" id="lbOpen">站点</button>
-      </div>
-      <div class="actions single">
+        <button class="accent" id="lbDownload" hidden>下载</button>
         <button class="ghost" id="lbClose">关闭</button>
       </div>
       <div class="kbd-hint">空格 播放/暂停 · 长按 2× · ←/→ 5s · ↑/↓ 音量 · F 全屏 · M 静音 · Ctrl+←/→ 切换 · Esc 关闭</div>
@@ -502,16 +517,9 @@
       <div class="big mstats" id="gInfo"></div>
 
       <div class="actions">
-        <button id="gFav">★ 收藏</button>
-        <button id="gPlay">本地播放器</button>
         <button class="ghost" id="gPip" disabled title="画中画：切出去也能继续看">画中画</button>
-        <button class="ghost" id="gReveal">定位</button>
-        <button class="ghost" id="gCopy">复制链接</button>
-        <button class="ghost" id="gOpen">站点</button>
-        <button class="ghost" id="gCollection" title="加入 / 移出合集">📚 合集</button>
-        <button class="ghost" id="gAgain">🎲 再抽</button>
-      </div>
-      <div class="actions single">
+        <button class="accent" id="gDownload" hidden>下载</button>
+        <button id="gAgain">🎲 再抽</button>
         <button class="ghost" id="gClose">关闭</button>
       </div>
       <div class="kbd-hint">空格 播放/暂停 · 长按 2× · ←/→ 5s · ↑/↓ 音量 · F 全屏 · Esc 关闭</div>

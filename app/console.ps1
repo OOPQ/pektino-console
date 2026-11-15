@@ -586,9 +586,11 @@ function Handle-Request {
                 try { $cid = [int]$body.id } catch { }
                 $ctokens = @()
                 if ($body.tokens) { $ctokens = @($body.tokens | Where-Object { $_ } | ForEach-Object { [string]$_ }) }
+                $ccolor = if ($null -ne $body.color) { [string]$body.color } else { '' }
                 $cr = switch ($action) {
-                    'create' { New-Collection -Name ([string]$body.name) }
+                    'create' { New-Collection -Name ([string]$body.name) -Color $ccolor }
                     'rename' { Rename-Collection -Id $cid -Name ([string]$body.name) }
+                    'color' { Set-CollectionColor -Id $cid -Color $ccolor }
                     'delete' { Remove-Collection -Id $cid }
                     'add' { Add-CollectionItems -Id $cid -Tokens $ctokens }
                     'remove' { Remove-CollectionItems -Id $cid -Tokens $ctokens }

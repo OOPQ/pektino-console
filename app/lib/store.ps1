@@ -15,6 +15,22 @@
 
 $script:DbConn = $null
 $script:DbPath = $null
+# 合集颜色：新合集按序取色；前端也内置同一组颜色做兜底
+$script:CollectionPalette = @('#4f8cff', '#f2a33c', '#3fb950', '#d2a8ff', '#f778ba', '#39c5cf', '#e3b341', '#ff7b72')
+function Get-DefaultCollectionColor {
+    param([int]$Seed = 0)
+    $p = $script:CollectionPalette
+    return $p[[Math]::Abs($Seed) % $p.Count]
+}
+function Resolve-CollectionColor {
+    param([string]$Color, [int]$Seed = 0)
+    $c = ([string]$Color).Trim()
+    if ($c -match '^#?[0-9a-fA-F]{6}$') {
+        if ($c[0] -ne '#') { $c = '#' + $c }
+        return $c.ToLowerInvariant()
+    }
+    return (Get-DefaultCollectionColor -Seed $Seed)
+}
 $script:LastSnapshot = [datetime]::MinValue
 # 写入计数（200 次一 checkpoint）；显式初始化，别依赖 $null + 1 的隐式行为
 $script:SaveCount = 0
@@ -81,6 +97,7 @@ CREATE INDEX IF NOT EXISTS idx_items_fav ON items(fav);
 CREATE TABLE IF NOT EXISTS collections (
   id         INTEGER PRIMARY KEY AUTOINCREMENT,
   name       TEXT NOT NULL,
+  color      TEXT DEFAULT '',
   created_at TEXT DEFAULT '',
   updated_at TEXT DEFAULT ''
 );
@@ -96,6 +113,32 @@ CREATE INDEX IF NOT EXISTS idx_collection_items_token ON collection_items(token)
     $cmd = $script:DbConn.CreateCommand()
     $cmd.CommandText = $schema
     [void]$cmd.ExecuteNonQuery()
+
+    # 合集颜色列：老库补列，并按序给已有合集补一个默认色
+    $haveCol = @{}
+    $cmd.CommandText = 'PRAGMA table_info(collections)'
+    $r = $cmd.ExecuteReader()
+    while ($r.Read()) { $haveCol[[string]$r.GetValue(1)] = $true }
+    $r.Close()
+    if (-not $haveCol.ContainsKey('color')) {
+        $cmd.CommandText = "ALTER TABLE collections ADD COLUMN color TEXT DEFAULT ''"
+        [void]$cmd.ExecuteNonQuery()
+    }
+    $needColor = New-Object System.Collections.ArrayList
+    $cmd.CommandText = "SELECT id FROM collections WHERE color IS NULL OR color = ''"
+    $r = $cmd.ExecuteReader()
+    while ($r.Read()) { [void]$needColor.Add([int]$r.GetInt64(0)) }
+    $r.Close()
+    $ci = 0
+    foreach ($cid in @($needColor)) {
+        $uc = $script:DbConn.CreateCommand()
+        $uc.CommandText = 'UPDATE collections SET color = @c WHERE id = @id'
+        [void]$uc.Parameters.AddWithValue('@c', (Get-DefaultCollectionColor -Seed $ci))
+        [void]$uc.Parameters.AddWithValue('@id', $cid)
+        [void]$uc.ExecuteNonQuery()
+        $uc.Dispose()
+        $ci++
+    }
 
     # 老库补列（SQLite 没有 ADD COLUMN IF NOT EXISTS）
     $have = @{}
@@ -253,7 +296,7 @@ function Get-Collections {
     $conn = Get-StoreConnection
     $cmd = $conn.CreateCommand()
     $cmd.CommandText = @'
-SELECT c.id, c.name, c.created_at, c.updated_at,
+SELECT c.id, c.name, c.color, c.created_at, c.updated_at,
        (SELECT COUNT(*) FROM collection_items ci WHERE ci.collection_id = c.id) AS cnt,
        CASE WHEN @tk <> '' AND EXISTS (
            SELECT 1 FROM collection_items x WHERE x.collection_id = c.id AND x.token = @tk
@@ -268,10 +311,11 @@ ORDER BY c.name COLLATE NOCASE ASC
         [void]$out.Add([pscustomobject]@{
                 id        = [int]$r.GetInt64(0)
                 name      = [string]$r.GetString(1)
-                createdAt = [string]$r.GetString(2)
-                updatedAt = [string]$r.GetString(3)
-                count     = [int]$r.GetInt64(4)
-                has       = [bool]([int]$r.GetInt64(5))
+                color     = [string]$r.GetString(2)
+                createdAt = [string]$r.GetString(3)
+                updatedAt = [string]$r.GetString(4)
+                count     = [int]$r.GetInt64(5)
+                has       = [bool]([int]$r.GetInt64(6))
             })
     }
     $r.Close(); $cmd.Dispose()
@@ -279,7 +323,7 @@ ORDER BY c.name COLLATE NOCASE ASC
 }
 
 function New-Collection {
-    param([string]$Name)
+    param([string]$Name, [string]$Color = '')
     $Name = ([string]$Name).Trim()
     if (-not $Name) { return @{ ok = $false; error = '合集名称不能为空' } }
     if ($Name.Length -gt 60) { return @{ ok = $false; error = '合集名称最长 60 字' } }
@@ -290,10 +334,16 @@ function New-Collection {
     $exists = $chk.ExecuteScalar()
     $chk.Dispose()
     if ($null -ne $exists) { return @{ ok = $false; error = '已有同名合集'; id = [int]$exists } }
+    $cntCmd = $conn.CreateCommand()
+    $cntCmd.CommandText = 'SELECT COUNT(1) FROM collections'
+    $seed = [int]$cntCmd.ExecuteScalar()
+    $cntCmd.Dispose()
+    $color = Resolve-CollectionColor -Color $Color -Seed $seed
     $now = (Get-Date).ToString('yyyy-MM-dd HH:mm:ss')
     $cmd = $conn.CreateCommand()
-    $cmd.CommandText = 'INSERT INTO collections (name, created_at, updated_at) VALUES (@n, @t, @t)'
+    $cmd.CommandText = 'INSERT INTO collections (name, color, created_at, updated_at) VALUES (@n, @c, @t, @t)'
     [void]$cmd.Parameters.AddWithValue('@n', $Name)
+    [void]$cmd.Parameters.AddWithValue('@c', $color)
     [void]$cmd.Parameters.AddWithValue('@t', $now)
     [void]$cmd.ExecuteNonQuery()
     $cmd.Dispose()
@@ -301,7 +351,7 @@ function New-Collection {
     $idCmd.CommandText = 'SELECT last_insert_rowid()'
     $id = [int]$idCmd.ExecuteScalar()
     $idCmd.Dispose()
-    return @{ ok = $true; id = $id; name = $Name }
+    return @{ ok = $true; id = $id; name = $Name; color = $color }
 }
 
 function Rename-Collection {
@@ -327,6 +377,22 @@ function Rename-Collection {
     $cmd.Dispose()
     if ($n -le 0) { return @{ ok = $false; error = '合集不存在' } }
     return @{ ok = $true; id = $Id; name = $Name }
+}
+
+function Set-CollectionColor {
+    param([int]$Id, [string]$Color = '')
+    if ($Id -le 0) { return @{ ok = $false; error = '合集不存在' } }
+    $color = Resolve-CollectionColor -Color $Color -Seed $Id
+    $conn = Get-StoreConnection
+    $cmd = $conn.CreateCommand()
+    $cmd.CommandText = 'UPDATE collections SET color = @c, updated_at = @t WHERE id = @id'
+    [void]$cmd.Parameters.AddWithValue('@c', $color)
+    [void]$cmd.Parameters.AddWithValue('@t', (Get-Date).ToString('yyyy-MM-dd HH:mm:ss'))
+    [void]$cmd.Parameters.AddWithValue('@id', $Id)
+    $n = $cmd.ExecuteNonQuery()
+    $cmd.Dispose()
+    if ($n -le 0) { return @{ ok = $false; error = '合集不存在' } }
+    return @{ ok = $true; id = $Id; color = $color }
 }
 
 function Remove-Collection {

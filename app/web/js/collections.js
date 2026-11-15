@@ -1,7 +1,16 @@
 /* collections.js — 合集：弹窗内浏览（卡片墙）+ 维护 */
-import { $, state, api, toast, confirmDialog, escHtml } from './core.js';
+import { $, state, api, toast, confirmDialog, escHtml, emit } from './core.js';
 import { render, cardHtml } from './table.js';
 import { onRowClick } from './rows.js';
+
+/* 与后端 store.ps1 的 CollectionPalette 保持一致；老数据没有颜色时按 id 取色 */
+export const COL_COLORS = ['#4f8cff', '#f2a33c', '#3fb950', '#d2a8ff', '#f778ba', '#39c5cf', '#e3b341', '#ff7b72'];
+export function colColor(col) {
+  const v = col && String(col.color || '').toLowerCase();
+  if (/^#[0-9a-f]{6}$/.test(v)) return v;
+  const i = col && col.id ? Math.abs(Number(col.id)) % COL_COLORS.length : 0;
+  return COL_COLORS[i];
+}
 
 let pickTokens = [];
 let pickMode = 'add';   // add = 批量加入；toggle = 单条加入/移出
@@ -19,6 +28,7 @@ export async function loadCollections() {
     paintCount();
     renderTabs();
     paintColFilterChip();
+    emit('collections-changed');
   } catch { }
 }
 
@@ -59,10 +69,15 @@ function renderTabs() {
   const el = $('#colbTabs');
   if (!el) return;
   const cols = state.COLLECTIONS || [];
-  el.innerHTML = cols.map(c => `<button class="colb-tab ${browserCol && browserCol.id === c.id ? 'on' : ''}" data-colb-tab="${c.id}">${escHtml(c.name)} <span class="sub">${c.count}</span></button>`).join('');
+  el.innerHTML = cols.map(c => `<button class="colb-tab ${browserCol && browserCol.id === c.id ? 'on' : ''}" data-colb-tab="${c.id}" style="--col:${colColor(c)}"><i class="cdot"></i>${escHtml(c.name)} <span class="sub">${c.count}</span></button>`).join('');
   const has = !!browserCol;
   if ($('#colbRename')) $('#colbRename').disabled = !has;
   if ($('#colbDelete')) $('#colbDelete').disabled = !has;
+  const colorEl = $('#colbColor');
+  if (colorEl) {
+    colorEl.disabled = !has;
+    if (has) colorEl.value = colColor(browserCol);
+  }
 }
 
 async function fetchCollectionRows(id) {
@@ -125,7 +140,8 @@ function renderBrowser() {
 async function createCollection() {
   const name = $('#colbNew').value.trim();
   if (!name) return toast('先输入合集名称', 2500);
-  const r = await api('/api/collections', { action: 'create', name });
+  const color = $('#colbNewColor') ? $('#colbNewColor').value : '';
+  const r = await api('/api/collections', { action: 'create', name, color });
   if (!r || !r.ok) return toast((r && r.error) || '新建失败', 3500);
   $('#colbNew').value = '';
   await loadCollections();
@@ -161,6 +177,67 @@ async function deleteCurrent() {
   toast('合集已删除', 2000);
 }
 
+/* ---------- 预览/抽卡里的合集标签编辑 ---------- */
+let editCol = null, editToken = '';
+
+export function openCollectionEditor(id, opts = {}) {
+  const col = (state.COLLECTIONS || []).find(c => c.id === id);
+  if (!col) return toast('合集不存在', 3000);
+  editCol = col;
+  editToken = opts.token || '';
+  $('#colEditName').value = col.name;
+  $('#colEditColor').value = colColor(col);
+  $('#colEditCount').textContent = `${col.count || 0} 条`;
+  $('#colEditRemove').hidden = !editToken;
+  $('#colEdit').classList.add('on');
+  setTimeout(() => { try { $('#colEditName').focus(); } catch { } }, 30);
+}
+
+function closeCollectionEditor() {
+  $('#colEdit').classList.remove('on');
+  editCol = null;
+  editToken = '';
+}
+
+async function saveCollectionEditor() {
+  if (!editCol) return;
+  const name = $('#colEditName').value.trim();
+  const color = $('#colEditColor').value;
+  if (!name) return toast('合集名称不能为空', 2500);
+  if (name.length > 60) return toast('合集名称最长 60 字', 2500);
+  const calls = [];
+  if (name !== editCol.name) calls.push(api('/api/collections', { action: 'rename', id: editCol.id, name }));
+  if (color.toLowerCase() !== colColor(editCol)) calls.push(api('/api/collections', { action: 'color', id: editCol.id, color }));
+  if (!calls.length) { closeCollectionEditor(); return; }
+  const results = await Promise.all(calls);
+  const bad = results.find(r => !r || !r.ok);
+  if (bad) return toast((bad && bad.error) || '保存失败', 3500);
+  await loadCollections();
+  closeCollectionEditor();
+  toast('合集已保存', 2000);
+}
+
+async function removeFromCollectionEditor() {
+  if (!editCol || !editToken) return;
+  const r = await api('/api/collections', { action: 'remove', id: editCol.id, tokens: [editToken] });
+  if (!r || !r.ok) return toast((r && r.error) || '移出失败', 3500);
+  await loadCollections();
+  closeCollectionEditor();
+  toast('已移出合集', 2000);
+}
+
+async function deleteFromCollectionEditor() {
+  if (!editCol) return;
+  const col = editCol;
+  if (!(await confirmDialog(`删除合集「${col.name}」？只会删合集，不会删条目。`, { title: '删除合集', danger: true, okText: '删除' }))) return;
+  const r = await api('/api/collections', { action: 'delete', id: col.id });
+  if (!r || !r.ok) return toast((r && r.error) || '删除失败', 3500);
+  if (state.COL_FILTER && state.COL_FILTER.id === col.id) clearColFilter();
+  await loadCollections();
+  closeCollectionEditor();
+  toast('合集已删除', 2000);
+}
+
 /* ---------- 筛选 ---------- */
 function paintColFilterChip() {
   const chip = $('#colFilterChip');
@@ -170,7 +247,10 @@ function paintColFilterChip() {
   chip.classList.toggle('on', on);
   if (on) {
     const nameEl = $('#colFilterName');
-    if (nameEl) nameEl.textContent = `合集：${state.COL_FILTER.name}`;
+    const col = (state.COLLECTIONS || []).find(c => c.id === state.COL_FILTER.id) || { id: state.COL_FILTER.id, name: state.COL_FILTER.name };
+    const color = colColor(col);
+    chip.style.setProperty('--col', color);
+    if (nameEl) nameEl.innerHTML = `<i class="cdot" style="--col:${color}"></i>合集：${escHtml(state.COL_FILTER.name)}`;
   }
 }
 
@@ -248,6 +328,7 @@ async function fetchCollectionsForToken(token) {
       state.COLLECTIONS = r.items || [];
       paintCount();
       renderTabs();
+      emit('collections-changed');
     }
   } catch { }
 }
@@ -262,6 +343,7 @@ function renderPickList() {
   }
   if (pickMode === 'toggle') {
     el.innerHTML = cols.map(c => `<div class="col-row">
+        <i class="cdot" style="--col:${colColor(c)}"></i>
         <span class="name">${escHtml(c.name)}</span>
         <span class="cnt">${c.count} 条</span>
         <button class="${c.has ? '' : 'ghost'}" data-pick-toggle="${c.id}">${c.has ? '✓ 已在 · 移出' : '加入'}</button>
@@ -269,6 +351,7 @@ function renderPickList() {
     return;
   }
   el.innerHTML = cols.map(c => `<div class="col-row">
+      <i class="cdot" style="--col:${colColor(c)}"></i>
       <span class="name" data-pick="${c.id}">${escHtml(c.name)}</span>
       <span class="cnt">${c.count} 条</span>
       <button data-pick="${c.id}">加入</button>
@@ -302,6 +385,23 @@ export function initCollections() {
   $('#colbNew').addEventListener('keydown', e => { if (e.key === 'Enter') createCollection(); });
   $('#colbRename').onclick = renameCurrent;
   $('#colbDelete').onclick = deleteCurrent;
+  $('#colbColor').addEventListener('change', async e => {
+    if (!browserCol) return;
+    const color = e.target.value;
+    const r = await api('/api/collections', { action: 'color', id: browserCol.id, color });
+    if (!r || !r.ok) { toast((r && r.error) || '颜色保存失败', 3500); e.target.value = colColor(browserCol); return; }
+    browserCol.color = r.color;
+    await loadCollections();
+    toast('合集颜色已更新', 1800);
+  });
+
+  /* 预览/抽卡里的合集标签编辑器 */
+  $('#colEditCancel').onclick = closeCollectionEditor;
+  $('#colEdit').onclick = e => { if (e.target.id === 'colEdit') closeCollectionEditor(); };
+  $('#colEditSave').onclick = saveCollectionEditor;
+  $('#colEditRemove').onclick = removeFromCollectionEditor;
+  $('#colEditDelete').onclick = deleteFromCollectionEditor;
+  $('#colEditName').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); saveCollectionEditor(); } });
   $('#colbBody').addEventListener('click', async e => {
     const rm = e.target.closest('[data-colb-remove]');
     if (rm) {

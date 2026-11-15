@@ -3,8 +3,8 @@
 import { $, state, api, toast, fmtMB, fmtNum, stTag, starsInner, emit, onEvent, escHtml } from './core.js';
 import { render, visible } from './table.js';
 import { doPlay, toggleMulti } from './rows.js';
-import { siteUrl, copyText, setRating, setFav } from './actions.js';
-import { openCollectionPickerForToken } from './collections.js';
+import { siteUrl, copyText, setRating } from './actions.js';
+import { openCollectionPickerForToken, openCollectionEditor, colColor } from './collections.js';
 
 const META_W = 280, GAP = 18;
 const boxOf = sel => document.querySelector(sel + ' .box');
@@ -24,15 +24,143 @@ function isBlankPreviewTarget(t) {
 function metaRows(r, opts = {}) {
   const { withRating = true, ratingHtml = null, extraTop = '' } = opts;
   const rating = ratingHtml || [1, 2, 3, 4, 5].map(n => n <= (+r.rating || 0) ? '★' : '☆').join('');
+  const hasFile = !!r.file_name;
+  const path = r.file_path || r.file_name || '';
+  const site = siteUrl(r);
   return `${extraTop}
     <div class="mhead"><b>${escHtml(r.duration) || '–'}</b><i>${escHtml(r.res) || '–'}</i></div>
     <div class="mrow"><span>站点观看</span><em>${fmtNum(r.views)}</em></div>
     <div class="mrow"><span>点赞</span><em>${fmtNum(r.likes)}</em></div>
     <div class="mrow"><span>状态</span><em>${stTag(r.status)}</em></div>
-    <div class="mrow"><span>本地文件</span><em>${r.file_name ? '✓ ' + fmtMB(r.file_size) : '<span style="color:#7f8ea1">未下载</span>'}</em></div>
     ${withRating ? `<div class="mrow"><span>评分</span><em class="gold">${rating}</em></div>` : ''}
     <div class="mrow"><span>本地播放</span><em>${(+r.play_count || 0) ? '▶ ' + escHtml(r.play_count) + ' 次' : '无记录'}</em></div>
-    ${r.file_name ? `<div class="mfile">${escHtml(r.file_name)}</div>` : ''}`;
+    <div class="mlinks" data-ptoken="${escHtml(r.token)}">
+      <div class="mlinkrow">
+        <span class="mlabel">文件</span>
+        ${hasFile
+          ? `<button type="button" class="mlink path" data-reveal title="在资源管理器中定位：${escHtml(path)}">${escHtml(path)}</button>
+             <span class="msub">${escHtml(fmtMB(r.file_size))}</span>
+             <button type="button" class="micon" data-play-local title="用本地播放器打开">▶</button>`
+          : `<span class="mlink muted">未下载</span>`}
+      </div>
+      <div class="mlinkrow">
+        <span class="mlabel">站点</span>
+        ${site
+          ? `<a class="mlink" href="${escHtml(site)}" target="_blank" rel="noopener" title="在浏览器打开：${escHtml(site)}">${escHtml(site)}</a>
+             <button type="button" class="micon" data-copy-site title="复制站点链接">⧉</button>`
+          : `<span class="mlink muted">—</span>`}
+      </div>
+      <div class="mlinkrow">
+        <span class="mlabel">合集</span>
+        <span class="colchips" data-col-chips><span class="mlink muted">…</span></span>
+        <button type="button" class="micon" data-col-add title="加入合集">＋</button>
+      </div>
+    </div>`;
+}
+
+/* ================= 预览里的链接行 / 下载 / 合集标签 ================= */
+function isDownloadActive(tk) {
+  return ((state.DOWNLOAD && state.DOWNLOAD.items) || [])
+    .some(i => i.token === tk && ['queued', 'downloading', 'paused'].includes(i.state));
+}
+
+function paintPreviewDownload(kind, r) {
+  if (!r) return;
+  const btn = $(kind === 'lb' ? '#lbDownload' : '#gDownload');
+  if (!btn) return;
+  const active = isDownloadActive(r.token);
+  btn.hidden = !!r.file_name || !r.url;
+  btn.disabled = active;
+  btn.textContent = active ? '下载中…' : '下载';
+  btn.dataset.previewToken = r.token;
+}
+
+const PREVIEW_COLS = new Map();
+
+function paintColChips(kind, token) {
+  const root = $(kind === 'lb' ? '#lbMeta' : '#gInfo');
+  const host = root && root.querySelector('[data-col-chips]');
+  if (!host) return;
+  const cols = PREVIEW_COLS.get(token) || [];
+  host.innerHTML = cols.length
+    ? cols.map(c => `<button type="button" class="colchip" data-col-edit="${c.id}" style="--col:${colColor(c)}" title="编辑合集 ${escHtml(c.name)}">${escHtml(c.name)}</button>`).join('')
+    : '<span class="mlink muted">未加入</span>';
+}
+
+async function refreshPreviewCols(kind) {
+  const token = kind === 'lb' ? state.LB_TOKEN : state.GACHA_TOKEN;
+  if (!token) return;
+  try {
+    const r = await api('/api/collections?token=' + encodeURIComponent(token));
+    if (state.LB_TOKEN !== token && state.GACHA_TOKEN !== token) return;
+    PREVIEW_COLS.set(token, ((r && r.items) || []).filter(c => c.has));
+    paintColChips(kind, token);
+  } catch { }
+}
+
+/* 下载状态变化后由 main.js 调用：只刷新按钮，不重绘整个预览 */
+export function refreshPreviewActions() {
+  if ($('#lightbox').classList.contains('on') && state.LB_TOKEN) {
+    const r = state.ROWS.find(x => x.token === state.LB_TOKEN);
+    if (r) paintPreviewDownload('lb', r);
+  }
+  if ($('#gacha').classList.contains('on') && state.GACHA_TOKEN) {
+    const r = state.ROWS.find(x => x.token === state.GACHA_TOKEN);
+    if (r) paintPreviewDownload('g', r);
+  }
+}
+
+async function onPreviewMetaClick(e) {
+  const wrap = e.target.closest('[data-ptoken]');
+  const token = wrap ? wrap.dataset.ptoken : '';
+  if (!token) return;
+  const row = state.ROWS.find(x => x.token === token);
+
+  const reveal = e.target.closest('[data-reveal]');
+  if (reveal) {
+    try {
+      const r = await api('/api/reveal', { token });
+      if (!r.ok) toast(r.error || '定位失败', 3000);
+    } catch { toast('定位失败', 3000); }
+    return;
+  }
+  const playLocal = e.target.closest('[data-play-local]');
+  if (playLocal) { doPlay(token); return; }
+  const copySite = e.target.closest('[data-copy-site]');
+  if (copySite) {
+    const u = row ? siteUrl(row) : '';
+    if (!u) return toast('没有站点链接', 2500);
+    return copyText(u, '站点链接已复制');
+  }
+  const colEdit = e.target.closest('[data-col-edit]');
+  if (colEdit) { openCollectionEditor(+colEdit.dataset.colEdit, { token }); return; }
+  const colAdd = e.target.closest('[data-col-add]');
+  if (colAdd) { openCollectionPickerForToken(token); return; }
+}
+
+async function downloadFromPreview(kind) {
+  const tk = kind === 'lb' ? state.LB_TOKEN : state.GACHA_TOKEN;
+  if (!tk) return;
+  const row = state.ROWS.find(x => x.token === tk);
+  if (!row || row.file_name) return;
+  if (!row.url) return toast('这条没有可下载的地址', 3000);
+  const btn = $(kind === 'lb' ? '#lbDownload' : '#gDownload');
+  if (btn) { btn.disabled = true; btn.textContent = '加入中…'; }
+  try {
+    const r = await api('/api/download', { tokens: [tk] });
+    if (!r || !r.ok) {
+      toast((r && r.error) || '下载失败', 4000);
+      if (btn) { btn.disabled = false; btn.textContent = '下载'; }
+      return;
+    }
+    if (r.appended !== undefined && r.appended === 0) toast(r.note || '已经在下载队列里', 3500);
+    else toast(r.appended !== undefined ? `已追加 ${r.appended} 条到下载队列` : '已加入下载队列', 3000);
+    if (btn) { btn.disabled = true; btn.textContent = '已加入队列'; }
+    emit('reload');
+  } catch (err) {
+    toast('请求失败：' + (err.message || err), 4000);
+    if (btn) { btn.disabled = false; btn.textContent = '下载'; }
+  }
 }
 
 /* ================= 图片自适应（灯箱 / 抽卡共用） ================= */
@@ -69,23 +197,6 @@ function loadCover(img, box, token) {
   };
   img.src = '/api/cover?token=' + encodeURIComponent(token) + '&full=1';
   if (img.complete && img.naturalWidth) fitMedia(img, box);
-}
-
-/* ================= 收藏（灯箱 / 抽卡共用） ================= */
-async function togglePreviewFav(token, kind) {
-  const row = state.ROWS.find(x => x.token === token);
-  if (!row) { toast('找不到这条数据，刷新页面再试', 3000); return; }
-  const btn = kind === 'g' ? $('#gFav') : $('#lbFav');
-  const next = row.fav !== '1';
-  const r = await setFav([token], next);
-  if (!r || !r.ok) { toast('收藏失败：' + ((r && r.error) || '未知错误'), 4000); return; }
-  if (btn) {
-    btn.textContent = kind === 'g'
-      ? (next ? '☆ 取消收藏' : '★ 收藏')
-      : (next ? '★ 已收藏' : '☆ 收藏');
-  }
-  render();
-  toast(next ? '已收藏' : '已取消收藏', 1800);
 }
 
 /* ================= 播放器（预览灯箱 / 抽卡共用） ================= */
@@ -223,7 +334,7 @@ function playToken(key, tk, opts = {}) {
   const pip = $(ctx.pip);
   if (pip) pip.disabled = false;
   v.onerror = () => {
-    toast('浏览器播不了这个文件，试试「本地播放器」', 5000);
+    toast('浏览器播不了这个文件，试试文件路径右侧的 ▶（本地播放器）', 5000);
     v.hidden = true;
     if (ov) ov.hidden = false;
     if (key === 'lb') lbPlaying = false; else gPlaying = false;
@@ -301,7 +412,8 @@ function lbPaint(tk) {
   $('#lbToken').textContent = tk;
   $('#lbMeta').innerHTML = metaRows(r, { ratingHtml: '<span class="rt" id="lbRate" title="点击打分，再点同一颗清除；数字键 1–5"></span>' });
   renderLRate(+r.rating || 0);
-  $('#lbFav').textContent = r.fav === '1' ? '★ 已收藏' : '☆ 收藏';
+  paintPreviewDownload('lb', r);
+  refreshPreviewCols('lb');
   if ($('#lbRestart')) $('#lbRestart').hidden = !(positionOf(tk) > 3);
   $('#lbCount').textContent = lbList.length ? `${lbIdx + 1} / ${lbList.length}` : '';
   const multi = lbList.length > 1;
@@ -310,16 +422,12 @@ function lbPaint(tk) {
 
   // 没下载的条目没有可播文件：隐藏播放入口，避免点了报错
   const canPlay = !!r.file_name;
-  const img = $('#lbImg'), ov = $('#lbPlayOverlay'), ext = $('#lbPlay'), pip = $('#lbPip');
+  const img = $('#lbImg'), ov = $('#lbPlayOverlay'), pip = $('#lbPip');
   if (ov) ov.hidden = !canPlay;
   if (pip) pip.disabled = true;   // 播放后才允许画中画
   if (img) {
     img.classList.toggle('canplay', canPlay);
-    img.title = canPlay ? '点击用浏览器播放（空格播放/暂停，F 全屏）' : '这条还没下载，先下载再播放';
-  }
-  if (ext) {
-    ext.disabled = !canPlay;
-    ext.textContent = canPlay ? '本地播放器' : '未下载';
+    img.title = canPlay ? '点击用浏览器播放（空格播放/暂停，F 全屏）' : '这条还没下载，先点「下载」';
   }
   return true;
 }
@@ -391,7 +499,7 @@ export function drawCard() {
   const box = boxOf('#gacha');
   box.classList.remove('nocover');
   loadCover($('#gImg'), box, r.token);
-  $('#gPlayOverlay').hidden = false;
+  $('#gPlayOverlay').hidden = !r.file_name;
   $('#gPip').disabled = true;
   $('#gTok').textContent = r.token;
   $('#gInfo').innerHTML = metaRows(r, {
@@ -399,7 +507,8 @@ export function drawCard() {
     extraTop: `<div class="mrow"><span>抽到</span><em>${r.last_play ? '看过了' : '还没看'}</em></div>`
   });
   renderGRate(+r.rating || 0);
-  $('#gFav').textContent = r.fav === '1' ? '☆ 取消收藏' : '★ 收藏';
+  paintPreviewDownload('g', r);
+  refreshPreviewCols('g');
   $('#gacha').classList.add('on');
 }
 
@@ -484,46 +593,27 @@ export function initPanels() {
   };
   $('#lbPrev').onclick = () => navLightbox(-1);
   $('#lbNext').onclick = () => navLightbox(1);
-  $('#lbPlay').onclick = () => { if (state.LB_TOKEN) doPlay(state.LB_TOKEN); };
-  $('#lbReveal').onclick = async () => {
-    try { const r = await api('/api/reveal', { token: state.LB_TOKEN }); if (!r.ok) toast('定位失败：' + (r.error || '文件不在本地')); } catch (e) { toast('定位失败'); }
-  };
-  $('#lbCopy').onclick = () => {
-    const r = state.ROWS.find(x => x.token === state.LB_TOKEN);
-    return copyText(r && r.url, 'URL 已复制');
-  };
-  $('#lbCopyToken').onclick = () => copyText(state.LB_TOKEN, 'token 已复制');
-  $('#lbOpen').onclick = () => { if (state.LB_TOKEN) window.open(siteUrl(state.LB_TOKEN), '_blank'); };
-  $('#lbFav').onclick = () => togglePreviewFav(state.LB_TOKEN, 'lb');
-  $('#lbCollection').onclick = () => { if (state.LB_TOKEN) openCollectionPickerForToken(state.LB_TOKEN); };
+  $('#lbDownload').onclick = () => downloadFromPreview('lb');
+  $('#lbMeta').addEventListener('click', onPreviewMetaClick);
 
   /* 抽卡 */
   $('#btnGacha').onclick = drawCard;
   $('#gAgain').onclick = drawCard;
   $('#gClose').onclick = closeGacha;
   $('#gacha').onclick = e => { if (isBlankPreviewTarget(e.target)) closeGacha(); };
-  $('#gImg').onclick = e => { e.stopPropagation(); if (state.GACHA_TOKEN) playToken('g', state.GACHA_TOKEN); };
-  $('#gPlayOverlay').onclick = e => { e.stopPropagation(); if (state.GACHA_TOKEN) playToken('g', state.GACHA_TOKEN); };
+  const gachaCanPlay = () => {
+    const r = state.ROWS.find(x => x.token === state.GACHA_TOKEN);
+    return !!(r && r.file_name);
+  };
+  $('#gImg').onclick = e => { e.stopPropagation(); if (gachaCanPlay()) playToken('g', state.GACHA_TOKEN); };
+  $('#gPlayOverlay').onclick = e => { e.stopPropagation(); if (gachaCanPlay()) playToken('g', state.GACHA_TOKEN); };
   $('#gMedia').onclick = e => {
     if (e.target.closest('video')) return;
-    if (state.GACHA_TOKEN) playToken('g', state.GACHA_TOKEN);
+    if (gachaCanPlay()) playToken('g', state.GACHA_TOKEN);
   };
   $('#gPip').onclick = () => togglePip('g');
-  $('#gPlay').onclick = () => { if (state.GACHA_TOKEN) doPlay(state.GACHA_TOKEN); };
-  $('#gReveal').onclick = async () => {
-    if (!state.GACHA_TOKEN) return;
-    try {
-      const r = await api('/api/reveal', { token: state.GACHA_TOKEN });
-      if (!r.ok) toast(r.error);
-    } catch (e) { toast('定位失败'); }
-  };
-  $('#gCopy').onclick = () => {
-    const r = state.ROWS.find(x => x.token === state.GACHA_TOKEN);
-    return copyText(r && r.url, 'URL 已复制');
-  };
-  $('#gOpen').onclick = () => { if (state.GACHA_TOKEN) window.open(siteUrl(state.GACHA_TOKEN), '_blank'); };
-  $('#gFav').onclick = () => togglePreviewFav(state.GACHA_TOKEN, 'g');
-  $('#gCollection').onclick = () => { if (state.GACHA_TOKEN) openCollectionPickerForToken(state.GACHA_TOKEN); };
+  $('#gDownload').onclick = () => downloadFromPreview('g');
+  $('#gInfo').addEventListener('click', onPreviewMetaClick);
 
   /* 星星是动态生成的 → 事件委托 */
   document.addEventListener('click', e => {
@@ -607,6 +697,9 @@ export function initPanels() {
     if ((e.key === 'r' || e.key === 'R') && !typing) { e.preventDefault(); drawCard(); return; }
     if (e.key === 'Escape') {
       if ($('#confirmModal').classList.contains('on')) return;
+      // 合集编辑/选择弹窗可能盖在预览之上：先关它们，再关预览
+      if ($('#colEdit').classList.contains('on')) { $('#colEditCancel').click(); return; }
+      if ($('#colPick').classList.contains('on')) { $('#colPickCancel').click(); return; }
       if ($('#scrapeModal').classList.contains('on')) $('#scrapeModal').classList.remove('on');
       else if ($('#gacha').classList.contains('on')) closeGacha();
       else if ($('#lightbox').classList.contains('on')) closeLightbox();
@@ -646,5 +739,11 @@ export function initPanels() {
   onEvent('open-lightbox', payload => {
     if (payload && typeof payload === 'object') openLightbox(payload.token, payload);
     else openLightbox(payload);
+  });
+
+  // 合集新建/改名/改色/加入/移出后，刷新正在打开的预览标签
+  onEvent('collections-changed', () => {
+    if ($('#lightbox').classList.contains('on')) refreshPreviewCols('lb');
+    if ($('#gacha').classList.contains('on')) refreshPreviewCols('g');
   });
 }

@@ -563,12 +563,6 @@ onPlay={() => { setIsPlaying(true); if (videoRef.current) videoRef.current.playb
             </div>
           ) : null}
 
-          {accelerating ? (
-            <div className="pointer-events-none absolute left-1/2 top-3 z-40 flex -translate-x-1/2 items-center gap-1.5 rounded-full border border-white/20 bg-black/70 px-2.5 py-1 text-[10px] font-medium text-white shadow-lg backdrop-blur" aria-live="polite">
-              <FastForward className="size-3.5 text-[color:var(--warning)]" />
-              正在加速播放 · {longPressRate}×
-            </div>
-          ) : null}
 
 
 
@@ -579,6 +573,11 @@ onPlay={() => { setIsPlaying(true); if (videoRef.current) videoRef.current.playb
                   {isPlaying ? <Pause className="size-3.5" /> : <Play className="size-3.5" />}
                 </IconButton>
                 <span className="font-mono text-[10px] tabular-nums text-white/90">{formatTime(currentTime)} / {formatTime(totalDuration)}</span>
+                {accelerating ? (
+                  <span className="inline-flex items-center gap-1 rounded-full border border-[color:var(--warning)]/35 bg-[color:var(--warning)]/15 px-1.5 py-0.5 text-[9px] font-medium text-[color:var(--warning)]">
+                    <FastForward className="size-3" /> 正在加速播放 · {longPressRate}×
+                  </span>
+                ) : null}
                 <div className="ml-auto flex items-center gap-1">
                   <IconButton label={isMuted ? '取消静音' : '静音'} size="sm" onClick={() => { const v = videoRef.current; if (!v) return; v.muted = !v.muted; setIsMuted(v.muted) }}>
                     {isMuted ? <VolumeX className="size-3.5" /> : <Volume2 className="size-3.5" />}

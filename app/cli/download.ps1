@@ -630,9 +630,12 @@ try {
             try {
                 $proc = Start-Curl -item $item -part $part -log $log
                 $states[$tk].state = 'downloading'
+                # 从已有 .part 续传时，第一次速度采样要基于现有大小，否则首秒会显示几十 MB/s 的假峰值
+                $startBytes = 0
+                if (Test-Path -LiteralPath $part) { try { $startBytes = (Get-Item -LiteralPath $part).Length } catch { } }
                 $jobs[$tk] = @{
                     proc = $proc; part = $part; final = $final; log = $log; expected = $expected; hls = ($item.mode -eq 'hls')
-                    lastBytes = 0; lastTime = Get-Date; speed = 0; retries = 0
+                    lastBytes = $startBytes; lastTime = Get-Date; speed = 0; retries = 0
                 }
             } catch {
                 $states[$tk].state = 'failed'

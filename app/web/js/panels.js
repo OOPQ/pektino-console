@@ -22,23 +22,32 @@ function isBlankPreviewTarget(t) {
 
 /* ================= 信息行（灯箱 / 抽卡共用） ================= */
 function metaRows(r, opts = {}) {
-  const { withRating = true, ratingHtml = null, extraTop = '' } = opts;
+  const { withRating = true, ratingHtml = null, note = '' } = opts;
   const rating = ratingHtml || [1, 2, 3, 4, 5].map(n => n <= (+r.rating || 0) ? '★' : '☆').join('');
   const hasFile = !!r.file_name;
   const path = r.file_path || r.file_name || '';
+  const cut = path.lastIndexOf('\\');
+  const pathName = cut >= 0 ? path.slice(cut + 1) : path;
+  const pathDir = cut >= 0 ? path.slice(0, cut) : '';
   const site = siteUrl(r);
-  return `${extraTop}
+  const playCount = +r.play_count || 0;
+  return `${note ? `<div class="mnote">${escHtml(note)}</div>` : ''}
     <div class="mhead"><b>${escHtml(r.duration) || '–'}</b><i>${escHtml(r.res) || '–'}</i></div>
-    <div class="mrow"><span>站点观看</span><em>${fmtNum(r.views)}</em></div>
-    <div class="mrow"><span>点赞</span><em>${fmtNum(r.likes)}</em></div>
-    <div class="mrow"><span>状态</span><em>${stTag(r.status)}</em></div>
-    ${withRating ? `<div class="mrow"><span>评分</span><em class="gold">${rating}</em></div>` : ''}
-    <div class="mrow"><span>本地播放</span><em>${(+r.play_count || 0) ? '▶ ' + escHtml(r.play_count) + ' 次' : '无记录'}</em></div>
+    <div class="mstats-grid">
+      <div class="mstat"><span>站点观看</span><b>${fmtNum(r.views)}</b></div>
+      <div class="mstat"><span>点赞</span><b>${fmtNum(r.likes)}</b></div>
+      <div class="mstat"><span>状态</span><b>${stTag(r.status)}</b></div>
+      ${withRating ? `<div class="mstat"><span>评分</span><b class="gold">${rating}</b></div>` : ''}
+      <div class="mstat span2"><span>本地播放</span><b>${playCount ? '▶ ' + escHtml(r.play_count) + ' 次' : '无记录'}</b></div>
+    </div>
     <div class="mlinks" data-ptoken="${escHtml(r.token)}">
       <div class="mlinkrow">
         <span class="mlabel">文件</span>
         ${hasFile
-          ? `<button type="button" class="mlink path" data-reveal title="在资源管理器中定位：${escHtml(path)}">${escHtml(path)}</button>
+          ? `<button type="button" class="mlink path" data-reveal title="在资源管理器中定位：${escHtml(path)}">
+               <span class="pname">${escHtml(pathName)}</span>
+               ${pathDir ? `<span class="pdir">${escHtml(pathDir)}</span>` : ''}
+             </button>
              <span class="msub">${escHtml(fmtMB(r.file_size))}</span>
              <button type="button" class="micon" data-play-local title="用本地播放器打开">▶</button>`
           : `<span class="mlink muted">未下载</span>`}
@@ -409,7 +418,9 @@ function lbPaint(tk) {
   const box = boxOf('#lightbox');
   box.classList.remove('nocover');
   loadCover($('#lbImg'), box, tk);
-  $('#lbToken').textContent = tk;
+  $('#lbToken').textContent = r.title || tk;
+  const lbSub = $('#lbTokenSub');
+  if (lbSub) lbSub.textContent = r.title ? tk : '';
   $('#lbMeta').innerHTML = metaRows(r, { ratingHtml: '<span class="rt" id="lbRate" title="点击打分，再点同一颗清除；数字键 1–5"></span>' });
   renderLRate(+r.rating || 0);
   paintPreviewDownload('lb', r);
@@ -501,10 +512,12 @@ export function drawCard() {
   loadCover($('#gImg'), box, r.token);
   $('#gPlayOverlay').hidden = !r.file_name;
   $('#gPip').disabled = true;
-  $('#gTok').textContent = r.token;
+  $('#gTok').textContent = r.title || r.token;
+  const gSub = $('#gTokenSub');
+  if (gSub) gSub.textContent = r.title ? r.token : '';
   $('#gInfo').innerHTML = metaRows(r, {
     ratingHtml: '<span class="rt" id="gRate"></span>',
-    extraTop: `<div class="mrow"><span>抽到</span><em>${r.last_play ? '看过了' : '还没看'}</em></div>`
+    note: r.last_play ? '抽到 · 看过了' : '抽到 · 还没看'
   });
   renderGRate(+r.rating || 0);
   paintPreviewDownload('g', r);

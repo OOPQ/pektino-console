@@ -403,11 +403,9 @@
     </div>
     <div class="colb-tools">
       <input id="colbNew" placeholder="新合集名称" maxlength="60" style="width:130px">
-      <input type="color" id="colbNewColor" value="#4f8cff" title="新合集颜色">
+      <div class="colorpick compact" id="colbNewPalette" title="新合集颜色"></div>
       <button id="colbCreate">新建</button>
-      <input type="color" id="colbColor" value="#4f8cff" title="当前合集颜色" disabled>
-      <button class="ghost" id="colbRename" title="重命名当前合集">重命名</button>
-      <button class="ghost danger" id="colbDelete" title="删除当前合集（不删条目）">删除</button>
+      <button class="ghost" id="colbEdit" title="编辑当前合集（名称 / 颜色 / 删除）" disabled>编辑合集</button>
       <span class="spacer"></span>
       <input id="colbSearch" placeholder="过滤 token / 时长" style="width:170px">
       <select id="colbStatus" style="padding:3px 6px">
@@ -464,13 +462,14 @@
     </div>
     <div class="field">
       <label class="sub">颜色</label>
-      <input type="color" id="colEditColor" value="#4f8cff">
+      <div class="coledit-preview"><span class="colchip" id="colEditPreview">合集</span></div>
+      <div class="colorpick" id="colEditPalette"></div>
     </div>
     <div class="coledit-actions">
       <button id="colEditSave">保存</button>
+      <button class="ghost" id="colEditCancel">取消</button>
       <button class="ghost" id="colEditRemove">移出当前条目</button>
       <button class="ghost danger" id="colEditDelete">删除合集</button>
-      <button class="ghost" id="colEditCancel">取消</button>
     </div>
   </div>
 </div>
@@ -488,6 +487,7 @@
     </div>
     <div class="meta">
       <h3 id="lbToken">–</h3>
+      <div class="mtoken" id="lbTokenSub"></div>
       <div class="big mstats" id="lbMeta"></div>
       <div class="actions">
         <button class="ghost" id="lbRestart" hidden title="从头开始播放">从头播放</button>
@@ -514,6 +514,7 @@
     </div>
     <div class="meta">
       <h3 id="gTok">–</h3>
+      <div class="mtoken" id="gTokenSub"></div>
       <div class="big mstats" id="gInfo"></div>
 
       <div class="actions">

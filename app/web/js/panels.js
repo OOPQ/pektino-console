@@ -648,9 +648,9 @@ export function initPanels() {
   });
 
   /* 抽屉 */
-  $('#btnSettings').onclick = () => $('#drawer').classList.add('on');
-  $('#btnLog').onclick = () => $('#drawer').classList.add('on');
-  $('#drawer').onclick = e => { if (e.target.id === 'drawer') $('#drawer').classList.remove('on'); };
+  $('#btnSettings').onclick = () => openOverlay('#drawer');
+  $('#btnLog').onclick = () => openOverlay('#drawer');
+  ['wa-hide', 'wa-after-hide'].forEach(ev => $('#drawer').addEventListener(ev, () => $('#drawer').classList.remove('on')));
 
   /* 键盘：capture 阶段拦截，避免视频控件先吃掉方向键/空格 */
   document.addEventListener('keydown', e => {
@@ -719,13 +719,13 @@ export function initPanels() {
       if ($('#colEdit').classList.contains('on')) { $('#colEditCancel').click(); return; }
       if ($('#colPick').classList.contains('on')) { $('#colPickCancel').click(); return; }
       if ($('#dlConfirm').classList.contains('on')) { closeOverlay('#dlConfirm'); return; }
-      if ($('#scrapeModal').classList.contains('on')) $('#scrapeModal').classList.remove('on');
+      if ($('#scrapeModal').classList.contains('on')) closeOverlay('#scrapeModal');
       else if ($('#gacha').classList.contains('on')) closeGacha();
       else if ($('#lightbox').classList.contains('on')) closeLightbox();
       else if ($('#dlDrawer').classList.contains('on')) closeOverlay('#dlDrawer');
-      else if ($('#binDrawer').classList.contains('on')) $('#binDrawer').classList.remove('on');
+      else if ($('#binDrawer').classList.contains('on')) closeOverlay('#binDrawer');
       else if ($('#colBrowser').classList.contains('on')) closeOverlay('#colBrowser');
-      else if ($('#drawer').classList.contains('on')) $('#drawer').classList.remove('on');
+      else if ($('#drawer').classList.contains('on')) closeOverlay('#drawer');
       else if ($('#ctxmenu').classList.contains('on')) emit('close-ctx');
       else if (state.MULTI) toggleMulti();
       else if (document.activeElement === $('#q')) emit('clear-query');

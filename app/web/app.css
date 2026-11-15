@@ -1194,3 +1194,105 @@ html.wa-light .wa-dlc .coledit-actions,html.wa-light .wa-confirm .confirm-action
 .wa-colb .colb-grid{grid-template-columns:repeat(auto-fill,minmax(168px,1fr))}
 html.wa-light .wa-colb::part(dialog){background:linear-gradient(180deg,#fff,#f8fbfe);border-color:#d6e0ea;box-shadow:0 28px 80px rgba(30,50,80,.2)}
 html.wa-light .wa-colb .colb-tools{background:#f7fafd;border-color:#e1e8f0}
+
+/* ---------- 队列里的 Web Awesome tab / progress / badge / button ---------- */
+.wa-dq .dq-tabs{display:block;margin:4px 18px 0}
+.wa-dq wa-tab::part(base){padding:8px 2px;margin-right:20px;color:var(--faint);font-size:12px;border-bottom:2px solid transparent}
+.wa-dq wa-tab[active]::part(base){color:var(--text);border-bottom-color:var(--acc)}
+.wa-dq wa-tab span{display:inline-block;min-width:16px;margin-left:4px;padding:0 5px;border-radius:999px;background:var(--panel3);border:1px solid var(--line);color:var(--faint);font-size:9.5px;line-height:15px;text-align:center}
+.wa-dq wa-progress-bar{display:block;margin:8px 0 6px;--height:5px;--track-color:rgba(255,255,255,.07);--indicator-color:var(--acc)}
+.wa-dq .dq-item.done wa-progress-bar{--indicator-color:var(--ok)}
+.wa-dq .dq-item.paused wa-progress-bar{--indicator-color:var(--warn)}
+.wa-dq .dq-item.failed wa-progress-bar{--indicator-color:var(--bad)}
+.wa-dq wa-badge{font-size:10px}
+.wa-dq .dq-actions wa-button::part(base){height:26px;font-size:10.5px;padding:0 8px}
+html.wa-light .wa-dq wa-progress-bar{--track-color:#e6edf4}
+html.wa-light .wa-dq wa-tab span{background:#eef3f8;border-color:#d6e0ea}.wa-pv .actions wa-button{width:100%}
+.wa-pv .actions wa-button::part(base){width:100%;height:34px;font-size:12px}
+.wa-col-edit .coledit-actions wa-button,.wa-col-pick .coledit-actions wa-button,.wa-dlc .coledit-actions wa-button,.wa-confirm .confirm-actions wa-button{width:100%}
+.wa-col-edit .coledit-actions wa-button::part(base),.wa-col-pick .coledit-actions wa-button::part(base),.wa-dlc .coledit-actions wa-button::part(base),.wa-confirm .confirm-actions wa-button::part(base){width:100%;height:34px;font-size:12px}
+.wa-dq .dq-tools wa-button::part(base){height:28px;font-size:11px;padding:0 9px}
+.wa-col-edit wa-input,.wa-col-pick wa-input{display:block;width:100%}.wa-col-pick .colpick-new wa-input{flex:1;min-width:0}
+.wa-dlc .dlc-limit wa-input{width:90px;flex:0 0 90px}.wa-dq .dq-tools wa-select{width:66px;flex:0 0 66px}
+.wa-dq .dq-tools wa-select::part(base){height:28px;font-size:11px}
+/* ---------- Web Awesome 设置抽屉 ---------- */
+.wa-set::part(dialog){width:min(480px,94vw);max-width:94vw;background:linear-gradient(180deg,var(--panel),var(--panel2));border-left:1px solid #26313d;color:var(--text)}
+.wa-set::part(header){padding:15px 18px 12px;border-bottom:1px solid rgba(255,255,255,.08)}
+.wa-set::part(title){font-size:13px;font-weight:650}
+.wa-set::part(body){padding:0;overflow:auto}
+.wa-set .set-body{padding:14px 18px 20px}
+.wa-set wa-input{display:block;width:100%;margin-bottom:10px}
+.wa-set wa-checkbox{margin:6px 0 12px}
+.set-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px}
+.set-section-title{margin:4px 0 8px;font-size:10px;letter-spacing:.6px;color:var(--faint)}
+.wa-set details.adv{margin-top:14px;border-top:1px solid var(--line);padding-top:10px}
+html.wa-light .wa-set::part(dialog){background:linear-gradient(180deg,#fff,#f8fbfe);border-color:#d6e0ea}
+html.wa-light .wa-set::part(header){border-color:#e3eaf2}.bar wa-checkbox{font-size:11px;color:var(--dim);margin-right:2px}
+.bar wa-checkbox::part(label){font-size:11px}
+thead wa-checkbox,tbody wa-checkbox{vertical-align:middle}
+.colpop wa-checkbox{display:flex;width:100%;margin:3px 0;font-size:12px;color:var(--text)}
+.colpop wa-checkbox::part(base){align-items:center}
+.colpop wa-checkbox::part(label){padding-left:6px}
+.wa-set wa-checkbox{font-size:12px;color:var(--dim)}.bar.queries wa-input#q{flex:1;min-width:160px}
+.bar.queries wa-select{width:auto;min-width:104px;flex:0 0 auto}
+.bar.queries wa-select#fSource{min-width:100px}
+.pop-row wa-select{width:150px}
+.pop-row wa-input{width:110px}
+.durwrap wa-input{width:110px;display:inline-block}
+.durwrap wa-input::part(input){padding-right:36px}.pager wa-select{width:82px;flex:0 0 82px}
+/* ---------- Web Awesome 获取数据 / 链接抓取 ---------- */
+.wa-scrape,.wa-url{--width:min(440px,94vw);background:transparent!important;border:0!important;box-shadow:none!important}
+.wa-url{--width:min(460px,94vw)}
+.wa-scrape::part(dialog),.wa-url::part(dialog){background:linear-gradient(180deg,var(--panel),var(--panel2));border:1px solid #26313d;border-radius:16px;color:var(--text);box-shadow:0 24px 70px rgba(0,0,0,.5)}
+.wa-scrape::part(header),.wa-url::part(header){padding:14px 18px 11px;border-bottom:1px solid rgba(255,255,255,.08)}
+.wa-scrape::part(title),.wa-url::part(title){font-size:13px;font-weight:650}
+.wa-scrape::part(body),.wa-url::part(body){padding:0}
+.wa-scrape::part(footer),.wa-url::part(footer){padding:0;border-top:0}
+.wa-scrape .modal-box,.wa-url .modal-box{width:auto;max-width:none;padding:16px 18px;background:none;border:0;box-shadow:none;border-radius:0}
+.wa-scrape wa-input,.wa-scrape wa-select,.wa-url wa-input{display:block;width:100%;margin-bottom:10px}
+.wa-scrape wa-checkbox,.wa-url wa-checkbox{display:flex;margin:6px 0 10px;font-size:12px;color:var(--dim)}
+.wa-scrape .modal-actions,.wa-url .modal-actions{display:grid;grid-template-columns:1fr 1fr;gap:7px;padding:12px 18px;border-top:1px solid rgba(255,255,255,.08);background:color-mix(in srgb,var(--panel2) 55%,transparent)}
+.wa-scrape .modal-actions wa-button,.wa-url .modal-actions wa-button{width:100%}
+.wa-scrape .modal-actions wa-button::part(base),.wa-url .modal-actions wa-button::part(base){width:100%;height:34px;font-size:12px}
+.wa-scrape #hdField{margin-bottom:8px}
+.wa-scrape #hdField wa-checkbox{margin:0}
+.wa-url .sub{margin-bottom:12px}
+html.wa-light .wa-scrape::part(dialog),html.wa-light .wa-url::part(dialog){background:linear-gradient(180deg,#fff,#f8fbfe);border-color:#d6e0ea;box-shadow:0 24px 70px rgba(30,50,80,.2)}
+html.wa-light .wa-scrape .modal-actions,html.wa-light .wa-url .modal-actions{background:#f7fafd;border-color:#e1e8f0}.wa-colb .colb-tools wa-input,.wa-colb .colb-tools wa-select{display:inline-block;vertical-align:middle}
+.wa-colb .colb-tools wa-button::part(base){height:32px;font-size:11.5px;padding:0 10px}
+.wa-colb .colb-tools wa-input::part(input){height:30px;font-size:11.5px}
+.wa-colb .colb-tools wa-select::part(base){height:32px;font-size:11.5px}
+/* ---------- Web Awesome 回收站抽屉 ---------- */
+.wa-bin::part(dialog){width:min(480px,94vw);max-width:94vw;background:linear-gradient(180deg,var(--panel),var(--panel2));border-left:1px solid #26313d;color:var(--text)}
+.wa-bin::part(header){padding:15px 18px 12px;border-bottom:1px solid rgba(255,255,255,.08)}
+.wa-bin::part(title){font-size:13px;font-weight:650}
+.wa-bin::part(body){padding:0;overflow:auto}
+.wa-bin .bin-body{padding:14px 18px 20px}
+.wa-bin .bin-tools{display:flex;align-items:center;gap:8px;margin-bottom:12px}
+.wa-bin .bin-actions wa-button::part(base){height:28px;font-size:11px;padding:0 9px}
+html.wa-light .wa-bin::part(dialog){background:linear-gradient(180deg,#fff,#f8fbfe);border-color:#d6e0ea}
+html.wa-light .wa-bin::part(header){border-color:#e3eaf2}.bar wa-button{flex:0 0 auto}
+.bar wa-button::part(base){height:30px;font-size:11.5px;padding:0 10px}
+.bar wa-button .badge,.bar wa-button .sub{font-size:10px}.selbar wa-button::part(base){height:26px;font-size:11px;padding:0 8px}.pager wa-button::part(base){height:28px;min-width:30px;font-size:11px;padding:0 8px}
+.pager wa-button.pg.on::part(base){border-color:var(--acc);color:#cfe6ff;background:#16304d}.wa-colb .colb-tabs{display:block;padding:10px 18px 0}
+.wa-colb .colb-tabs wa-tab::part(base){height:30px;padding:0 11px;margin-right:8px;border-radius:999px;border:1px solid var(--line);background:rgba(255,255,255,.02);color:var(--dim);font-size:11.5px}
+.wa-colb .colb-tabs wa-tab[active]::part(base){color:var(--text);border-color:var(--col,#2b6cb0);background:color-mix(in srgb,var(--col,#2b6cb0) 17%,transparent)}
+.wa-colb .colb-tabs wa-tab .cdot{margin-right:5px}
+html.wa-light .wa-colb .colb-tabs wa-tab::part(base){background:#fff;border-color:#d6e0ea}
+html.wa-light .wa-colb .colb-tabs wa-tab[active]::part(base){background:color-mix(in srgb,var(--col,#2b6cb0) 12%,#fff)}#fStatus{width:112px;min-width:0}
+#fSource{width:112px;min-width:0}
+#fFlag{width:112px;min-width:0}
+.bar.queries wa-select{width:112px;min-width:0;flex:0 0 112px;height:32px}
+.bar.queries wa-select::part(combobox){height:32px;min-width:0;font-size:11.5px;padding-left:9px}
+.bar.queries wa-select::part(display-input){font-size:11.5px}
+.bar.queries wa-input#q{height:32px;flex:1 1 160px;min-width:140px}
+.bar.queries wa-input#q::part(input){height:30px;font-size:11.5px}
+.bar.queries wa-checkbox{font-size:10.5px}.selbar{gap:4px;padding:7px 9px;max-width:calc(100vw - 32px)}
+.selbar #selCount{flex:0 0 auto;white-space:nowrap;font-size:10px;margin-right:2px}
+.selbar wa-button{flex:0 0 auto}
+.selbar wa-button::part(base){height:24px;font-size:10px;padding:0 6px}
+.selbar .rt{margin:0 2px}#filterPop{min-width:300px}
+#filterPop .pop-row>span:first-child{white-space:nowrap;flex:0 0 auto}
+#filterPop .pop-row wa-select{width:170px}
+#filterPop .pop-row wa-input{width:100px}
+.selbar .sub{white-space:nowrap;flex:0 0 auto}

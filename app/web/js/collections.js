@@ -91,7 +91,7 @@ function renderTabs() {
   const el = $('#colbTabs');
   if (!el) return;
   const cols = state.COLLECTIONS || [];
-  el.innerHTML = cols.map(c => `<button class="colb-tab ${browserCol && browserCol.id === c.id ? 'on' : ''}" data-colb-tab="${c.id}" style="--col:${colColor(c)}"><i class="cdot"></i>${escHtml(c.name)} <span class="sub">${c.count}</span></button>`).join('');
+  el.innerHTML = cols.map(c => `<wa-tab slot="nav" panel="${c.id}" ${browserCol && browserCol.id === c.id ? 'active' : ''} style="--col:${colColor(c)}"><i class="cdot"></i>${escHtml(c.name)} <span class="sub">${c.count}</span></wa-tab>`).join('');
   const has = !!browserCol;
   if ($('#colbEdit')) $('#colbEdit').disabled = !has;
 }
@@ -396,9 +396,9 @@ export function initCollections() {
   };
   $('#colbSearch').addEventListener('input', e => { browserQuery = e.target.value || ''; renderBrowser(); });
   $('#colbStatus').addEventListener('change', e => { browserStatus = e.target.value; renderBrowser(); });
-  $('#colbTabs').addEventListener('click', e => {
-    const b = e.target.closest('[data-colb-tab]');
-    if (b) selectCollection(+b.dataset.colbTab);
+  $('#colbTabs').addEventListener('wa-tab-show', e => {
+    const name = e.detail && (e.detail.name || e.detail.panel);
+    if (name && (!browserCol || browserCol.id !== +name)) selectCollection(+name);
   });
   $('#colbCreate').onclick = createCollection;
   $('#colbNew').addEventListener('keydown', e => { if (e.key === 'Enter') createCollection(); });
@@ -411,7 +411,7 @@ export function initCollections() {
   $('#colEditSave').onclick = saveCollectionEditor;
   $('#colEditRemove').onclick = removeFromCollectionEditor;
   $('#colEditDelete').onclick = deleteFromCollectionEditor;
-  $('#colEditName').addEventListener('input', updateEditPreview);
+  ['input', 'wa-input', 'change', 'wa-change'].forEach(ev => $('#colEditName').addEventListener(ev, updateEditPreview));
   $('#colEditName').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); saveCollectionEditor(); } });
   $('#colbBody').addEventListener('click', async e => {
     const rm = e.target.closest('[data-colb-remove]');

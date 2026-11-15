@@ -1,6 +1,7 @@
 /* main.js — 数据加载、工具条、批量操作、初始化 */
 import { $, state, PREFS, savePrefs, api, toast, onEvent, confirmDialog, escHtml, openOverlay, closeOverlay } from './core.js';
 import { render, markActiveKpi, initTable, visible } from './table.js';
+import { setSelectOptions } from './ui/select.js';
 import { initRows } from './rows.js';
 import { initPanels, connectSse, openLightbox, refreshPreviewActions } from './panels.js';
 import { initCollections, openCollectionPicker } from './collections.js';
@@ -127,7 +128,15 @@ function setQueueTab(tab, manual) {
   const drawer = $('#dlDrawer');
   if (!drawer) return;
   drawer.dataset.qtab = tab;
-  document.querySelectorAll('#dqTabs .dq-tab').forEach(b => b.classList.toggle('on', b.dataset.qtab === tab));
+  const group = $('#dqTabs');
+  if (group) {
+    group.querySelectorAll('wa-tab').forEach(t => {
+      const on = t.getAttribute('panel') === tab;
+      t.active = on;
+      if (on) t.setAttribute('active', ''); else t.removeAttribute('active');
+    });
+    if (group.getAttribute('active') !== tab) group.setAttribute('active', tab);
+  }
   if (manual) dqTabSet = true;
 }
 const rowOf = tk => state.ROWS.find(r => r.token === tk);
@@ -204,6 +213,7 @@ function dlItemHtml(i, rowMap) {
     : i.state === 'cancelled' ? 'cancelled'
     : (i.state === 'failed' || i.state === 'dead') ? 'failed' : '';
   const etk = escHtml(i.token);
+  const badgeVariant = i.state === 'done' ? 'success' : (i.state === 'failed' || i.state === 'dead') ? 'danger' : i.state === 'paused' ? 'warning' : 'neutral';
   return `<div class="dq-item ${cls}">
     <div class="dq-thumb" ${hasFile ? `data-dq-play="${etk}" title="播放"` : 'title="本地还没有这个文件"'}>
       <img src="/api/cover?token=${encodeURIComponent(i.token)}" loading="lazy" alt=""
@@ -214,16 +224,16 @@ function dlItemHtml(i, rowMap) {
       <div class="dq-top">
         <span class="tk mono" title="${etk}">${etk}</span>
         <span class="sub">${size}</span>
-        <span class="dq-state ${cls}">${right}</span>
+        <wa-badge variant="${badgeVariant}">${right}</wa-badge>
       </div>
-      <div class="dq-bar"><i style="width:${pct}%"></i></div>
+      <wa-progress-bar value="${pct}"></wa-progress-bar>
       <div class="dq-actions">
-        ${canPause ? `<button class="ghost" data-dq-pause="${etk}">⏸ 暂停</button>` : ''}
-        ${canResume ? `<button class="ghost accent" data-dq-resume="${etk}">▶ 继续</button>` : ''}
-        ${canCancel ? `<button class="ghost danger" data-dq-cancel="${etk}">取消</button>` : ''}
-        <button class="ghost" data-dq-fav="${etk}">${fav ? '★ 已收藏' : '☆ 收藏'}</button>
-        ${hasFile ? `<button class="ghost" data-dq-play="${etk}">▶ 播放</button>` : ''}
-        ${hasFile ? `<button class="ghost" data-dq-reveal="${etk}">定位</button>` : ''}
+        ${canPause ? `<wa-button size="small" appearance="plain" data-dq-pause="${etk}">⏸ 暂停</wa-button>` : ''}
+        ${canResume ? `<wa-button size="small" appearance="plain" variant="brand" data-dq-resume="${etk}">▶ 继续</wa-button>` : ''}
+        ${canCancel ? `<wa-button size="small" appearance="plain" variant="danger" data-dq-cancel="${etk}">取消</wa-button>` : ''}
+        <wa-button size="small" appearance="plain" data-dq-fav="${etk}">${fav ? '★ 已收藏' : '☆ 收藏'}</wa-button>
+        ${hasFile ? `<wa-button size="small" appearance="plain" data-dq-play="${etk}">▶ 播放</wa-button>` : ''}
+        ${hasFile ? `<wa-button size="small" appearance="plain" data-dq-reveal="${etk}">定位</wa-button>` : ''}
       </div>
     </div>
   </div>`;
@@ -404,15 +414,15 @@ function initDownloadQueue() {
     // 打开时强制重建一次：关闭期间列表没有跟着刷新
     renderDownloadQueue(state.DOWNLOAD || {}, { force: true });
   };
-  $('#dlConc').innerHTML = Array.from({ length: 16 }, (_, i) => `<option value="${i + 1}">${i + 1}</option>`).join('');
+  $('#dlConc').innerHTML = Array.from({ length: 16 }, (_, i) => `<wa-option value="${i + 1}">${i + 1}</wa-option>`).join('');
   $('#btnDlQueue').onclick = openDrawer;
   // 进度条本身也可以点开队列（✕ 按钮除外）
   $('#prog').addEventListener('click', e => { if (!e.target.closest('button')) openDrawer(); });
   ['wa-hide', 'wa-after-hide'].forEach(ev => $('#dlDrawer').addEventListener(ev, () => $('#dlDrawer').classList.remove('on')));
-  $('#dqTabs').onclick = e => {
-    const b = e.target.closest('[data-qtab]');
-    if (b) setQueueTab(b.dataset.qtab, true);
-  };
+  $('#dqTabs').addEventListener('wa-tab-show', e => {
+    const name = (e.detail && (e.detail.name || e.detail.panel)) || '';
+    if (name) setQueueTab(name, true);
+  });
   $('#dlPause').onclick = toggleDownloadPause;
   $('#dlCancelAll').onclick = cancelAllDownloads;
   $('#dlClearDone').onclick = async () => {
@@ -482,8 +492,8 @@ function renderBin() {
         <span class="sub">${escHtml(meta) || '—'}</span>
       </div>
       <div class="bin-actions">
-        <button class="ghost" data-bin-restore="${etk}">恢复</button>
-        <button class="ghost danger" data-bin-del="${etk}">彻底删除</button>
+        <wa-button size="small" appearance="plain" data-bin-restore="${etk}">恢复</wa-button>
+        <wa-button size="small" appearance="plain" variant="danger" data-bin-del="${etk}">彻底删除</wa-button>
       </div>
     </div>`;
   }).join('');
@@ -491,7 +501,7 @@ function renderBin() {
 
 function openBinDrawer() {
   renderBin();
-  $('#binDrawer').classList.add('on');
+  openOverlay('#binDrawer');
 }
 
 async function binRestore(tokens) {
@@ -514,8 +524,8 @@ async function binDelete(tokens) {
 }
 
 function initBin() {
-  $('#binClose').onclick = () => $('#binDrawer').classList.remove('on');
-  $('#binDrawer').onclick = e => { if (e.target.id === 'binDrawer') $('#binDrawer').classList.remove('on'); };
+  $('#binClose').onclick = () => closeOverlay('#binDrawer');
+  ['wa-hide', 'wa-after-hide'].forEach(ev => $('#binDrawer').addEventListener(ev, () => $('#binDrawer').classList.remove('on')));
   $('#binEmpty').onclick = () => binDelete(binRows().map(r => r.token));
   $('#binList').addEventListener('click', e => {
     const re = e.target.closest('[data-bin-restore]');
@@ -538,14 +548,16 @@ function paintSources() {
   const sel = $('#fSource');
   if (!sel) return;
   const cur = state.FILTER.source || 'all';
-  sel.innerHTML = '<option value="all">全部来源</option>'
-    + (state.SOURCES || []).map(s => `<option value="${escHtml(s.key)}">${escHtml(s.name || s.key)}</option>`).join('');
-  sel.value = (cur === 'all' || (state.SOURCES || []).some(s => s.key === cur)) ? cur : 'all';
+  setSelectOptions(sel, [
+    { value: 'all', label: '全部来源' },
+    ...(state.SOURCES || []).map(s => ({ value: s.key, label: s.name || s.key }))
+  ], (cur === 'all' || (state.SOURCES || []).some(s => s.key === cur)) ? cur : 'all');
   const sc = $('#scrapeSource');
-  if (sc && !sc.options.length) {
-    sc.innerHTML = (state.SOURCES || [])
+  if (sc && !sc.querySelectorAll('wa-option').length) {
+    const scrapeSources = (state.SOURCES || [])
       .filter(s => (s.capabilities || []).includes('scrape'))
-      .map(s => `<option value="${escHtml(s.key)}">${escHtml(s.name || s.key)}</option>`).join('');
+      .map(s => ({ value: s.key, label: s.name || s.key }));
+    setSelectOptions(sc, scrapeSources, scrapeSources[0] ? scrapeSources[0].value : undefined);
     if ($('#scrapeModal').classList.contains('on')) paintScrapeOptions();
   }
 }
@@ -1040,21 +1052,10 @@ function paintScrapeOptions() {
   if (rankSel) {
     const prev = rankSel.value;
     const ranks = (src && src.ranks) || [];
-    if (ranks.length) {
-      const groups = new Map();
-      for (const r of ranks) {
-        const g = r.group || '';
-        if (!groups.has(g)) groups.set(g, []);
-        groups.get(g).push(r);
-      }
-      rankSel.innerHTML = [...groups.entries()].map(([g, rs]) => {
-        const opts = rs.map(r => `<option value="${escHtml(r.key)}">${escHtml(r.label)}</option>`).join('');
-        return g ? `<optgroup label="${escHtml(g)}">${opts}</optgroup>` : opts;
-      }).join('');
-    } else {
-      rankSel.innerHTML = '<option value="default">默认</option>';
-    }
-    if (prev && ranks.some(r => r.key === prev)) rankSel.value = prev;
+    const opts = ranks.map(r => ({ value: r.key, label: r.label, group: r.group || '' }));
+    const list = opts.length ? opts : [{ value: 'default', label: '默认' }];
+    const keep = prev && list.some(o => o.value === prev) ? prev : list[0].value;
+    setSelectOptions(rankSel, list, keep);
     const field = rankSel.closest('.field');
     if (field) field.style.display = ranks.length ? '' : 'none';
   }
@@ -1072,26 +1073,26 @@ function paintScrapeOptions() {
   }
 }
 
-function openScrapeModal() { paintScrapeOptions(); $('#scrapeModal').classList.add('on'); }
-function closeScrapeModal() { $('#scrapeModal').classList.remove('on'); }
+function openScrapeModal() { paintScrapeOptions(); openOverlay('#scrapeModal'); }
+function closeScrapeModal() { closeOverlay('#scrapeModal'); }
 function openUrlModal() {
   const m = $('#urlModal'); if (!m) return;
-  m.classList.add('on');
+  openOverlay('#urlModal');
   const i = $('#urlInput'); if (i) { i.value = ''; setTimeout(() => i.focus(), 30); }
 }
-function closeUrlModal() { $('#urlModal')?.classList.remove('on'); }
+function closeUrlModal() { closeOverlay('#urlModal'); }
 
 function initToolbar() {
   $('#btnScrape').onclick = openScrapeModal;
   $('#btnUrlScrape').onclick = openUrlModal;
   $('#btnUrlGo').onclick = doUrlScrape;
   $('#btnUrlCancel').onclick = closeUrlModal;
-  $('#urlModal').onclick = e => { if (e.target.id === 'urlModal') closeUrlModal(); };
+  ['wa-hide', 'wa-after-hide'].forEach(ev => $('#urlModal').addEventListener(ev, () => $('#urlModal').classList.remove('on')));
   if ($('#urlInput')) $('#urlInput').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); doUrlScrape(); } });
   $('#btnScrapeGo').onclick = doFetch;
   document.querySelectorAll('#fetchMode button').forEach(b => { b.onclick = () => setFetchMode(b.dataset.mode); });
   $('#btnScrapeCancel').onclick = closeScrapeModal;
-  $('#scrapeModal').onclick = e => { if (e.target.id === 'scrapeModal') closeScrapeModal(); };
+  ['wa-hide', 'wa-after-hide'].forEach(ev => $('#scrapeModal').addEventListener(ev, () => $('#scrapeModal').classList.remove('on')));
   if ($('#scrapeSource')) $('#scrapeSource').addEventListener('change', paintScrapeOptions);
   // 「本次新增」临时筛选
   if ($('#addedToggle')) {
@@ -1139,7 +1140,7 @@ function initToolbar() {
   $('#btnDownload').onclick = openDownloadConfirm;
   $('#dlcCancel').onclick = closeDownloadConfirm;
   ['wa-hide', 'wa-after-hide'].forEach(ev => $('#dlConfirm').addEventListener(ev, () => $('#dlConfirm').classList.remove('on')));
-  $('#dlcLimit').oninput = updateDlcHint;
+  ['input', 'wa-input', 'change', 'wa-change'].forEach(ev => $('#dlcLimit').addEventListener(ev, updateDlcHint));
   $('#dlcStart').onclick = () => {
     const p = dlPreview;
     if (!p) return;

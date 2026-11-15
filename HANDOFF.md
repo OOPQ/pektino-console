@@ -165,13 +165,17 @@ c4cf594 feat(player): 自动续播 + 音量记忆（v2.1.0 tag）
   - 合集浏览/编辑/选择：`<wa-dialog>`（1460px / 440px / 460px，90vh 浏览），built-in header/close。
   - 开始下载 / 通用确认：`<wa-dialog>`，确认框动态 label，built-in close 也会 resolve(false)。
   - 开关用 `openOverlay` / `closeOverlay`（core.js）：同时维护原 `.on` 和 WA `open`，`wa-hide` 事件回同步 `.on`，侧栏 MutationObserver 继续工作。
-  - 设置 / 回收站 / 获取数据 / 链接抓取仍是自定义抽屉/弹窗，已换皮，下一批可继续转 WA。
-- 通用控件：输入框 / 下拉 / 勾选框统一高度、圆角、焦点环；下拉自定义箭头，勾选框支持选中 / 半选 / 禁用；工具栏里的复选框不再被 `.bar input{height}` 拉高。
+  - 设置 / 回收站：`wa-drawer`；获取数据 / 链接抓取：`wa-dialog`；底部动作都用 `wa-button`。
+  - 表单控件全部换 WA：`wa-input` / `wa-select` / `wa-checkbox`（查询、筛选、页大小、设置、抓取、合集、并发、下载确认）。
+  - 表格行勾选、列显隐、分页按钮也是 WA；下载队列 tab/progress/badge/按钮、合集 tab 都是 WA。
+  - 新增 `app\web\js\ui\select.js`：原生/WA select 选项写入适配，动态来源/榜单/页大小都走它。
+  - 仍保留原生的是侧栏/标题图标、表格/画廊分段按钮、菜单项、表格行内微按钮、播放浮层和色卡按钮；它们不是表单控件。
 - 主框架：左侧主菜单（媒体库 / 下载队列 / 合集 / 回收站 / 设置）+ 标题栏收起按钮（216 ↔ 64px，`PREFS.sidebarCollapsed`）；
   菜单通过 MutationObserver 同步当前抽屉/弹窗，关闭后回到媒体库；下载/合集/回收站数量从原角标同步。
 - 主框架：品牌顶栏 + 状态胶囊、9 列 KPI、渐变主按钮、圆角表格 / 行悬停 / 操作列按钮、画廊卡片和分页同步 demo 皮肤。
 - 验证：本轮手动验证 `wa-dialog` / `wa-drawer` 的打开、堆叠、built-in 关闭 / Esc、`.on` 回同步、侧栏高亮与页面标题；
-  合集编辑打开/保存关闭、预览上下条、主题切换、队列 tab 和 footer 正常；`app\dev\test.ps1` 25/25；真实页面 1217 行正常。
+  合集编辑打开/保存关闭、预览上下条、主题切换、队列 tab 和 footer 正常；
+  WA 输入/下拉/勾选（查询、筛选、页大小、设置、抓取、合集、表格行/列）、分页按钮、选择浮条都验证过；`app\dev\test.ps1` 25/25；真实页面 1217 行正常。
 - demo 已保留到 `demo\ui-refresh`（入库，静态参考稿）；本地 `8731` 仍从 `tools\out\ui-demo` 提供同一份内容，不影响业务。
 
 ### 下一批候选（尚未做）
@@ -245,7 +249,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File app\dev\test.ps1 -Start -Por
 
 - 控制台当前在 `127.0.0.1:8791` 运行（媒体服务 8831），数据库已迁移 `collections.color`
 - 测试都在 8674/8685/8688/8720/8722 等临时端口 + 临时项目，跑完已清理
-- `a5d128a`（v2.2.0 发布后状态）已推送；UI 重构（`e8a82f8` / `43b9c88` / `e9b3816` / `858aaea` / `cd11128` / `7b43551` / `f76c8ee`）在本地，领先 14 个提交、尚未推送
+- `a5d128a`（v2.2.0 发布后状态）已推送；UI 重构（`e8a82f8` / `43b9c88` / `e9b3816` / `858aaea` / `cd11128` / `7b43551` / `f76c8ee` / 本轮全量控件迁移）在本地，领先 15 个提交、尚未推送
 - 发布包在 `dist\pektino-console-v2.2.0.zip`，解压后冒烟 25/25；该包不含本轮 UI 重构
 - 没有进行中的下载/抓取任务需要保留
 - GitHub Release 附件待手动上传；下一批候选见上面「2026-11-15 优化进展」

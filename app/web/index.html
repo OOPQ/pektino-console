@@ -84,62 +84,62 @@
 
 <!-- ===== 查询条 ===== -->
 <div class="bar queries">
-  <input type="text" id="q" placeholder="查询：token / 标题 / 来源 / 分辨率 / 时长（空格分词，按 / 聚焦）">
-  <select id="fStatus" title="按状态筛选（任务生命周期）">
-    <option value="all">全部状态</option>
-    <option value="new">待下载</option>
-    <option value="done">已完成</option>
-    <option value="failed">下载失败</option>
-  </select>
-  <select id="fSource" title="按来源筛选">
-    <option value="all">全部来源</option>
-  </select>
-  <select id="fFlag" title="按标记筛选（可叠加在上面的状态之上）">
-    <option value="none">不限标记</option>
-    <option value="fav">★ 收藏</option>
-    <option value="towatch">待看</option>
-    <option value="watched">已看</option>
-    <option value="have">在磁盘</option>
-    <option value="miss">未下载</option>
-    <option value="rated">已评分</option>
-    <option value="top">高分 ≥4★</option>
-    <option value="today">今日新增</option>
-  </select>
+  <wa-input id="q" placeholder="查询：token / 标题 / 来源 / 分辨率 / 时长（空格分词，按 / 聚焦）" size="small"></wa-input>
+  <wa-select id="fStatus" size="small" title="按状态筛选（任务生命周期）">
+    <wa-option value="all">全部状态</wa-option>
+    <wa-option value="new">待下载</wa-option>
+    <wa-option value="done">已完成</wa-option>
+    <wa-option value="failed">下载失败</wa-option>
+  </wa-select>
+  <wa-select id="fSource" size="small" title="按来源筛选">
+    <wa-option value="all">全部来源</wa-option>
+  </wa-select>
+  <wa-select id="fFlag" size="small" title="按标记筛选（可叠加在上面的状态之上）">
+    <wa-option value="none">不限标记</wa-option>
+    <wa-option value="fav">★ 收藏</wa-option>
+    <wa-option value="towatch">待看</wa-option>
+    <wa-option value="watched">已看</wa-option>
+    <wa-option value="have">在磁盘</wa-option>
+    <wa-option value="miss">未下载</wa-option>
+    <wa-option value="rated">已评分</wa-option>
+    <wa-option value="top">高分 ≥4★</wa-option>
+    <wa-option value="today">今日新增</wa-option>
+  </wa-select>
   <span style="position:relative">
-    <button class="ghost" id="btnFilter" title="分辨率 / 最短时长 / 快捷排序">筛选 ▾</button>
+    <wa-button size="small" appearance="plain" id="btnFilter" title="分辨率 / 最短时长 / 快捷排序">筛选 ▾</wa-button>
     <div class="pop" id="filterPop">
       <label class="pop-row"><span>分辨率</span>
-        <select id="fRes">
-          <option value="all">全部</option>
-          <option value="1080">1080p+</option>
-          <option value="720">720p+</option>
-          <option value="4k">4K+</option>
-          <option value="portrait">竖屏</option>
-        </select>
+        <wa-select id="fRes" size="small">
+          <wa-option value="all">全部</wa-option>
+          <wa-option value="1080">1080p+</wa-option>
+          <wa-option value="720">720p+</wa-option>
+          <wa-option value="4k">4K+</wa-option>
+          <wa-option value="portrait">竖屏</wa-option>
+        </wa-select>
       </label>
       <label class="pop-row"><span>最短时长</span>
-        <span class="durwrap"><input type="number" id="fMinDur" min="0" step="1" placeholder="不限"><em>分钟</em></span>
+        <span class="durwrap"><wa-input type="number" id="fMinDur" min="0" step="1" placeholder="不限" size="small"></wa-input><em>分钟</em></span>
       </label>
       <label class="pop-row"><span>快捷排序</span>
-        <select id="fSortQuick">
-          <option value="">选择…</option>
-          <option value="views">观看最多</option>
-          <option value="likes">点赞最多</option>
-          <option value="rating">评分最高</option>
-          <option value="duration">时长最长</option>
-          <option value="first_seen">最新入库</option>
-          <option value="disk">文件最大</option>
-        </select>
+        <wa-select id="fSortQuick" size="small">
+          <wa-option value="">选择…</wa-option>
+          <wa-option value="views">观看最多</wa-option>
+          <wa-option value="likes">点赞最多</wa-option>
+          <wa-option value="rating">评分最高</wa-option>
+          <wa-option value="duration">时长最长</wa-option>
+          <wa-option value="first_seen">最新入库</wa-option>
+          <wa-option value="disk">文件最大</wa-option>
+        </wa-select>
       </label>
     </div>
   </span>
-  <button class="ghost" id="btnReset">重置</button>
+  <wa-button size="small" appearance="plain" id="btnReset">重置</wa-button>
   <span style="position:relative">
-    <button class="ghost" id="btnViews" title="保存 / 应用筛选视图">视图 ▾</button>
+    <wa-button size="small" appearance="plain" id="btnViews" title="保存 / 应用筛选视图">视图 ▾</wa-button>
     <div class="menu" id="viewsMenu"></div>
   </span>
   <span style="position:relative">
-    <button class="ghost" id="btnCols" title="显示/隐藏列">列 ▾</button>
+    <wa-button size="small" appearance="plain" id="btnCols" title="显示/隐藏列">列 ▾</wa-button>
     <div class="colpop" id="colpop"></div>
   </span>
   <span class="seg" id="viewSeg" title="显示方式">
@@ -147,20 +147,20 @@
     <button data-view="gallery">画廊</button>
   </span>
   <span class="spacer"></span>
-  <label class="chk"><input type="checkbox" id="chkCovers" checked>封面</label>
-  <label class="chk"><input type="checkbox" id="chkCompact">紧凑</label>
+  <wa-checkbox id="chkCovers" checked>封面</wa-checkbox>
+  <wa-checkbox id="chkCompact">紧凑</wa-checkbox>
 </div>
 
 <!-- ===== 操作条 ===== -->
 <div class="bar actions">
-  <button class="primary" id="btnScrape" title="获取数据：在线榜单或导入本地视频">获取数据</button>
-  <button class="ghost" id="btnUrlScrape" title="粘贴单条视频页面或直链，独立抓取">链接抓取</button>
-  <button class="ghost" id="btnMulti" title="多选：表格勾选行，画廊点卡片">多选</button>
+  <wa-button size="small" variant="brand" id="btnScrape" title="获取数据：在线榜单或导入本地视频">获取数据</wa-button>
+  <wa-button size="small" appearance="outlined" id="btnUrlScrape" title="粘贴单条视频页面或直链，独立抓取">链接抓取</wa-button>
+  <wa-button size="small" appearance="plain" id="btnMulti" title="多选：表格勾选行，画廊点卡片">多选</wa-button>
   <span class="divider"></span>
-  <button class="primary" id="btnDownload" title="用内置下载器下载（支持续传 / 并发 / 追加）">下载待下载</button>
-  <button id="btnDlQueue" title="下载队列：进行中 / 已完成，可暂停继续">下载队列<span class="badge" id="dlBadge" hidden>0</span></button>
-  <button class="ghost" id="btnGacha" title="从在盘条目里随机抽一个（快捷键 R）">🎲 抽一卡</button>
-  <button class="ghost" id="btnCollections" title="合集：查看 / 管理 / 批量加入">📚 合集 <span class="sub" id="colCount"></span></button>
+  <wa-button size="small" variant="brand" id="btnDownload" title="用内置下载器下载（支持续传 / 并发 / 追加）">下载待下载</wa-button>
+  <wa-button size="small" appearance="outlined" id="btnDlQueue" title="下载队列：进行中 / 已完成，可暂停继续">下载队列<span class="badge" id="dlBadge" hidden>0</span></wa-button>
+  <wa-button size="small" appearance="plain" id="btnGacha" title="从在盘条目里随机抽一个（快捷键 R）">🎲 抽一卡</wa-button>
+  <wa-button size="small" appearance="plain" id="btnCollections" title="合集：查看 / 管理 / 批量加入">📚 合集 <span class="sub" id="colCount"></span></wa-button>
   <span class="resume-bar" id="resumeBar" hidden title="上次退出时还有没下完的条目">
     上次有 <b id="resumeCount">0</b> 条未完成
     <button id="resumeGo">继续</button>
@@ -175,7 +175,7 @@
     <button id="colFilterClear" title="清除合集筛选">×</button>
   </span>
   <span style="position:relative;margin-left:auto">
-    <button class="ghost" id="btnMore" title="更多操作">更多 ▾</button>
+    <wa-button size="small" appearance="plain" id="btnMore" title="更多操作">更多 ▾</wa-button>
     <div class="menu" id="moreMenu">
       <button data-more="import" title="扫描内容目录，把本站视频录入台账">本地入库</button>
       <button data-more="scan" title="重新扫描内容目录">重新扫描目录</button>
@@ -190,74 +190,51 @@
 </div>
 
 <!-- ===== 抓取设置弹窗 ===== -->
-<div class="modal" id="scrapeModal">
+<wa-dialog id="scrapeModal" class="wa-scrape" label="获取数据">
   <div class="modal-box">
-    <div class="ui-head">
-      <div class="ui-title"><span class="ui-kicker">IMPORT</span><h3>获取数据</h3></div>
-      <button type="button" class="ui-x" id="scrapeX" data-ui-close="#btnScrapeCancel" title="关闭">×</button>
-    </div>
     <div class="seg" id="fetchMode" style="margin-bottom:12px">
       <button type="button" data-mode="online" class="on">在线榜单</button>
       <button type="button" data-mode="local">本地视频</button>
     </div>
     <div id="onlineFields">
-    <div class="field">
-      <label>来源</label>
-      <select id="scrapeSource"></select>
-    </div>
-    <label class="chk" id="hdField" style="margin-bottom:10px" title="高清需要登录/VIP，暂未开放"><input type="checkbox" id="scrapeHd" disabled> 高清（viewhd，需登录/VIP，暂未开放）</label>
-    <div class="field">
-      <label>榜单</label>
-      <select id="rank"></select>
-    </div>
-    <div class="field">
-      <label>抓取数量（条）</label>
-      <input type="number" id="limit" value="50" min="1" max="2000" step="1">
-    </div>
+    <wa-select id="scrapeSource" label="来源"></wa-select>
+    <div id="hdField"><wa-checkbox id="scrapeHd" disabled>高清（viewhd，需登录/VIP，暂未开放）</wa-checkbox></div>
+    <wa-select id="rank" label="榜单"></wa-select>
+    <wa-input type="number" id="limit" label="抓取数量（条）" value="50" min="1" max="2000" step="1"></wa-input>
     <div class="sub" id="scrapeHint" style="margin-bottom:10px"></div>
-    <label class="chk" style="margin-bottom:14px"><input type="checkbox" id="chkInc" checked>增量（跳过最近 3 天抓过的）</label>
-    <label class="chk" style="margin-bottom:14px"><input type="checkbox" id="chkSkipDeleted" checked>跳过此前手动删除的条目</label>
+    <wa-checkbox id="chkInc" checked>增量（跳过最近 3 天抓过的）</wa-checkbox>
+    <wa-checkbox id="chkSkipDeleted" checked>跳过此前手动删除的条目</wa-checkbox>
     </div>
     <div id="localFields" hidden>
-      <div class="field">
-        <label>本地视频文件夹（会移动到 media\local，并自动生成封面/时长/分辨率）</label>
-        <input type="text" id="localPath" placeholder="D:\project\testVideo" value="D:\project\testVideo">
-      </div>
+      <wa-input id="localPath" label="本地视频文件夹（会移动到 media\local，并自动生成封面/时长/分辨率）" placeholder="D:\project\testVideo" value="D:\project\testVideo"></wa-input>
       <div class="sub" style="margin-bottom:12px">只移动 mp4；同名同大小文件会跳过，不覆盖目标。</div>
     </div>
-    <div class="modal-actions">
-      <button class="primary" id="btnScrapeGo">开始获取</button>
-      <button class="ghost" id="btnScrapeCancel">取消</button>
-    </div>
   </div>
-</div>
+  <div slot="footer" class="modal-actions">
+    <wa-button size="small" variant="brand" id="btnScrapeGo">开始获取</wa-button>
+    <wa-button size="small" appearance="outlined" id="btnScrapeCancel">取消</wa-button>
+  </div>
+</wa-dialog>
 
 <!-- ===== 链接抓取弹窗 ===== -->
-<div class="modal" id="urlModal">
+<wa-dialog id="urlModal" class="wa-url" label="通过链接抓取">
   <div class="modal-box">
-    <div class="ui-head">
-      <div class="ui-title"><span class="ui-kicker">URL</span><h3>通过链接抓取</h3></div>
-      <button type="button" class="ui-x" id="urlX" data-ui-close="#btnUrlCancel" title="关闭">×</button>
-    </div>
-    <div class="field">
-      <label>视频链接</label>
-      <input type="text" id="urlInput" placeholder="视频页，或 .m3u8 / .mp4 直链；自动识别来源">
-    </div>
+    <wa-input id="urlInput" label="视频链接" placeholder="视频页，或 .m3u8 / .mp4 直链；自动识别来源"></wa-input>
     <div class="sub" style="margin-bottom:14px">支持 qise / hsex / pektino 视频页与直链；填一条抓一条，不影响榜单设置。</div>
-    <label class="chk" style="margin-bottom:14px"><input type="checkbox" id="urlSkipDeleted" checked>跳过此前手动删除的条目</label>
-    <div class="modal-actions">
-      <button class="primary" id="btnUrlGo">开始抓取</button>
-      <button class="ghost" id="btnUrlCancel">取消</button>
-    </div>
+    <wa-checkbox id="urlSkipDeleted" checked>跳过此前手动删除的条目</wa-checkbox>
   </div>
-</div>
+  <div slot="footer" class="modal-actions">
+    <wa-button size="small" variant="brand" id="btnUrlGo">开始抓取</wa-button>
+    <wa-button size="small" appearance="outlined" id="btnUrlCancel">取消</wa-button>
+  </div>
+</wa-dialog>
 
 <!-- ===== 通用确认弹窗 ===== -->
 <wa-dialog id="confirmModal" class="wa-confirm" label="请确认">
   <div class="confirm-msg" id="confirmMsg"></div>
   <div slot="footer" class="confirm-actions">
-    <button class="primary" id="confirmOk">确认</button>
-    <button class="ghost" id="confirmCancel">取消</button>
+    <wa-button size="small" variant="brand" id="confirmOk">确认</wa-button>
+    <wa-button size="small" appearance="outlined" id="confirmCancel">取消</wa-button>
   </div>
 </wa-dialog>
 
@@ -281,7 +258,7 @@
     <table>
       <thead>
         <tr>
-          <th style="width:30px"><input type="checkbox" id="chkAll"></th>
+          <th style="width:30px"><wa-checkbox id="chkAll"></wa-checkbox></th>
           <th style="width:38px" title="收藏">★</th>
           <th style="width:92px" class="col-cover">封面</th>
           <th class="sortable col-title" data-key="title" style="width:220px">标题<span class="ar">▲</span></th>
@@ -309,69 +286,62 @@
     <span class="spacer"></span>
     <span class="sub" id="sseInfo">–</span>
     <label class="sub">每页</label>
-    <select id="pgSize" style="padding:3px 6px">
-      <option value="25">25</option><option value="50" selected>50</option>
-      <option value="100">100</option><option value="200">200</option><option value="0">全部</option>
-    </select>
-    <button class="ghost pg" id="pgFirst">«</button>
-    <button class="ghost pg" id="pgPrev">‹</button>
+    <wa-select id="pgSize" size="small">
+      <wa-option value="25">25</wa-option><wa-option value="50" selected>50</wa-option>
+      <wa-option value="100">100</wa-option><wa-option value="200">200</wa-option><wa-option value="0">全部</wa-option>
+    </wa-select>
+    <wa-button size="small" appearance="plain" class="pg" id="pgFirst">«</wa-button>
+    <wa-button size="small" appearance="plain" class="pg" id="pgPrev">‹</wa-button>
     <span id="pgNums" style="display:flex;gap:4px"></span>
-    <button class="ghost pg" id="pgNext">›</button>
-    <button class="ghost pg" id="pgLast">»</button>
+    <wa-button size="small" appearance="plain" class="pg" id="pgNext">›</wa-button>
+    <wa-button size="small" appearance="plain" class="pg" id="pgLast">»</wa-button>
   </div>
 </main>
 
 <!-- ===== 选中浮条 ===== -->
 <div class="selbar" id="selbar">
   <b id="selCount">已选 0</b>
-  <button class="ghost rowbtn" id="selDownload" title="把选中的条目加入下载队列">⬇ 下载</button>
-  <button class="ghost rowbtn" id="selCollection" title="把选中的条目加入合集">📚 合集</button>
-  <button class="ghost rowbtn danger" id="selRecycle" title="删除：移入回收站，可在回收站恢复或彻底删除">🗑 删除（移入回收站）</button>
-  <button class="ghost rowbtn" id="selFavToggle">★ 收藏</button>
-  <button class="ghost rowbtn" id="selDone">标记完成</button>
-  <button class="ghost rowbtn" id="selWatchedToggle">✓ 标记已看</button>
+  <wa-button size="small" appearance="plain" id="selDownload" title="把选中的条目加入下载队列">⬇ 下载</wa-button>
+  <wa-button size="small" appearance="plain" id="selCollection" title="把选中的条目加入合集">📚 合集</wa-button>
+  <wa-button size="small" appearance="plain" variant="danger" id="selRecycle" title="删除：移入回收站，可在回收站恢复或彻底删除">🗑 删除</wa-button>
+  <wa-button size="small" appearance="plain" id="selFavToggle">★ 收藏</wa-button>
+  <wa-button size="small" appearance="plain" id="selDone">标记完成</wa-button>
+  <wa-button size="small" appearance="plain" id="selWatchedToggle">✓ 标记已看</wa-button>
   <span class="sub" style="margin-left:4px">打分</span>
   <span class="rt" id="selRate"></span>
-  <button class="ghost rowbtn" id="selCopy">复制 URL</button>
-  <button class="ghost rowbtn" id="selAll">全选本页</button>
-  <button class="ghost rowbtn" id="selClear">清空</button>
+  <wa-button size="small" appearance="plain" id="selCopy">复制 URL</wa-button>
+  <wa-button size="small" appearance="plain" id="selAll">全选本页</wa-button>
+  <wa-button size="small" appearance="plain" id="selClear">清空</wa-button>
 </div>
 
 <!-- ===== 设置抽屉 ===== -->
-<div class="drawer" id="drawer">
-  <div class="sheet">
-    <div class="ui-head">
-      <div class="ui-title"><span class="ui-kicker">SETTINGS</span><h3>设置</h3></div>
-      <button type="button" class="ui-x" id="setClose" data-ui-hide="drawer" title="关闭">×</button>
-    </div>
+<wa-drawer id="drawer" class="wa-set" label="设置" placement="end">
+  <div class="set-body">
     <div class="sub" id="wsInfo" style="margin-bottom:10px">–</div>
-    <div style="display:flex;gap:8px;margin-bottom:14px">
-      <button class="ghost" id="btnWsOpen">打开数据目录</button>
-      <button class="ghost" id="btnWsImport" title="扫描工作区里的 mp4，把没入过账的补进来">识别已有文件</button>
+    <div class="set-row">
+      <wa-button size="small" appearance="outlined" id="btnWsOpen">打开数据目录</wa-button>
+      <wa-button size="small" appearance="plain" id="btnWsImport" title="扫描工作区里的 mp4，把没入过账的补进来">识别已有文件</wa-button>
     </div>
-    <div class="field">
-      <label>当前项目（数据与媒体都在这个文件夹里）</label>
-      <input type="text" id="dirInput" readonly title="项目根目录不可在此修改；换项目请在启动时选择">
-    </div>
-    <div style="display:flex;gap:8px;margin-bottom:6px;flex-wrap:wrap">
-      <button id="btnOpenContent">打开项目文件夹</button>
-      <button class="ghost" id="btnScan">重新扫描</button>
+    <wa-input id="dirInput" label="当前项目（数据与媒体都在这个文件夹里）" readonly title="项目根目录不可在此修改；换项目请在启动时选择"></wa-input>
+    <div class="set-row">
+      <wa-button size="small" appearance="outlined" id="btnOpenContent">打开项目文件夹</wa-button>
+      <wa-button size="small" appearance="plain" id="btnScan">重新扫描</wa-button>
     </div>
     <div class="sub" id="dirHint" style="margin-bottom:14px">换项目＝启动时从最近项目选择，或用 start.cmd -Project &lt;路径&gt;</div>
     <div class="sub" id="dirInfo" style="margin-bottom:16px">–</div>
-    <div class="field"><label>代理（留空 = 跟随系统代理）</label><input type="text" id="proxyInput" placeholder="http://127.0.0.1:7890"></div>
-      <div class="field"><label>qise Cookie（可选；登录后复制完整 Cookie，用于高清/VIP 下载）</label><input type="text" id="qiseCookieInput" placeholder="粘贴 qise100.com 的 Cookie"></div>
-    <div class="field"><label>FFmpeg 路径（HLS 下载需要，留空 = 自动查找）</label><input type="text" id="ffmpegInput" placeholder="D:\ffmpeg\bin\ffmpeg.exe"></div>
-    <div class="field"><label>并发下载数（1-16）</label><input type="number" id="concInput" min="1" max="16" value="3"></div>
-    <div style="display:flex;gap:8px;margin-bottom:14px">
-      <button id="btnSaveNet">保存下载设置</button>
+    <wa-input id="proxyInput" label="代理（留空 = 跟随系统代理）" placeholder="http://127.0.0.1:7890"></wa-input>
+    <wa-input id="qiseCookieInput" label="qise Cookie（可选；登录后复制完整 Cookie，用于高清/VIP 下载）" placeholder="粘贴 qise100.com 的 Cookie"></wa-input>
+    <wa-input id="ffmpegInput" label="FFmpeg 路径（HLS 下载需要，留空 = 自动查找）" placeholder="D:\ffmpeg\bin\ffmpeg.exe"></wa-input>
+    <wa-input id="concInput" type="number" label="并发下载数（1-16）" min="1" max="16" value="3"></wa-input>
+    <div class="set-row">
+      <wa-button size="small" variant="brand" id="btnSaveNet">保存下载设置</wa-button>
     </div>
-    <div class="field"><label>封面</label></div>
-    <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px">
+    <div class="set-section-title">封面</div>
+    <div class="set-row">
       <span class="sub" id="coverInfo">–</span>
-      <button id="btnRepairCovers" title="重新抓详情页补封面">修复缺失封面</button>
+      <wa-button size="small" appearance="outlined" id="btnRepairCovers" title="重新抓详情页补封面">修复缺失封面</wa-button>
     </div>
-    <label class="chk" style="margin-bottom:16px"><input type="checkbox" id="chkSound" checked>下载完成提示音</label>
+    <wa-checkbox id="chkSound" checked>下载完成提示音</wa-checkbox>
 
     <details class="adv">
       <summary>运行指标</summary>
@@ -385,9 +355,9 @@
       <summary>下载任务</summary>
       <div class="sub" id="dlInfo" style="margin-top:8px">–</div>
       <div class="logbox" id="dlList" style="margin-top:6px"></div>
-      <div style="display:flex;gap:8px;margin-top:8px">
-        <button class="ghost" id="btnCancelAll">全部取消</button>
-        <button class="ghost" id="btnRepairParts" title="把已完成但还残留 .part 后缀的文件改名">整理 .part</button>
+      <div class="set-row" style="margin-top:8px">
+        <wa-button size="small" appearance="plain" variant="danger" id="btnCancelAll">全部取消</wa-button>
+        <wa-button size="small" appearance="plain" id="btnRepairParts" title="把已完成但还残留 .part 后缀的文件改名">整理 .part</wa-button>
       </div>
     </details>
 
@@ -403,18 +373,18 @@
       <div style="margin-top:10px" class="sub" id="diag">自检：–</div>
     </details>
   </div>
-</div>
+</wa-drawer>
 
 <!-- ===== 下载队列（独立抽屉：进行中 / 已完成 / 失败） ===== -->
 <wa-drawer id="dlDrawer" class="wa-dq" label="下载队列" placement="end" data-qtab="active">
   <div class="dq-body">
     <div class="dq-summary"><span class="sub" id="dlHead">–</span></div>
-    <div class="dq-tabs" id="dqTabs">
-      <button class="dq-tab on" data-qtab="active">进行中 <em id="dqTabActive">0</em></button>
-      <button class="dq-tab" data-qtab="done">已完成 <em id="dqTabDone">0</em></button>
-      <button class="dq-tab" data-qtab="failed">失败 <em id="dqTabFailed">0</em></button>
-      <button class="dq-tab" data-qtab="cancelled">已取消 <em id="dqTabCancelled">0</em></button>
-    </div>
+    <wa-tab-group class="dq-tabs" id="dqTabs">
+      <wa-tab slot="nav" panel="active" active>进行中 <span id="dqTabActive">0</span></wa-tab>
+      <wa-tab slot="nav" panel="done">已完成 <span id="dqTabDone">0</span></wa-tab>
+      <wa-tab slot="nav" panel="failed">失败 <span id="dqTabFailed">0</span></wa-tab>
+      <wa-tab slot="nav" panel="cancelled">已取消 <span id="dqTabCancelled">0</span></wa-tab>
+    </wa-tab-group>
     <div class="dq-panel">
       <section class="dq-section" data-qsection="active">
         <div class="sub" id="dlActiveInfo">–</div>
@@ -437,51 +407,47 @@
     </div>
   </div>
   <div slot="footer" class="dq-tools">
-    <button id="dlPause" disabled>⏸ 全部暂停</button>
-    <button class="ghost" id="dlCancelAll">全部取消</button>
-    <button class="ghost" id="dlClearDone" title="只清理队列里的完成记录，不删文件、不改台账">清理已完成</button>
-    <button class="ghost" id="dlRetry" title="把失败的条目重新加入下载队列" hidden>重试失败</button>
+    <wa-button size="small" appearance="outlined" id="dlPause" disabled>⏸ 全部暂停</wa-button>
+    <wa-button size="small" appearance="plain" variant="danger" id="dlCancelAll">全部取消</wa-button>
+    <wa-button size="small" appearance="plain" id="dlClearDone" title="只清理队列里的完成记录，不删文件、不改台账">清理已完成</wa-button>
+    <wa-button size="small" appearance="plain" variant="brand" id="dlRetry" title="把失败的条目重新加入下载队列" hidden>重试失败</wa-button>
     <span class="sub">并发</span>
-    <select id="dlConc" style="padding:2px 4px" title="同时下载的文件数（1-16）"></select>
+    <wa-select id="dlConc" size="small" title="同时下载的文件数（1-16）"></wa-select>
     <span class="dq-foot-note">失败记录不会自动清空</span>
   </div>
 </wa-drawer>
 
 <!-- ===== 回收站 ===== -->
-<div class="drawer" id="binDrawer">
-  <div class="sheet">
-    <div class="ui-head">
-      <div class="ui-title"><span class="ui-kicker">RECYCLE</span><h3>回收站</h3></div>
-      <button type="button" class="ui-x" id="binCloseX" data-ui-close="#binClose" title="关闭">×</button>
-    </div>
+<wa-drawer id="binDrawer" class="wa-bin" label="回收站" placement="end">
+  <div class="bin-body">
     <div class="sub" id="binHead" style="margin-bottom:12px">–</div>
-    <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;align-items:center">
-      <button class="ghost danger" id="binEmpty" disabled title="彻底删除回收站里的全部条目（含本地文件）">清空回收站</button>
+    <div class="bin-tools">
+      <wa-button size="small" appearance="plain" variant="danger" id="binEmpty" disabled title="彻底删除回收站里的全部条目（含本地文件）">清空回收站</wa-button>
       <span class="spacer"></span>
-      <button class="ghost" id="binClose">关闭</button>
+      <wa-button size="small" appearance="outlined" id="binClose">关闭</wa-button>
     </div>
     <div class="bin-list" id="binList"></div>
   </div>
-</div>
+</wa-drawer>
 
 <!-- ===== 合集（弹窗：浏览 + 维护） ===== -->
 <wa-dialog id="colBrowser" class="wa-colb" label="合集">
   <div class="colb-box">
-    <div class="colb-tabs" id="colbTabs"></div>
+    <wa-tab-group class="colb-tabs" id="colbTabs"></wa-tab-group>
     <div class="colb-tools">
-      <input id="colbNew" placeholder="新合集名称" maxlength="60" style="width:130px">
+      <wa-input id="colbNew" placeholder="新合集名称" maxlength="60" size="small" style="width:150px"></wa-input>
       <div class="colorpick compact" id="colbNewPalette" title="新合集颜色"></div>
-      <button id="colbCreate">新建</button>
-      <button class="ghost" id="colbEdit" title="编辑当前合集（名称 / 颜色 / 删除）" disabled>编辑合集</button>
+      <wa-button size="small" variant="brand" id="colbCreate">新建</wa-button>
+      <wa-button size="small" appearance="outlined" id="colbEdit" title="编辑当前合集（名称 / 颜色 / 删除）" disabled>编辑合集</wa-button>
       <span class="spacer"></span>
-      <input id="colbSearch" placeholder="过滤 token / 时长" style="width:170px">
-      <select id="colbStatus" style="padding:3px 6px">
-        <option value="all">全部状态</option>
-        <option value="new">待下载</option>
-        <option value="done">已完成</option>
-        <option value="failed">下载失败</option>
-      </select>
-      <button class="ghost" id="colbApply" title="关闭并在台账里只看这个合集">在台账中查看</button>
+      <wa-input id="colbSearch" placeholder="过滤 token / 时长" size="small" style="width:180px"></wa-input>
+      <wa-select id="colbStatus" size="small">
+        <wa-option value="all">全部状态</wa-option>
+        <wa-option value="new">待下载</wa-option>
+        <wa-option value="done">已完成</wa-option>
+        <wa-option value="failed">下载失败</wa-option>
+      </wa-select>
+      <wa-button size="small" appearance="plain" id="colbApply" title="关闭并在台账里只看这个合集">在台账中查看</wa-button>
     </div>
     <div class="colb-body" id="colbBody"></div>
   </div>
@@ -493,14 +459,14 @@
     <div class="sub" id="dlcInfo" style="line-height:1.9">–</div>
     <div class="dlc-limit">
       <span class="sub">本次下载</span>
-      <input type="number" id="dlcLimit" min="1" step="1">
+      <wa-input type="number" id="dlcLimit" min="1" step="1" size="small"></wa-input>
       <span class="sub">条（留空 = 全部）</span>
     </div>
     <div class="sub" id="dlcHint">–</div>
   </div>
   <div slot="footer" class="coledit-actions">
-    <button id="dlcStart">开始下载</button>
-    <button class="ghost" id="dlcCancel">取消</button>
+    <wa-button size="small" variant="brand" id="dlcStart">开始下载</wa-button>
+    <wa-button size="small" appearance="outlined" id="dlcCancel">取消</wa-button>
   </div>
 </wa-dialog>
 
@@ -509,12 +475,12 @@
     <div class="colpick-summary" id="colPickCount"></div>
     <div class="col-list" id="colPickList"></div>
     <div class="colpick-new">
-      <input id="colPickNew" placeholder="新建合集名称" maxlength="60">
-      <button id="colPickCreate">新建并加入</button>
+      <wa-input id="colPickNew" placeholder="新建合集名称" maxlength="60"></wa-input>
+      <wa-button size="small" variant="brand" id="colPickCreate">新建并加入</wa-button>
     </div>
   </div>
   <div slot="footer" class="coledit-actions">
-    <button class="ghost" id="colPickCancel">取消</button>
+    <wa-button size="small" appearance="outlined" id="colPickCancel">取消</wa-button>
   </div>
 </wa-dialog>
 
@@ -525,20 +491,17 @@
       <span class="colchip" id="colEditPreview">合集</span>
       <span class="sub" id="colEditCount"></span>
     </div>
-    <div class="field">
-      <label class="sub">名称</label>
-      <input id="colEditName" maxlength="60" placeholder="合集名称">
-    </div>
+    <wa-input id="colEditName" label="名称" maxlength="60" placeholder="合集名称"></wa-input>
     <div class="field">
       <label class="sub">颜色</label>
       <div class="colorpick" id="colEditPalette"></div>
     </div>
   </div>
   <div slot="footer" class="coledit-actions">
-    <button id="colEditSave">保存</button>
-    <button class="ghost" id="colEditCancel">取消</button>
-    <button class="ghost" id="colEditRemove">移出当前条目</button>
-    <button class="ghost danger" id="colEditDelete">删除合集</button>
+    <wa-button size="small" variant="brand" id="colEditSave">保存</wa-button>
+    <wa-button size="small" appearance="outlined" id="colEditCancel">取消</wa-button>
+    <wa-button size="small" appearance="plain" id="colEditRemove">移出当前条目</wa-button>
+    <wa-button size="small" appearance="plain" variant="danger" id="colEditDelete">删除合集</wa-button>
   </div>
 </wa-dialog>
 
@@ -559,10 +522,10 @@
       <div class="mtoken" id="lbTokenSub"></div>
       <div class="big mstats" id="lbMeta"></div>
       <div class="actions">
-        <button class="ghost" id="lbRestart" hidden title="从头开始播放">从头播放</button>
-        <button class="ghost" id="lbPip" disabled title="画中画：切出去也能继续看">画中画</button>
-        <button class="accent" id="lbDownload" hidden>下载</button>
-        <button class="ghost" id="lbClose">关闭</button>
+        <wa-button size="small" appearance="plain" id="lbRestart" hidden title="从头开始播放">从头播放</wa-button>
+        <wa-button size="small" appearance="plain" id="lbPip" disabled title="画中画：切出去也能继续看">画中画</wa-button>
+        <wa-button size="small" variant="brand" id="lbDownload" hidden>下载</wa-button>
+        <wa-button size="small" appearance="outlined" id="lbClose">关闭</wa-button>
       </div>
     </div>
     <button class="lbNav prev" id="lbPrev" title="上一项（Ctrl+←）">‹</button>
@@ -588,10 +551,10 @@
       <div class="big mstats" id="gInfo"></div>
 
       <div class="actions">
-        <button class="ghost" id="gPip" disabled title="画中画：切出去也能继续看">画中画</button>
-        <button class="accent" id="gDownload" hidden>下载</button>
-        <button id="gAgain">🎲 再抽</button>
-        <button class="ghost" id="gClose">关闭</button>
+        <wa-button size="small" appearance="plain" id="gPip" disabled title="画中画：切出去也能继续看">画中画</wa-button>
+        <wa-button size="small" variant="brand" id="gDownload" hidden>下载</wa-button>
+        <wa-button size="small" appearance="outlined" id="gAgain">🎲 再抽</wa-button>
+        <wa-button size="small" appearance="outlined" id="gClose">关闭</wa-button>
       </div>
       <div class="sub" id="gRateHint" style="font-size:11px">点星星打分，或按 1–5；R 再抽，Esc 关闭</div>
     </div>

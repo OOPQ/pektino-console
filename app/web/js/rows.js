@@ -36,10 +36,10 @@ function handleSelect(cb, shift) {
   }
   LAST_IDX = isNaN(idx) ? null : idx;
   LAST_TOKEN = tk || null;
-  document.querySelectorAll('#tbody input[type=checkbox]').forEach(box => {
+  document.querySelectorAll('#tbody wa-checkbox[data-tk]').forEach(box => {
     box.checked = state.SEL.has(box.dataset.tk);
   });
-  const boxes = [...document.querySelectorAll('#tbody input[type=checkbox]')];
+  const boxes = [...document.querySelectorAll('#tbody wa-checkbox[data-tk]')];
   $('#chkAll').checked = boxes.length > 0 && boxes.every(b => b.checked);
   renderSel();
 }
@@ -264,7 +264,7 @@ export async function onRowClick(e) {
     if (r.ok) { render(); toast(val ? `已打 ${val} 星` : '已清除评分'); }
     return;
   }
-  if (e.target.closest('input[type=checkbox]')) return;
+  if (e.target.closest('wa-checkbox[data-tk]')) return;
 
   /* 画廊多选：滑动勾选后抑制这一次 click；单击仍走原逻辑 */
   if (SUPPRESS_GALLERY_CLICK && e.target.closest('#gallery .card')) { SUPPRESS_GALLERY_CLICK = false; return; }
@@ -331,10 +331,10 @@ export async function onRowClick(e) {
 /* ================= 初始化 ================= */
 export function initRows() {
   $('#tbody').addEventListener('mousedown', e => {
-    if (e.target.matches('input[type=checkbox]')) SHIFT_DOWN = e.shiftKey;
+    if (e.target.matches('wa-checkbox[data-tk]')) SHIFT_DOWN = e.shiftKey;
   });
   $('#tbody').addEventListener('change', e => {
-    if (e.target.matches('input[type=checkbox]')) { handleSelect(e.target, SHIFT_DOWN); SHIFT_DOWN = false; }
+    if (e.target.matches('wa-checkbox[data-tk]')) { handleSelect(e.target, SHIFT_DOWN); SHIFT_DOWN = false; }
   });
   $('#chkAll').addEventListener('change', e => {
     const per = state.PER > 0 ? state.PER : 999999;

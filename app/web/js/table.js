@@ -241,7 +241,7 @@ export function render(allRows) {
       const etitle = escHtml(r.title || r.token);
       return `
       <tr data-row="${etk}" class="${state.SEL.has(r.token) ? 'sel' : ''}">
-        <td><input type="checkbox" data-tk="${etk}" data-idx="${start + i}" ${state.SEL.has(r.token) ? 'checked' : ''}></td>
+        <td><wa-checkbox data-tk="${etk}" data-idx="${start + i}" ${state.SEL.has(r.token) ? 'checked' : ''}></wa-checkbox></td>
         <td><button class="star ${r.fav === '1' ? 'on' : ''}" data-fav="${etk}" title="收藏/取消">${r.fav === '1' ? '★' : '☆'}</button></td>
         <td class="col-cover">${coverCell(r)}</td>
         <td class="col-title" title="${etitle}"><span class="ttl">${etitle}</span></td>
@@ -290,9 +290,9 @@ export function render(allRows) {
   const nums = []; const win = 5;
   let a = Math.max(1, state.PAGE - 2), b = Math.min(pages, a + win - 1);
   a = Math.max(1, b - win + 1);
-  if (a > 1) nums.push(`<button class="ghost pg" data-pg="1">1</button><span class="sub">…</span>`);
-  for (let k = a; k <= b; k++) nums.push(`<button class="ghost pg ${k === state.PAGE ? 'on' : ''}" data-pg="${k}">${k}</button>`);
-  if (b < pages) nums.push(`<span class="sub">…</span><button class="ghost pg" data-pg="${pages}">${pages}</button>`);
+  if (a > 1) nums.push(`<wa-button size="small" appearance="plain" class="pg" data-pg="1">1</wa-button><span class="sub">…</span>`);
+  for (let k = a; k <= b; k++) nums.push(`<wa-button size="small" appearance="plain" class="pg ${k === state.PAGE ? 'on' : ''}" data-pg="${k}">${k}</wa-button>`);
+  if (b < pages) nums.push(`<span class="sub">…</span><wa-button size="small" appearance="plain" class="pg" data-pg="${pages}">${pages}</wa-button>`);
   $('#pgNums').innerHTML = nums.join('');
   $('#pgFirst').disabled = $('#pgPrev').disabled = state.PAGE <= 1;
   $('#pgNext').disabled = $('#pgLast').disabled = state.PAGE >= pages;
@@ -398,7 +398,7 @@ export function initTable() {
     state.PAGE = Math.max(1, Math.ceil(visible().length / per)); render();
   };
   $('#pgNums').addEventListener('click', e => {
-    const b = e.target.closest('button[data-pg]');
+    const b = e.target.closest('[data-pg]');
     if (b) { state.PAGE = parseInt(b.dataset.pg); render(); }
   });
 
@@ -479,9 +479,9 @@ export function initTable() {
   $('#btnCols').onclick = e => {
     e.stopPropagation();
     $('#colpop').innerHTML = COLS.map(c =>
-      `<label><input type="checkbox" data-col="${c.key}" ${PREFS.cols[c.key] === false ? '' : 'checked'}> ${c.label}</label>`).join('')
+      `<wa-checkbox data-col="${c.key}" ${PREFS.cols[c.key] === false ? '' : 'checked'}>${c.label}</wa-checkbox>`).join('')
       + `<div style="height:1px;background:#262f3a;margin:6px 4px"></div>
-         <label><input type="checkbox" id="colAll" ${COLS.every(c => PREFS.cols[c.key] !== false) ? 'checked' : ''}> 全显</label>`;
+         <wa-checkbox id="colAll" ${COLS.every(c => PREFS.cols[c.key] !== false) ? 'checked' : ''}>全显</wa-checkbox>`;
     $('#colpop').classList.toggle('on');
   };
   document.addEventListener('click', e => {

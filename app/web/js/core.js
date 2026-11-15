@@ -171,7 +171,7 @@ export function confirmDialog(message, opts = {}) {
     modal.setAttribute('label', opts.title || '请确认');
     msg.textContent = message;
     ok.textContent = opts.okText || '确认';
-    ok.className = opts.danger ? 'danger' : 'primary';
+    ok.setAttribute('variant', opts.danger ? 'danger' : 'brand');
     const prev = document.activeElement;
     let done = false;
     const finish = val => {

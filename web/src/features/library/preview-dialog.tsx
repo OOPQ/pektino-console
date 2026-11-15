@@ -229,18 +229,6 @@ if (e.key === 'f' || e.key === 'F') { e.preventDefault(); e.stopImmediatePropaga
     }
   }, [token, canPlay, qc, longPressRate])
 
-  React.useEffect(() => {
-    const onChange = () => setIsFullscreen(Boolean(document.fullscreenElement))
-    document.addEventListener('fullscreenchange', onChange)
-    return () => document.removeEventListener('fullscreenchange', onChange)
-  }, [])
-
-  React.useEffect(() => {
-    if (!token) return
-    const timer = window.setTimeout(() => { const a = document.activeElement as HTMLElement | null; if (a && a !== document.body) a.blur() }, 80)
-    const guard = window.setInterval(() => { const a = document.activeElement as HTMLElement | null; if (a && a.getAttribute('role') === 'dialog') a.blur() }, 120)
-    return () => { window.clearTimeout(timer); window.clearInterval(guard) }
-  }, [token])
 
   if (!row) return null
 
@@ -402,9 +390,10 @@ if (e.key === 'f' || e.key === 'F') { e.preventDefault(); e.stopImmediatePropaga
 
   return (
     <>
-    <Dialog open={!!token} onOpenChange={open => { if (!open) onClose() }}>
+<Dialog open={!!token} modal={false} onOpenChange={open => { if (!open) onClose() }}>
       <DialogContent
         onOpenAutoFocus={e => e.preventDefault()}
+        onFocus={e => { if (e.target === e.currentTarget) e.currentTarget.blur() }}
         title="条目详情"
         description={`${index + 1} / ${rows.length} · ${row.token}`}
         bodyClassName="flex min-h-0 p-0"
@@ -698,6 +687,7 @@ function TimelineDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         onOpenAutoFocus={e => e.preventDefault()}
+        onFocus={e => { if (e.target === e.currentTarget) e.currentTarget.blur() }}
         title="播放时间轴"
         description={`${snapshots.length} 个进度快照 · 按时间串联`}
         className="w-[min(700px,calc(100vw-40px))]"

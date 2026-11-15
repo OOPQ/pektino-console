@@ -542,7 +542,7 @@ function Handle-Request {
             if (-not $full -and (Test-Path -LiteralPath $thumb)) { $file = $thumb }
             elseif (Test-Path -LiteralPath $orig) { $file = $orig }
             if ($file) {
-                Send-Bytes -Stream $Stream -Bytes ([System.IO.File]::ReadAllBytes($file)) -ContentType 'image/jpeg' -ExtraHeaders @{ 'Cache-Control' = 'public, max-age=604800' }
+                Send-Bytes -Stream $Stream -Bytes ([System.IO.File]::ReadAllBytes($file)) -ContentType 'image/jpeg' -ExtraHeaders @{ 'Cache-Control' = 'no-store' }
                 return
             }
         }

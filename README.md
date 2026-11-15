@@ -254,6 +254,22 @@ powershell -ExecutionPolicy Bypass -File app\dev\optimize-faststart.ps1
 - HTTP 服务只绑定回环地址，没有登录鉴权，也**不要**改成对外监听
 - 抓取与下载的内容来自第三方站点，使用前请自行确认合规性
 
+## 抓取冒烟测试
+
+每个榜单实际抓取一次，默认要求各 10 条、token 唯一且有播放地址：
+
+```bat
+app\tests\run-scrape-smoke.cmd
+```
+
+可自定义：
+
+```bat
+app\tests\run-scrape-smoke.cmd -Limit 10 -Ranks daily,weekly,monthly,all
+```
+
+测试只写临时目录，不修改台账。
+
 ## 深入
 
 - 实现、接口、性能取舍：[app/README.md](app/README.md)
@@ -262,3 +278,4 @@ powershell -ExecutionPolicy Bypass -File app\dev\optimize-faststart.ps1
 ## 许可
 
 [MIT](LICENSE)
+

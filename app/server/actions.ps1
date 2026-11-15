@@ -384,7 +384,7 @@ function Start-Import {
 }
 
 function Write-JobResult {
-    param([string]$Phase = 'done', [int]$Added = 0, [int]$Updated = 0, [int]$Count = 0, [double]$Elapsed = 0, [string]$Kind = '', [string]$ErrorText = '')
+    param([string]$Phase = 'done', [int]$Added = 0, [int]$Updated = 0, [int]$Count = 0, [double]$Elapsed = 0, [string]$Kind = '', [string]$ErrorText = '', [object[]]$AddedTokens = @())
     if (-not $ProgressFile) { return }
     try {
         $speed = if ($Elapsed -gt 0) { [math]::Round($Count / $Elapsed, 2) } else { 0 }

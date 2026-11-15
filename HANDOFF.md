@@ -263,3 +263,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File app\dev\test.ps1 -Start -Por
 - 发布包在 `dist\pektino-console-v2.2.0.zip`，解压后冒烟 25/25；该包不含本轮 UI 重构
 - 没有进行中的下载/抓取任务需要保留
 - GitHub Release 附件待手动上传；下一批候选见上面「2026-11-15 优化进展」
+
+## 抓取回归
+
+- pp\tests\run-scrape-smoke.cmd：daily/weekly/monthly/all 各 10 条，验证 token 唯一和播放地址；只写临时目录。
+- Pektino 日榜根路径已变成文章列表，日榜暂时回退到周榜 SSR 榜单，避免抓到失效外链。

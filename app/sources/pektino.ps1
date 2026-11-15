@@ -198,31 +198,21 @@ function Invoke-PektinoScrape {
             }
             Write-SourceProgress -Path $progress -Phase 'list' -Done $pi -Total $pages.Count -Started $started
         }
-        if ($targets.Count -eq 0) {
-            # 新榜单页改为客户端渲染，SSR HTML 中没有 /movie/ 链接。
-            # 从站点公开的 /api/posts 里提取文章内的 movie 链接作为回退。
+        if ($targets.Count -eq 0 -and $rank -eq 'daily') {
+            # 日榜根路径已改为文章列表；用周榜的 SSR 榜单页作为兼容回退，避免抓到失效外链。
             try {
-                $postsText = $client.GetStringAsync("$script:PektinoBase/api/posts").GetAwaiter().GetResult()
-                $posts = @($postsText | ConvertFrom-Json)
-                foreach ($post in $posts) {
-                    $body = [string]$post.body
-                    $cover = ''
-                    $cm = [regex]::Match($body, '<img[^>]+src="([^"]+)"')
-                    if ($cm.Success) { $cover = $cm.Groups[1].Value }
-                    foreach ($lm in [regex]::Matches($body, 'href="(https?://[^"]+/movie/([A-Za-z0-9_\-]+))"')) {
-                        $link = $lm.Groups[1].Value
-                        $tid = $lm.Groups[2].Value
-                        if ($seen.ContainsKey($tid)) { continue }
-                        $seen[$tid] = $true
-                        [void]$targets.Add([pscustomobject]@{
-                                id = $tid; page = 1; rank = $targets.Count + 1
-                                detail_url = $link
-                                title = [System.Net.WebUtility]::HtmlDecode([string]$post.title)
-                                cover_url = $cover
-                            })
-                    }
+                $html = $client.GetStringAsync("$script:PektinoBase/zh-CN/weekly").GetAwaiter().GetResult()
+                $i = 0
+                foreach ($m in [regex]::Matches($html, '/zh-CN/movie/([A-Za-z0-9_\-]+)')) {
+                    $tk = $m.Groups[1].Value
+                    if ($seen.ContainsKey($tk)) { continue }
+                    $seen[$tk] = $true
+                    $i++
+                    if ($i -gt $pageSize) { break }
+                    [void]$targets.Add([pscustomobject]@{
+                            id = $tk; page = 1; rank = $i; detail_url = ''; title = ''; cover_url = ''
+                        })
                 }
-
             } catch { }
         }
         if ($targets.Count -eq 0) { throw '没能从榜单页拿到任何条目，站点结构可能变了' }

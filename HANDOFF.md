@@ -159,6 +159,7 @@ c4cf594 feat(player): 自动续播 + 音量记忆（v2.1.0 tag）
   `index.html` 只加载 `styles/layers.css`、`styles/themes/default.css` 和 `webawesome.loader.js`；没有加载会重置原生控件的 `native.css`。
 - 顶栏新增 `wa-switch` 明暗切换：`PREFS.theme` 持久化，`<head>` 内联脚本在 CSS 前定 `wa-dark` / `wa-light`，避免刷新闪屏；
   `app.css` 末尾增加 `html.wa-light` 整套变量和主要硬编码颜色的覆盖（表格、菜单、灯箱、抽屉、合集、队列）。
+- 主框架：品牌顶栏 + 状态胶囊、9 列 KPI、渐变主按钮、圆角表格 / 行悬停 / 操作列按钮、画廊卡片和分页同步 demo 皮肤。
 - 预览/抽卡：右侧面板 320px、顶部「条目详情 / 抽卡」+ 序号提示 + 关闭 X，面板 16px 圆角、sticky 头、34px 操作按钮；
   `#lbCloseTop` / `#gCloseTop` 已绑定；保留 `#lbPrev` / `#lbNext`、Ctrl+←/→、视频、画中画、从头播放和全部快捷键。
 - 合集编辑：440px 弹窗式面板、顶部关闭 X、26px 色卡、34px 操作按钮；`#colEditX` 绑定关闭。

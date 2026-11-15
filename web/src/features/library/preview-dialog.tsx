@@ -1,5 +1,6 @@
 import * as React from 'react'
 import { createPortal } from 'react-dom'
+import { useNavigate } from 'react-router-dom'
 import {
   ChevronLeft,
   Camera,
@@ -77,6 +78,7 @@ export function PreviewDialog({ rows, token, autoplay = false, media, onClose, o
   const bumpCoverRev = useUiStore(s => s.bumpCoverRev)
   const videoRef = React.useRef<HTMLVideoElement>(null)
   const qc = useQueryClient()
+  const navigate = useNavigate()
   const snapshotsQuery = useQuery<{ items: Snapshot[] }>({
     queryKey: ['snapshots', token],
     queryFn: async () => {

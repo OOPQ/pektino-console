@@ -43,8 +43,8 @@ export function QueuePage() {
   const qc = useQueryClient()
   const actions = useLibraryActions()
   const [tab, setTab] = React.useState<Tab>('active')
-  const didInit = React.useRef(false)
   const openPreview = useUiStore(s => s.openPreview)
+  const userPicked = React.useRef(false)
   const previewToken = useUiStore(s => s.previewToken)
   const previewAutoplay = useUiStore(s => s.previewAutoplay)
   const closePreview = useUiStore(s => s.closePreview)
@@ -61,11 +61,10 @@ export function QueuePage() {
   }), [items])
 
   React.useEffect(() => {
-    if (isLoading || didInit.current) return
-    didInit.current = true
-    if (!groups.active.length && groups.done.length) setTab('done')
+    if (isLoading || userPicked.current) return
+    if (groups.active.length) setTab('active')
+    else if (groups.done.length) setTab('done')
   }, [isLoading, groups.active.length, groups.done.length])
-
   const list = groups[tab]
   const queueGroups = React.useMemo(() => {
     const map = new Map<string, DItem[]>()
@@ -168,7 +167,7 @@ export function QueuePage() {
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <Tabs value={tab} onValueChange={v => setTab(v as Tab)}>
+        <Tabs value={tab} onValueChange={v => { userPicked.current = true; setTab(v as Tab) }}>
           <TabsList>
             <TabsTrigger value="active">进行中 <span className="rounded-full border border-[color:var(--border)] px-1.5 text-[8.5px]">{groups.active.length}</span></TabsTrigger>
             <TabsTrigger value="done">已完成 <span className="rounded-full border border-[color:var(--border)] px-1.5 text-[8.5px]">{groups.done.length}</span></TabsTrigger>

@@ -24,3 +24,7 @@ desktop.ini
 acl-report/
 
 dist/
+
+web/node_modules/
+web/dist/
+web/.vite/

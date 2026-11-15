@@ -6,6 +6,8 @@
 
 当前版本：**v2.2.0** · [更新日志](CHANGELOG.md) · [发版与维护流程](docs/RELEASING.md)
 
+> 前端重做中：新的 React 版在 [`web/`](web/README.md)，开发地址 `http://127.0.0.1:5173/`；旧 `app/web` 暂时保留作回退。
+
 - 程序的界面是中文
 - 数据来源通过**源适配器**接入：当前内置 `pektino`（HTTP）和 `hsex`（HLS 解析），新增源只需在 `app/sources/` 加一个文件，见 [多源与适配器](app/docs/SOURCES.md)
 - 下载方式支持 HTTP 直链和 **HLS（m3u8）**；HLS 走 ffmpeg，在「设置 → FFmpeg 路径」里填 `ffmpeg.exe` 即可

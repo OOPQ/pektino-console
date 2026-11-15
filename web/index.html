@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="zh-CN" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="dark light" />
+    <title>pektino · 媒体库</title>
+    <script>
+      try {
+        const theme = localStorage.getItem('pektino.theme') || 'dark';
+        document.documentElement.classList.toggle('dark', theme !== 'light');
+        document.documentElement.classList.toggle('light', theme === 'light');
+      } catch (e) {}
+    </script>
+    <style>
+      :root {
+        --boot-bg: #080c11;
+        --boot-panel: #101820;
+        --boot-line: #22303d;
+        --boot-text: #e9f0f7;
+        --boot-dim: #8d9bac;
+      }
+      html.light {
+        --boot-bg: #eef3f8;
+        --boot-panel: #ffffff;
+        --boot-line: #d8e2ec;
+        --boot-text: #18232f;
+        --boot-dim: #5c6b7c;
+      }
+      html, body { margin: 0; min-height: 100%; background: var(--boot-bg); color: var(--boot-text); }
+      #root { min-height: 100vh; }
+      .boot {
+        min-height: 100vh; display: grid; grid-template-columns: 216px minmax(0, 1fr);
+        background: var(--boot-bg); font-family: Inter, "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+      }
+      .boot aside { border-right: 1px solid var(--boot-line); padding: 18px 14px; background: var(--boot-panel); }
+      .boot-brand { display: flex; gap: 10px; align-items: center; margin-bottom: 26px; }
+      .boot-mark { width: 34px; height: 34px; border-radius: 10px; background: linear-gradient(145deg, #7ab7ff, #2f6fe4); }
+      .boot-line { height: 9px; border-radius: 5px; background: color-mix(in srgb, var(--boot-dim) 18%, transparent); }
+      .boot-nav { height: 175px; border-radius: 10px; background: color-mix(in srgb, var(--boot-dim) 8%, transparent); margin-top: 18px; }
+      .boot main { padding: 26px 30px; }
+      .boot-head { height: 58px; margin-bottom: 22px; }
+      .boot-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; margin-bottom: 20px; }
+      .boot-kpi { height: 68px; border-radius: 12px; border: 1px solid var(--boot-line); background: var(--boot-panel); }
+      .boot-table { height: 390px; border-radius: 14px; border: 1px solid var(--boot-line); background: var(--boot-panel); }
+      @keyframes bootpulse { 0%,100% { opacity: .45 } 50% { opacity: .8 } }
+      .boot-line, .boot-nav, .boot-kpi, .boot-table { animation: bootpulse 1.4s ease-in-out infinite; }
+      @media (max-width: 980px) { .boot { grid-template-columns: 64px 1fr } .boot aside { padding: 14px 10px } .boot-kpis { grid-template-columns: repeat(3,1fr) } }
+    </style>
+  </head>
+  <body>
+    <div id="root">
+      <div class="boot" aria-hidden="true">
+        <aside>
+          <div class="boot-brand"><div class="boot-mark"></div><div class="boot-line" style="width:86px"></div></div>
+          <div class="boot-line" style="width:44px;margin-bottom:8px"></div>
+          <div class="boot-nav"></div>
+        </aside>
+        <main>
+          <div class="boot-head"><div class="boot-line" style="width:180px;height:16px;margin-bottom:10px"></div><div class="boot-line" style="width:260px"></div></div>
+          <div class="boot-kpis"><div class="boot-kpi"></div><div class="boot-kpi"></div><div class="boot-kpi"></div><div class="boot-kpi"></div><div class="boot-kpi"></div><div class="boot-kpi"></div><div class="boot-kpi"></div></div>
+          <div class="boot-table"></div>
+        </main>
+      </div>
+    </div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

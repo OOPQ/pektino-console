@@ -1,0 +1,104 @@
+export type Row = {
+  token: string
+  status: string
+  fav: string
+  rank: string
+  page: string
+  duration: string
+  seconds: string
+  res: string
+  views: string
+  likes: string
+  uploaded: string
+  url: string
+  page_url: string
+  site: string
+  source: string
+  source_id: string
+  title: string
+  cover_url: string
+  download_kind: string
+  download_headers: string
+  extra: string
+  first_seen: string
+  last_seen: string
+  sent_at: string
+  note: string
+  file_name: string
+  file_path: string
+  file_size: string
+  file_date: string
+  play_count: string
+  last_play: string
+  rating: string
+}
+
+export type Stats = {
+  total: number
+  new: number
+  done: number
+  recycled: number
+  failed: number
+  hours: number
+  todayAdded: number
+  byRes?: Record<string, number>
+  busy?: boolean
+  downloaded: number
+  missing: number
+  favorites: number
+  watched: number
+  toWatch: number
+  diskGB: number
+  contentDir: string
+  fileCount: number
+  coverMissing?: number
+  ledgerPath?: string
+  lastSeen?: string
+}
+
+export type Source = {
+  key: string
+  name: string
+  capabilities?: string[]
+  ranks?: Array<{ key: string; label: string; group?: string }>
+}
+
+export type MediaConfig = {
+  base: string
+  key: string
+}
+
+export type AppSettings = {
+  proxy?: string
+  concurrent?: number
+  ffmpegPath?: string
+  qiseCookie?: string
+}
+
+export type AppState = {
+  ok: boolean
+  api: number
+  rev: number
+  rowsRev: number
+  stats: Stats
+  sources: Source[]
+  media: MediaConfig
+  settings: AppSettings
+  rows: Row[]
+  download?: {
+    items?: Array<{
+      token: string
+      state: string
+      bytes: number
+      expected: number
+      speed?: number
+      error?: string
+    }>
+    active?: number
+  }
+  job?: unknown
+  log?: unknown
+  project?: unknown
+  resume?: unknown
+  metrics?: unknown
+}

@@ -26,10 +26,11 @@ pnpm dev
 ## 构建
 
 ```powershell
-pnpm build
+pnpm build       # 普通构建，base=/
+pnpm build:new   # 接入现有控制台 /new/ 预览，base=/new/
 ```
 
-产物在 `web/dist`。构建接入现有控制台静态服务前，旧 `app/web` 保留作回退。
+构建产物在 `web/dist`。`app/console.ps1` 已支持 `http://127.0.0.1:8791/new/` 读取这份产物；旧 `app/web` 仍在根路径保留回退。
 
 ## 目录
 

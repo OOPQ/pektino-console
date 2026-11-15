@@ -29,7 +29,7 @@ export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider delayDuration={220}>
-        <BrowserRouter>
+        <BrowserRouter basename={import.meta.env.BASE_URL.replace(/\/$/, '') || undefined}>
           <Routes>
             <Route element={<AppShell />}>
               <Route index element={<LibraryPage />} />

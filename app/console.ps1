@@ -121,6 +121,7 @@ $Pektino = Join-Path $Root 'cli\pektino.ps1'
 $ScrapeScript = Join-Path $Root 'cli\scrape.ps1'
 $LedgerPath = $WS.LedgerCsv
 $WebDir = Join-Path $Root 'web'
+$NewWebDir = Join-Path (Split-Path $Root -Parent) 'web\dist'
 $HtmlPath = Join-Path $WebDir 'index.html'
 $TmpCsv = Join-Path $WS.DataDir '.scrape.csv'
 $CoverDir = $WS.Covers
@@ -268,6 +269,39 @@ function Handle-Request {
         if (-not (Test-Path $HtmlPath)) { Send-Bytes -Stream $Stream -Bytes ([Text.Encoding]::UTF8.GetBytes('web/index.html missing')) -ContentType 'text/plain'; return }
         $html = Get-Content $HtmlPath -Raw -Encoding UTF8
         Send-Bytes -Stream $Stream -Bytes ([Text.Encoding]::UTF8.GetBytes($html)) -ContentType 'text/html; charset=utf-8'
+        return
+    }
+
+    # React 新前端（生产构建）预览：/new/
+    if ($method -eq 'GET' -and ($path -eq '/new' -or $path.StartsWith('/new/'))) {
+        if (-not (Test-Path -LiteralPath (Join-Path $NewWebDir 'index.html'))) {
+            Send-Bytes -Stream $Stream -Bytes ([Text.Encoding]::UTF8.GetBytes('new web build missing: web/dist/index.html')) -ContentType 'text/plain' -Status '404 Not Found'
+            return
+        }
+        $rel = if ($path -eq '/new') { '' } else { $path.Substring(5) }
+        $rel = $rel.TrimStart('/').Replace('/', '\')
+        $file = if ($rel) { Join-Path $NewWebDir $rel } else { Join-Path $NewWebDir 'index.html' }
+        if ($rel -and $rel -match '^[A-Za-z0-9_\-\.\\]+$' -and $rel -notmatch '\.\.' -and (Test-Path -LiteralPath $file -PathType Leaf)) {
+            $ext = [System.IO.Path]::GetExtension($file).TrimStart('.').ToLower()
+            $ct = switch ($ext) {
+                'html' { 'text/html; charset=utf-8' }
+                'css' { 'text/css; charset=utf-8' }
+                'js' { 'application/javascript; charset=utf-8' }
+                'svg' { 'image/svg+xml' }
+                'png' { 'image/png' }
+                'jpg' { 'image/jpeg' }
+                'woff2' { 'font/woff2' }
+                default { 'application/octet-stream' }
+            }
+            Send-Bytes -Stream $Stream -Bytes ([System.IO.File]::ReadAllBytes($file)) -ContentType $ct -ExtraHeaders @{ 'Cache-Control' = 'no-store' }
+            return
+        }
+        if (-not [System.IO.Path]::HasExtension($rel)) {
+            $html = Get-Content (Join-Path $NewWebDir 'index.html') -Raw -Encoding UTF8
+            Send-Bytes -Stream $Stream -Bytes ([Text.Encoding]::UTF8.GetBytes($html)) -ContentType 'text/html; charset=utf-8' -ExtraHeaders @{ 'Cache-Control' = 'no-store' }
+            return
+        }
+        Send-Bytes -Stream $Stream -Bytes ([byte[]]@()) -ContentType 'text/plain' -Status '404 Not Found'
         return
     }
 

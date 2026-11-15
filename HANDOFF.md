@@ -126,6 +126,16 @@ c4cf594 feat(player): 自动续播 + 音量记忆（v2.1.0 tag）
 - 回归验证：HLS 失败不产生 `.mp4`、标题保护、脏数值容错、qise Cookie 回填/保存、
   XSS 不执行、队列 200 条完成项渲染、Shift 区间、`start.cmd` 不杀运行中实例。
 
+### 下载失败排查（2026-11-15 13:20）
+
+- 现象：pektino 单条下载 403（`download.json` 里 `dead http:403`），但站点内播放正常。
+- 原因：`video.twimg.com` 拒绝带 `Referer: https://pektino.com/...` 的请求。实测同一 URL：
+  带 pektino Referer → 403；不带 Referer（或带 `x.com`）→ 200/206。
+- 修复：`Resolve-PektinoDownload` 对 `video.twimg.com` 不再发送 Referer，其它 CDN 仍保留。
+  已直接用同一 URL 在临时目录实测 10 秒：状态 `downloading`、已写入 2MB+，不再 403。
+- 队列：完成/失败/取消记录跨重启和新任务保留；失败项带 `history` 标记，不重复复核；
+  重试同一 token 会去重并允许原地重排。控制台已用新代码重启，旧的失败项仍在队列里。
+
 ### 下一批候选（尚未做）
 
 - `/api/refresh-url`、`/api/covers/repair`、`/api/import/local` 仍是同步长任务，主循环会被卡住：建议 job 化。

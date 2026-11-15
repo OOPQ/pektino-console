@@ -39,11 +39,15 @@ app/cli/import.ps1            通用本地入库（按 token 找源 → 详情�
 - 新下载的文件按来源放进子目录：`media\<source>\<token>.mp4`；老文件继续平铺在 `media\`，
   扫描/播放/补封面都按递归查找，两种布局可以共存
 
+> `video.twimg.com` 会拒绝带 pektino 页面 Referer 的请求（HEAD/GET 都返回 403），
+> 所以 pektino 适配器对 twimg 直链不再发送 Referer；其它 CDN 仍保留。
+> 实测同一 URL：带 pektino Referer → 403，不带 Referer（或带 `x.com`）→ 200/206。
+
 当前已接入：
 
 | key | 抓取 | 详情 | 封面 | 下载 |
 |---|---|---|---|---|
-| `pektino` | 榜单 | JSON-LD | JSON-LD | HTTP（Referer） |
+| `pektino` | 榜单 | JSON-LD | JSON-LD | HTTP（twimg 不带 Referer） |
 | `hsex` | 首页 / `index-N.htm` | `<source>` 的 m3u8 | thumb 图 | HLS（ffmpeg，需配置路径） |
 | `qise` | `/video`、`/video/category/hd` | `/video/embed/<id>` 的 m3u8；支持 `viewhd`（高清）/ `view`（标清）切换 | thumb 图 | HLS（未登录/VIP 时只有 6 秒提示片，会被识别并拒绝） |
 | `web` | 任意单条视频页/直链（用于测试） | og:video / video / source | og:image | 按解析出的 m3u8/mp4 |

@@ -10,6 +10,10 @@ import {
   Download,
   ExternalLink,
   List,
+  Maximize,
+  Pause,
+  Volume2,
+  VolumeX,
   Play,
   Star,
   X,
@@ -52,6 +56,11 @@ export function PreviewDialog({ rows, token, autoplay = false, media, onClose, o
   const [hoverSnap, setHoverSnap] = React.useState<Snapshot | null>(null)
   const [timelineOpen, setTimelineOpen] = React.useState(false)
   const [volumeHint, setVolumeHint] = React.useState('')
+  const [currentTime, setCurrentTime] = React.useState(0)
+  const [duration, setDuration] = React.useState(0)
+  const [isPlaying, setIsPlaying] = React.useState(false)
+  const [isMuted, setIsMuted] = React.useState(false)
+  const [dragging, setDragging] = React.useState(false)
   const longPressRate = useUiStore(s => s.longPressRate)
   const videoRef = React.useRef<HTMLVideoElement>(null)
   const qc = useQueryClient()
@@ -85,7 +94,12 @@ export function PreviewDialog({ rows, token, autoplay = false, media, onClose, o
     setCopied(false)
     setSeek(null)
     setVolumeHint('')
-  }, [token, autoplay, canPlay])
+    setCurrentTime(0)
+    setDuration(Number(row?.seconds) || 0)
+    setIsPlaying(false)
+    setIsMuted(false)
+    setHoverSnap(null)
+  }, [token, autoplay, canPlay, row?.seconds])
 
   const prev = index > 0 ? rows[index - 1] : null
   const next = index >= 0 && index < rows.length - 1 ? rows[index + 1] : null
@@ -281,6 +295,36 @@ export function PreviewDialog({ rows, token, autoplay = false, media, onClose, o
     }
   }
 
+  const totalDuration = duration || Number(row.seconds) || 0
+  const progressPct = totalDuration ? Math.min(100, Math.max(0, (currentTime / totalDuration) * 100)) : 0
+
+  const seekTo = (time: number) => {
+    const max = totalDuration || Number(row.seconds) || 0
+    const next = Math.max(0, Math.min(max, time))
+    setCurrentTime(next)
+    const v = videoRef.current
+    if (v) {
+      try { v.currentTime = next } catch (e) {}
+      if (v.paused) { void v.play().catch(() => {}); setPlaying(true) }
+    } else {
+      setSeek(next)
+      setPlaying(true)
+    }
+  }
+
+  const togglePlay = () => {
+    const v = videoRef.current
+    if (!v) return
+    if (v.paused) { void v.play().catch(() => {}); setPlaying(true) }
+    else v.pause()
+  }
+
+  const seekFromPointer = (clientX: number, el: HTMLElement) => {
+    const rect = el.getBoundingClientRect()
+    const pct = Math.max(0, Math.min(1, (clientX - rect.left) / Math.max(1, rect.width)))
+    seekTo(pct * totalDuration)
+  }
+
   return (
     <>
     <Dialog open={!!token} onOpenChange={open => { if (!open) onClose() }}>
@@ -318,7 +362,7 @@ export function PreviewDialog({ rows, token, autoplay = false, media, onClose, o
           </div>
         }
       >
-        <div className="relative flex min-h-[480px] flex-1 items-center justify-center overflow-hidden bg-[#05080c]">
+        <div className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden bg-[#05080c]">
           <CoverImage token={row.token} full fit="contain" alt={rowTitle(row)} className={cn('absolute inset-0 h-full w-full transition-opacity', videoReady ? 'opacity-0' : 'opacity-100')} />
 
           {playing && !videoError ? (
@@ -327,13 +371,19 @@ export function PreviewDialog({ rows, token, autoplay = false, media, onClose, o
               key={row.token}
               src={videoSrc}
               poster={`/api/cover?token=${encodeURIComponent(row.token)}&full=1`}
-              controls
               autoPlay
               playsInline
               preload="auto"
+              muted={isMuted}
+              onTimeUpdate={e => setCurrentTime(e.currentTarget.currentTime)}
+              onLoadedMetadata={e => setDuration(e.currentTarget.duration || Number(row.seconds) || 0)}
+              onDurationChange={e => setDuration(e.currentTarget.duration || Number(row.seconds) || 0)}
+              onPlaying={() => { setVideoReady(true); setIsPlaying(true) }}
+              onPause={() => setIsPlaying(false)}
+              onPlay={() => setIsPlaying(true)}
+              onVolumeChange={e => setIsMuted(e.currentTarget.muted)}
               onCanPlay={() => setVideoReady(true)}
-              onPlaying={() => setVideoReady(true)}
-              onError={() => { setVideoError(true); setPlaying(false) }}
+              onError={() => { setVideoError(true); setPlaying(false); setIsPlaying(false) }}
               className={cn(
                 'absolute inset-0 z-10 h-full w-full object-contain outline-none transition-opacity duration-200',
                 videoReady ? 'opacity-100' : 'opacity-0',
@@ -357,37 +407,61 @@ export function PreviewDialog({ rows, token, autoplay = false, media, onClose, o
             ) : null}
           </div>
 
-          {snapshots.length && Number(row.seconds) > 0 ? (
-            <div className="absolute inset-x-3 bottom-[42px] z-20 h-4">
-              <div className="absolute inset-x-0 top-1/2 h-px bg-white/20" />
-              {snapshots.map(s => (
-                <button
-                  key={s.name}
-                  type="button"
-                  title={`快照 ${formatTime(s.time)}`}
-                  aria-label={`跳转到快照 ${formatTime(s.time)}`}
-                  onMouseEnter={() => setHoverSnap(s)}
-                  onMouseLeave={() => setHoverSnap(null)}
-                  onClick={() => { setSeek(s.time); setPlaying(true) }}
-                  className="absolute top-1/2 size-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/80 bg-[color:var(--warning)] shadow-[0_0_0_3px_rgba(227,179,65,.18)] transition-transform hover:scale-125"
-                  style={{ left: `${Math.min(100, Math.max(0, (s.time / Number(row.seconds)) * 100))}%` }}
-                />
-              ))}
-              {hoverSnap ? (
-                <div className="pointer-events-none absolute bottom-7 z-30 w-[150px] -translate-x-1/2 overflow-hidden rounded-lg border border-white/20 bg-black shadow-2xl" style={{ left: `${Math.min(90, Math.max(10, (hoverSnap.time / Number(row.seconds)) * 100))}%` }}>
-                  <img src={hoverSnap.url} alt="" className="aspect-video w-full object-cover" />
-                  <div className="flex items-center justify-between px-1.5 py-1 text-[9px] text-white/80"><span>{formatTime(hoverSnap.time)}</span><span className="text-[8px] text-white/45">快照</span></div>
-                </div>
-              ) : null}
-            </div>
-          ) : null}
-
           {volumeHint ? (
             <div className="absolute left-1/2 top-3 z-30 -translate-x-1/2 rounded-full border border-white/15 bg-black/60 px-3 py-1 text-[10px] text-white backdrop-blur">
               {volumeHint}
             </div>
           ) : null}
 
+
+
+          {playing && !videoError ? (
+            <div className="absolute inset-x-0 bottom-0 z-30 bg-[linear-gradient(0deg,rgba(0,0,0,.88),rgba(0,0,0,.35),transparent)] px-3 pb-4 pt-10">
+              <div className="flex items-center gap-2">
+                <IconButton label={isPlaying ? '暂停' : '播放'} size="sm" onClick={togglePlay}>
+                  {isPlaying ? <Pause className="size-3.5" /> : <Play className="size-3.5" />}
+                </IconButton>
+                <span className="font-mono text-[10px] tabular-nums text-white/90">{formatTime(currentTime)} / {formatTime(totalDuration)}</span>
+                <div className="ml-auto flex items-center gap-1">
+                  <IconButton label={isMuted ? '取消静音' : '静音'} size="sm" onClick={() => { const v = videoRef.current; if (!v) return; v.muted = !v.muted; setIsMuted(v.muted) }}>
+                    {isMuted ? <VolumeX className="size-3.5" /> : <Volume2 className="size-3.5" />}
+                  </IconButton>
+                  <IconButton label="全屏" size="sm" onClick={() => { void videoRef.current?.requestFullscreen?.().catch(() => {}) }}>
+                    <Maximize className="size-3.5" />
+                  </IconButton>
+                </div>
+              </div>
+              <div
+                className="relative mt-2 h-2 cursor-pointer rounded-full bg-white/20"
+                onPointerDown={e => { e.currentTarget.setPointerCapture?.(e.pointerId); setDragging(true); seekFromPointer(e.clientX, e.currentTarget) }}
+                onPointerMove={e => { if (dragging) seekFromPointer(e.clientX, e.currentTarget) }}
+                onPointerUp={() => setDragging(false)}
+                onPointerCancel={() => setDragging(false)}
+              >
+                <div className="h-full rounded-full bg-[color:var(--primary)]" style={{ width: `${progressPct}%` }} />
+                {snapshots.map(s => (
+                  <button
+                    key={s.name}
+                    type="button"
+                    title={`快照 ${formatTime(s.time)}`}
+                    aria-label={`跳转到快照 ${formatTime(s.time)}`}
+                    onPointerDown={e => e.stopPropagation()}
+                    onMouseEnter={() => setHoverSnap(s)}
+                    onMouseLeave={() => setHoverSnap(null)}
+                    onClick={() => { setHoverSnap(null); seekTo(s.time) }}
+                    className="absolute top-1/2 size-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/80 bg-[color:var(--warning)] shadow-[0_0_0_3px_rgba(227,179,65,.18)] transition-transform hover:scale-125"
+                    style={{ left: `${totalDuration ? Math.min(100, Math.max(0, (s.time / totalDuration) * 100)) : 0}%` }}
+                  />
+                ))}
+                {hoverSnap ? (
+                  <div className="pointer-events-none absolute bottom-6 z-40 w-[150px] -translate-x-1/2 overflow-hidden rounded-lg border border-white/20 bg-black shadow-2xl" style={{ left: `${totalDuration ? Math.min(90, Math.max(10, (hoverSnap.time / totalDuration) * 100)) : 50}%` }}>
+                    <img src={hoverSnap.url} alt="" className="aspect-video w-full object-cover" />
+                    <div className="flex items-center justify-between px-1.5 py-1 text-[9px] text-white/80"><span>{formatTime(hoverSnap.time)}</span><span className="text-[8px] text-white/45">快照</span></div>
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          ) : null}
 
         </div>
 

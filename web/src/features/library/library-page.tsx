@@ -557,6 +557,7 @@ const [per, setPer] = React.useState(Number(searchParams.get('per')) || 50)
       <PreviewDialog
         rows={sorted}
         token={previewToken}
+        downloadItem={previewToken ? downloadMap.get(previewToken) : undefined}
         autoplay={previewAutoplay}
         media={data?.media}
         onClose={closePreview}

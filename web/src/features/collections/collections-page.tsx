@@ -401,6 +401,7 @@ export function CollectionsPage() {
       <PreviewDialog
         rows={rows}
         token={previewToken}
+        downloadItem={previewToken ? downloadMap.get(previewToken) : undefined}
         autoplay={previewAutoplay}
         media={state?.media}
         onClose={closePreview}

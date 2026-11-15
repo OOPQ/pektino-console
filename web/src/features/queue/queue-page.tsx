@@ -267,6 +267,7 @@ export function QueuePage() {
       <PreviewDialog
         rows={data?.rows || []}
         token={previewToken}
+        downloadItem={previewToken ? items.find(i => i.token === previewToken) : undefined}
         autoplay={previewAutoplay}
         media={data?.media}
         onClose={closePreview}

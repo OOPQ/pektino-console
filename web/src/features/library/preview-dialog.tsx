@@ -21,7 +21,7 @@ import {
   Star,
   X,
 } from 'lucide-react'
-import type { MediaConfig, Row, Snapshot } from '@/types'
+import type { DownloadItem, MediaConfig, Row, Snapshot } from '@/types'
 import { cn, copyText, formatCount, formatDate, formatTime, mediaUrl, rowTitle, statusOf } from '@/lib/utils'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
@@ -32,7 +32,7 @@ import { Button } from '@/components/ui/button'
 import { Dialog, DialogClose, DialogContent } from '@/components/ui/dialog'
 import { IconButton } from '@/components/ui/icon-button'
 import { RatingInput } from '@/components/rating-input'
-import { StatusBadge } from '@/components/status-badge'
+import { DownloadStatus } from './download-status'
 import { CoverImage } from '@/components/cover-image'
 
 type Props = {
@@ -43,9 +43,10 @@ type Props = {
   onClose: () => void
   onNavigate: (token: string) => void
   onFav: (row: Row) => void
+  downloadItem?: DownloadItem
 }
 
-export function PreviewDialog({ rows, token, autoplay = false, media, onClose, onNavigate, onFav }: Props) {
+export function PreviewDialog({ rows, token, autoplay = false, media, onClose, onNavigate, onFav, downloadItem }: Props) {
   const index = React.useMemo(() => rows.findIndex(r => r.token === token), [rows, token])
   const row = index >= 0 ? rows[index] : null
   const [playing, setPlaying] = React.useState(false)
@@ -663,7 +664,7 @@ onPlay={() => { setIsPlaying(true); if (videoRef.current) videoRef.current.playb
             <span className="text-[10px] text-[color:var(--subtle)]">{row.res || '—'}</span>
           </div>
           <div className="mt-1 flex items-center gap-2">
-            <StatusBadge status={row.status} />
+<DownloadStatus row={row} item={downloadItem} />
             <RatingInput value={row.rating} onChange={setRating} />
           </div>
 

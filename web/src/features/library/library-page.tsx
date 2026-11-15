@@ -241,6 +241,19 @@ export function LibraryPage() {
     openPreview(pool[Math.floor(Math.random() * pool.length)].token, true)
   }
 
+  React.useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.ctrlKey || e.metaKey || e.altKey || e.key.toLowerCase() !== 'r') return
+      const target = e.target as HTMLElement | null
+      if (target instanceof Element && target.closest('input,textarea,select,[contenteditable]')) return
+      if (previewToken || document.querySelector('[role="dialog"]')) return
+      e.preventDefault()
+      gacha()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [previewToken, data?.rows])
+
   if (isLoading) return <LibrarySkeleton />
 
   if (error) {
@@ -359,7 +372,7 @@ export function LibraryPage() {
         <Button size="sm" variant={multi ? 'outline' : 'ghost'} onClick={() => setMulti(!multi)}>
           <ListChecks className="size-3.5" /> 多选
         </Button>
-        <Button size="sm" variant="ghost" onClick={gacha}>
+        <Button size="sm" variant="ghost" onClick={gacha} title="随机播放一部本地视频（快捷键 R）">
           <Sparkles className="size-3.5" /> 抽一卡
         </Button>
         <Button size="sm" variant="ghost" onClick={() => { setStatus('all'); setFlag('towatch') }}>

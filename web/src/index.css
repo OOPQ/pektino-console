@@ -186,3 +186,10 @@ video:focus-visible,
 video::-webkit-media-controls-panel {
   outline: none !important;
 }
+
+[data-preview-stage]:fullscreen,
+[data-preview-stage]:-webkit-full-screen {
+  width: 100vw;
+  height: 100vh;
+  background: #000;
+}

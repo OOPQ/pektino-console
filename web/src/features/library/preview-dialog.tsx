@@ -61,6 +61,9 @@ export function PreviewDialog({ rows, token, autoplay = false, media, onClose, o
   const [isPlaying, setIsPlaying] = React.useState(false)
   const [isMuted, setIsMuted] = React.useState(false)
   const [dragging, setDragging] = React.useState(false)
+  const [hoverTime, setHoverTime] = React.useState<number | null>(null)
+  const [hoverPct, setHoverPct] = React.useState(0)
+  const stageRef = React.useRef<HTMLDivElement>(null)
   const longPressRate = useUiStore(s => s.longPressRate)
   const videoRef = React.useRef<HTMLVideoElement>(null)
   const qc = useQueryClient()
@@ -142,10 +145,11 @@ export function PreviewDialog({ rows, token, autoplay = false, media, onClose, o
     }
     const onKeyDown = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement | null
-      if (target?.closest('input,textarea,select,[contenteditable]')) return
+      if (target instanceof Element && target.closest('input,textarea,select,[contenteditable]')) return
       if (e.ctrlKey) return
       if (e.key === ' ') {
         e.preventDefault()
+        e.stopPropagation()
         if (e.repeat) return
         spaceAt = performance.now()
         const v = videoRef.current
@@ -160,6 +164,7 @@ export function PreviewDialog({ rows, token, autoplay = false, media, onClose, o
         const v = videoRef.current
         if (!v) return
         e.preventDefault()
+        e.stopPropagation()
         if (e.key === 'ArrowLeft') v.currentTime = Math.max(0, v.currentTime - 5)
         if (e.key === 'ArrowRight') v.currentTime = Math.min(v.duration || Infinity, v.currentTime + 5)
         if (e.key === 'ArrowUp') { v.volume = Math.min(1, v.volume + 0.05); showVolume(v) }
@@ -168,6 +173,7 @@ export function PreviewDialog({ rows, token, autoplay = false, media, onClose, o
       }
       if (/^[1-5]$/.test(e.key)) {
         e.preventDefault()
+        e.stopPropagation()
         const value = Number(e.key)
         void post<{ ok: boolean; error?: string }>('/api/rate', { tokens: [token], value }).then(r => {
           if (r.ok) { toast.success(`已评分 ${value} 星`); qc.invalidateQueries({ queryKey: ['state'] }) }
@@ -177,6 +183,7 @@ export function PreviewDialog({ rows, token, autoplay = false, media, onClose, o
       }
       if (e.key === '0') {
         e.preventDefault()
+        e.stopPropagation()
         void post<{ ok: boolean; error?: string }>('/api/rate', { tokens: [token], value: 0 }).then(r => {
           if (r.ok) { toast.success('已清除评分'); qc.invalidateQueries({ queryKey: ['state'] }) }
           else toast.error(r.error || '评分失败')
@@ -186,11 +193,12 @@ export function PreviewDialog({ rows, token, autoplay = false, media, onClose, o
       const v = videoRef.current
       if (!v) return
       if (e.key === 'm' || e.key === 'M') { v.muted = !v.muted; showVolume(v) }
-      if (e.key === 'f' || e.key === 'F') { void v.requestFullscreen?.().catch(() => {}) }
+      if (e.key === 'f' || e.key === 'F') { requestStageFullscreen(); }
     }
     const onKeyUp = (e: KeyboardEvent) => {
       if (e.key !== ' ') return
       e.preventDefault()
+        e.stopPropagation()
       const v = videoRef.current
       if (!v) return
       const held = performance.now() - spaceAt
@@ -202,11 +210,11 @@ export function PreviewDialog({ rows, token, autoplay = false, media, onClose, o
         v.playbackRate = 1
       }
     }
-    window.addEventListener('keydown', onKeyDown)
-    window.addEventListener('keyup', onKeyUp)
+    window.addEventListener('keydown', onKeyDown, true)
+    window.addEventListener('keyup', onKeyUp, true)
     return () => {
-      window.removeEventListener('keydown', onKeyDown)
-      window.removeEventListener('keyup', onKeyUp)
+      window.removeEventListener('keydown', onKeyDown, true)
+      window.removeEventListener('keyup', onKeyUp, true)
       window.clearTimeout(hintTimer)
     }
   }, [token, canPlay, qc, longPressRate])
@@ -319,10 +327,25 @@ export function PreviewDialog({ rows, token, autoplay = false, media, onClose, o
     else v.pause()
   }
 
-  const seekFromPointer = (clientX: number, el: HTMLElement) => {
+  const timeFromPointer = (clientX: number, el: HTMLElement) => {
     const rect = el.getBoundingClientRect()
     const pct = Math.max(0, Math.min(1, (clientX - rect.left) / Math.max(1, rect.width)))
-    seekTo(pct * totalDuration)
+    return { pct, time: pct * totalDuration }
+  }
+
+  const seekFromPointer = (clientX: number, el: HTMLElement) => {
+    const { pct, time } = timeFromPointer(clientX, el)
+    setHoverTime(time)
+    setHoverPct(pct * 100)
+    seekTo(time)
+  }
+
+  const requestStageFullscreen = () => {
+    const el = stageRef.current as (HTMLDivElement & { webkitRequestFullscreen?: () => Promise<void> }) | null
+    if (!el) return
+    const request = el.requestFullscreen || el.webkitRequestFullscreen
+    if (!request) return
+    void Promise.resolve(request.call(el)).catch(() => {})
   }
 
   return (
@@ -362,7 +385,7 @@ export function PreviewDialog({ rows, token, autoplay = false, media, onClose, o
           </div>
         }
       >
-        <div className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden bg-[#05080c]">
+        <div ref={stageRef} data-preview-stage className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden bg-[#05080c]">
           <CoverImage token={row.token} full fit="contain" alt={rowTitle(row)} className={cn('absolute inset-0 h-full w-full transition-opacity', videoReady ? 'opacity-0' : 'opacity-100')} />
 
           {playing && !videoError ? (
@@ -426,19 +449,28 @@ export function PreviewDialog({ rows, token, autoplay = false, media, onClose, o
                   <IconButton label={isMuted ? '取消静音' : '静音'} size="sm" onClick={() => { const v = videoRef.current; if (!v) return; v.muted = !v.muted; setIsMuted(v.muted) }}>
                     {isMuted ? <VolumeX className="size-3.5" /> : <Volume2 className="size-3.5" />}
                   </IconButton>
-                  <IconButton label="全屏" size="sm" onClick={() => { void videoRef.current?.requestFullscreen?.().catch(() => {}) }}>
+                  <IconButton label="全屏" size="sm" onClick={requestStageFullscreen}>
                     <Maximize className="size-3.5" />
                   </IconButton>
                 </div>
               </div>
               <div
-                className="relative mt-2 h-2 cursor-pointer rounded-full bg-white/20"
+                className="relative mt-2 h-4 touch-none cursor-pointer"
+                role="slider"
+                aria-label="播放进度"
+                aria-valuemin={0}
+                aria-valuemax={Math.round(totalDuration)}
+                aria-valuenow={Math.round(currentTime)}
                 onPointerDown={e => { e.currentTarget.setPointerCapture?.(e.pointerId); setDragging(true); seekFromPointer(e.clientX, e.currentTarget) }}
-                onPointerMove={e => { if (dragging) seekFromPointer(e.clientX, e.currentTarget) }}
+                onPointerMove={e => { const { pct, time } = timeFromPointer(e.clientX, e.currentTarget); setHoverTime(time); setHoverPct(pct * 100); if (dragging) seekTo(time) }}
                 onPointerUp={() => setDragging(false)}
                 onPointerCancel={() => setDragging(false)}
+                onPointerLeave={() => setHoverTime(null)}
               >
-                <div className="h-full rounded-full bg-[color:var(--primary)]" style={{ width: `${progressPct}%` }} />
+                <div className="absolute inset-x-0 top-1/2 h-1.5 -translate-y-1/2 rounded-full bg-white/20">
+                  <div className="h-full rounded-full bg-[color:var(--primary)]" style={{ width: `${progressPct}%` }} />
+                </div>
+                <div className="absolute top-1/2 size-3 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/60 bg-white shadow" style={{ left: `${progressPct}%` }} />
                 {snapshots.map(s => (
                   <button
                     key={s.name}
@@ -448,7 +480,7 @@ export function PreviewDialog({ rows, token, autoplay = false, media, onClose, o
                     onPointerDown={e => e.stopPropagation()}
                     onMouseEnter={() => setHoverSnap(s)}
                     onMouseLeave={() => setHoverSnap(null)}
-                    onClick={() => { setHoverSnap(null); seekTo(s.time) }}
+                    onClick={() => { setHoverSnap(null); setHoverTime(null); seekTo(s.time) }}
                     className="absolute top-1/2 size-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/80 bg-[color:var(--warning)] shadow-[0_0_0_3px_rgba(227,179,65,.18)] transition-transform hover:scale-125"
                     style={{ left: `${totalDuration ? Math.min(100, Math.max(0, (s.time / totalDuration) * 100)) : 0}%` }}
                   />
@@ -457,6 +489,10 @@ export function PreviewDialog({ rows, token, autoplay = false, media, onClose, o
                   <div className="pointer-events-none absolute bottom-6 z-40 w-[150px] -translate-x-1/2 overflow-hidden rounded-lg border border-white/20 bg-black shadow-2xl" style={{ left: `${totalDuration ? Math.min(90, Math.max(10, (hoverSnap.time / totalDuration) * 100)) : 50}%` }}>
                     <img src={hoverSnap.url} alt="" className="aspect-video w-full object-cover" />
                     <div className="flex items-center justify-between px-1.5 py-1 text-[9px] text-white/80"><span>{formatTime(hoverSnap.time)}</span><span className="text-[8px] text-white/45">快照</span></div>
+                  </div>
+                ) : hoverTime != null ? (
+                  <div className="pointer-events-none absolute bottom-6 z-40 -translate-x-1/2 rounded-md border border-white/20 bg-black/90 px-1.5 py-0.5 font-mono text-[9px] text-white shadow-xl" style={{ left: `${Math.min(90, Math.max(10, hoverPct))}%` }}>
+                    {formatTime(hoverTime)}
                   </div>
                 ) : null}
               </div>

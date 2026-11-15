@@ -13,11 +13,8 @@ const boxOf = sel => document.querySelector(sel + ' .box');
 function isBlankPreviewTarget(t) {
   if (!t || !t.closest) return false;
   if (t.closest('button, video, img, a, input, select, textarea, .rt, .star, .tag')) return false;
-  if (t.id === 'lightbox' || t.id === 'gacha') return true;
-  if (t.classList && (t.classList.contains('box') || t.classList.contains('meta') ||
-      t.classList.contains('mstats') || t.classList.contains('actions'))) return true;
-  if (t.id === 'lbMedia' || t.id === 'gMedia') return true;
-  return false;
+  // 只点背景遮罩关闭；点浮窗内部的空白（box/meta/media 边距）不关闭
+  return t.id === 'lightbox' || t.id === 'gacha';
 }
 
 /* ================= 信息行（灯箱 / 抽卡共用） ================= */

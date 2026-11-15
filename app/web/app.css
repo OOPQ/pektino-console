@@ -994,3 +994,68 @@ html.wa-light input[type=checkbox]{background:#fff;border-color:#c9d5e3}
 html.wa-light input[type=checkbox]:checked,html.wa-light input[type=checkbox]:indeterminate{
   background:linear-gradient(180deg,#5b9cff,#2f6fce);border-color:#2f6fce;
 }
+
+/* ---------- 预览：整体做成 demo 式浮窗 ---------- */
+.lightbox .box{
+  grid-template-columns:minmax(0,1fr) 330px;
+  grid-template-rows:auto minmax(0,1fr) auto;
+  gap:12px 20px;width:min(1100px,96vw);
+  padding:14px;border-radius:20px;align-items:stretch;
+  background:linear-gradient(180deg,rgba(17,24,32,.98),rgba(11,17,24,.98));
+  border:1px solid #26313d;box-shadow:0 30px 90px rgba(0,0,0,.58);
+  max-height:94vh;
+}
+.lightbox .box > .pmeta-bar.lb-head{
+  grid-column:1 / -1;grid-row:1;margin:0;padding:0 2px 10px;
+  position:static;background:transparent;backdrop-filter:none;
+  border-bottom:1px solid rgba(255,255,255,.08);
+}
+.lightbox .lb-head .pmeta-kicker{font-size:10px;letter-spacing:1.4px}
+.lightbox .lb-head .pmeta-hint{font-size:10px}
+.lightbox .lb-head .pmeta-x{width:27px;height:27px}
+.lightbox .box > .lbMedia{
+  grid-column:1;grid-row:2;min-width:0;min-height:0;height:100%;
+  display:flex;align-items:center;justify-content:center;overflow:hidden;
+  padding:8px;border:1px solid rgba(255,255,255,.08);border-radius:14px;background:#080c11;
+}
+.lightbox .lbMedia img{max-height:72vh;border-radius:10px;box-shadow:none;margin:0}
+.lightbox .lbMedia video{border-radius:10px}
+.lightbox .box > .meta{
+  grid-column:2;grid-row:2;min-height:0;max-height:none;overflow:auto;
+  background:transparent;border:0;box-shadow:none;border-radius:0;padding:2px 2px 0;gap:9px;
+}
+.lightbox .box > .meta h3{font-size:17px;line-height:1.35;max-height:2.7em}
+.lightbox .box > .meta .mtoken{font-size:10.5px}
+.lightbox .box > .meta .mstats .mhead b{font-size:30px}
+.lightbox .mstats-grid{gap:7px}
+.lightbox .mstat{padding:9px 10px}
+.lightbox .box > .meta .actions{grid-template-columns:1fr 1fr;margin-top:8px;padding-top:11px}
+.lightbox .box > .meta .actions button{height:36px}
+.lightbox .lb-foot{
+  grid-column:1 / -1;grid-row:3;margin:0;padding:9px 2px 0;
+  border-top:1px solid rgba(255,255,255,.08);font-size:10px;color:var(--faint);
+}
+.lightbox .lbNav.prev{left:-54px}
+.lightbox .lbNav.next{right:-54px}
+@media (max-width:900px){
+  .lightbox .box{grid-template-columns:1fr;grid-template-rows:auto minmax(0,1fr) auto;width:94vw;padding:12px}
+  .lightbox .box > .lbMedia{grid-column:1;grid-row:2;max-height:52vh}
+  .lightbox .box > .meta{grid-column:1;grid-row:3;max-height:none}
+  .lightbox .lb-foot{grid-row:4}
+  .lightbox .lbNav.prev{left:4px}.lightbox .lbNav.next{right:4px}
+}
+html.wa-light .lightbox .box{background:linear-gradient(180deg,#fff,#f8fbfe);border-color:#d6e0ea;box-shadow:0 30px 90px rgba(30,50,80,.22)}
+html.wa-light .lightbox .box > .pmeta-bar.lb-head,html.wa-light .lightbox .lb-foot{border-color:#e3eaf2}
+/* ---------- 下载队列：固定头/底部工具，内容区滚动 ---------- */
+#dlDrawer .sheet{display:flex;flex-direction:column;overflow:hidden;padding:0}
+#dlDrawer .dq-head{margin:0;padding:16px 18px 12px;position:static;flex:0 0 auto;border-bottom:1px solid rgba(255,255,255,.08);background:transparent;backdrop-filter:none}
+#dlDrawer .dq-tabs{margin:0 18px;padding-top:2px;flex:0 0 auto}
+#dlDrawer .dq-panel{flex:1 1 auto;min-height:0;overflow:auto;padding:10px 18px 12px}
+#dlDrawer .dq-tools{
+  flex:0 0 auto;margin:0;padding:11px 18px;border:0;border-top:1px solid var(--line);
+  border-radius:0;background:color-mix(in srgb,var(--panel2) 55%,transparent);
+  display:flex;align-items:center;gap:7px;flex-wrap:wrap;
+}
+#dlDrawer .dq-foot-note{margin-left:auto;font-size:9.5px;color:var(--faint);white-space:nowrap}
+html.wa-light #dlDrawer .dq-head{border-color:#e3eaf2}
+html.wa-light #dlDrawer .dq-tools{background:#f7fafd;border-color:#e1e8f0}

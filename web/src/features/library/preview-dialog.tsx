@@ -26,6 +26,7 @@ import { cn, copyText, formatCount, formatDate, formatTime, mediaUrl, rowTitle, 
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { post } from '@/lib/api'
+import { unlockAudio } from '@/lib/sound'
 import { confirmAction } from '@/store/confirm'
 import { useUiStore } from '@/store/ui'
 import { Button } from '@/components/ui/button'
@@ -344,6 +345,7 @@ if (e.key === 'f' || e.key === 'F') { e.preventDefault(); e.stopImmediatePropaga
   }
 
   const download = async () => {
+    unlockAudio()
     if (downloading) return
     if (!(await confirmAction({ title: '开始下载', description: `把「${rowTitle(row)}」加入下载队列？`, confirmText: '开始下载' }))) return
     setDownloading(true)

@@ -19,6 +19,7 @@ import { useLibraryActions } from '@/features/library/use-library-actions'
 import { confirmAction } from '@/store/confirm'
 import { useUiStore } from '@/store/ui'
 import { post } from '@/lib/api'
+import { unlockAudio } from '@/lib/sound'
 import { cn, formatBytes, formatCount, rowTitle } from '@/lib/utils'
 import type { Row } from '@/types'
 import { Button } from '@/components/ui/button'
@@ -110,7 +111,7 @@ export function QueuePage() {
       run(() => post('/api/download/clear-done', {}), '已清理完成记录')
     }
   }
-  const retryFailed = () => run(() => post('/api/download', { tokens: failedTokens, status: 'failed' }), '已重新加入失败条目')
+  const retryFailed = () => { unlockAudio(); run(() => post('/api/download', { tokens: failedTokens, status: 'failed' }), '已重新加入失败条目') }
   const setConcurrent = (value: string) => run(() => post('/api/config', { concurrent: Number(value) }), `并发数已设为 ${value}`)
 
   const pauseItem = (token: string) => run(() => post('/api/download/pause', { on: true, tokens: [token] }), '已暂停')

@@ -9,7 +9,7 @@ export function useAppState(refetchMs = 15_000) {
     staleTime: 5_000,
     refetchInterval: query => {
       const state = query.state.data as AppState | undefined
-      return state?.job?.running ? 1_500 : refetchMs
+      return state?.job?.running || state?.download?.running ? 1_500 : refetchMs
     },
     refetchOnWindowFocus: false,
   })

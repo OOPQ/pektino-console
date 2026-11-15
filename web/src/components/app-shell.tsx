@@ -17,6 +17,7 @@ import {
 import { useQueryClient } from '@tanstack/react-query'
 import { useAppState } from '@/features/use-app-state'
 import { useUiStore } from '@/store/ui'
+import { playDownloadChime } from '@/lib/sound'
 import { cn, formatCount } from '@/lib/utils'
 import { toast } from 'sonner'
 import { IconButton } from '@/components/ui/icon-button'
@@ -214,6 +215,40 @@ export function AppShell() {
   const navigate = useNavigate()
   const wasRunning = React.useRef(false)
   const lastResult = React.useRef('')
+  const downloadWasRunning = React.useRef(false)
+  const lastDownloadResult = React.useRef('')
+
+  React.useEffect(() => {
+    const d = data?.download
+    if (!d) return
+    if (d.running) {
+      downloadWasRunning.current = true
+      return
+    }
+    if (!downloadWasRunning.current) return
+    downloadWasRunning.current = false
+    const key = `${d.phase || ''}|${d.done || 0}|${d.failed || 0}|${d.bytes || 0}`
+    if (key === lastDownloadResult.current) return
+    lastDownloadResult.current = key
+    const items = d.items || []
+    const current = items.filter(item => !item.history)
+    const done = current.filter(item => item.state === 'done').length
+    const failed = current.filter(item => item.state === 'failed' || item.state === 'dead').length
+    if (d.phase === 'error') {
+      toast.error('下载失败', {
+        description: d.errors?.[0]?.error || '下载进程异常结束',
+        duration: 8000,
+        action: { label: '查看队列', onClick: () => navigate('/queue') },
+      })
+      return
+    }
+    playDownloadChime()
+    toast.success(failed > 0 ? '下载结束' : '下载完成', {
+      description: `${done || d.done || 0} 完成${failed ? ` · ${failed} 失败` : ''}`,
+      duration: 7000,
+      action: { label: '查看队列', onClick: () => navigate('/queue') },
+    })
+  }, [data?.download, data?.download?.running, data?.download?.done, data?.download?.failed, data?.download?.phase, data?.download?.items])
   const [helpOpen, setHelpOpen] = React.useState(false)
   const [commandOpen, setCommandOpen] = React.useState(false)
 

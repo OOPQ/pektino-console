@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import { post } from '@/lib/api'
 import { copyText } from '@/lib/utils'
+import { unlockAudio } from '@/lib/sound'
 
 export function useLibraryActions() {
   const qc = useQueryClient()
@@ -10,6 +11,7 @@ export function useLibraryActions() {
   const invalidate = () => qc.invalidateQueries({ queryKey: ['state'] })
 
   const download = async (tokens: string[], limit = 0) => {
+    unlockAudio()
     try {
       const r = await post<{ ok: boolean; error?: string; started?: number }>('/api/download', {
         tokens,

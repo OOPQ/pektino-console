@@ -32,7 +32,7 @@ import { useUiStore } from '@/store/ui'
 import { cn, formatCount } from '@/lib/utils'
 import { post } from '@/lib/api'
 import { Progress } from '@/components/ui/progress'
-import type { Row } from '@/types'
+import type { DownloadItem, Row } from '@/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
@@ -99,6 +99,7 @@ type SavedView = {
 
 export function LibraryPage() {
   const { data, isLoading, error, refetch, isFetching } = useAppState()
+  const downloadMap = React.useMemo(() => new Map<string, DownloadItem>((data?.download?.items || []).map(item => [item.token, item])), [data?.download?.items])
   const actions = useLibraryActions()
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -517,6 +518,7 @@ const [per, setPer] = React.useState(Number(searchParams.get('per')) || 50)
       <div className="ui-scroll min-h-0 flex-1 overflow-auto pr-0.5">
         {view === 'table' ? (
           <LibraryTable
+            downloads={downloadMap}
             rows={visible}
             selected={selected}
             onToggle={toggleSelected}
@@ -531,7 +533,7 @@ const [per, setPer] = React.useState(Number(searchParams.get('per')) || 50)
             onSort={sort}
           />
         ) : (
-          <LibraryGallery rows={visible} selected={selected} onToggle={toggleSelected} onOpen={openPreview} onFav={onFav} onRate={menu.rate} onDownload={menu.download} menu={menu} />
+            <LibraryGallery rows={visible} downloads={downloadMap} selected={selected} onToggle={toggleSelected} onOpen={openPreview} onFav={onFav} onRate={menu.rate} onDownload={menu.download} menu={menu} />
         )}
       </div>
 

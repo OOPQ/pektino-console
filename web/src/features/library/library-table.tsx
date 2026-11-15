@@ -8,18 +8,19 @@ import {
   Play,
   Star,
 } from 'lucide-react'
-import type { Row } from '@/types'
-import { cn, formatCount, formatDate, rowTitle, statusOf } from '@/lib/utils'
+import type { DownloadItem, Row } from '@/types'
+import { cn, formatCount, formatDate, rowTitle } from '@/lib/utils'
 import { Checkbox } from '@/components/ui/checkbox'
 import { IconButton } from '@/components/ui/icon-button'
 import { RatingInput } from '@/components/rating-input'
-import { StatusBadge } from '@/components/status-badge'
+import { DownloadStatus } from './download-status'
 import { CoverImage } from '@/components/cover-image'
 import type { SortDir, SortKey } from './library-filters'
 import { RowContextMenu, type RowMenuActions } from './row-context-menu'
 
 type Props = {
   rows: Row[]
+  downloads: Map<string, DownloadItem>
   selected: string[]
   onToggle: (token: string) => void
   onTogglePage: (checked: boolean) => void
@@ -69,6 +70,7 @@ function SortHead({
 
 export function LibraryTable({
   rows,
+  downloads,
   selected,
   onToggle,
   onTogglePage,
@@ -124,7 +126,6 @@ export function LibraryTable({
         </thead>
         <tbody>
           {rows.map(row => {
-            const status = statusOf(row.status)
             const isSelected = selected.includes(row.token)
             return (
               <RowContextMenu key={row.token} row={row} actions={menu}>
@@ -167,7 +168,7 @@ export function LibraryTable({
                 <td className="px-2 py-1.5 text-[10px] text-[color:var(--muted)]">{formatCount(row.likes)}</td>
                 <td className="px-2 py-2.5"><RatingInput value={row.rating} onChange={value => onRate(row, value)} /></td>
                 <td className="px-2 py-2.5 text-[10px] text-[color:var(--muted)]">{formatDate(row.first_seen)}</td>
-                <td className="px-2 py-2.5"><StatusBadge status={row.status} /></td>
+<td className="px-2 py-2.5"><DownloadStatus row={row} item={downloads.get(row.token)} /></td>
 <td className="sticky right-0 border-l border-[color:var(--border)] bg-[color:var(--surface)] px-2 py-2.5 group-hover:bg-[color:color-mix(in_srgb,var(--primary)_4%,var(--surface))]">
                   <div className="flex items-center justify-end gap-0.5 opacity-70 transition-opacity group-hover:opacity-100">
                     <IconButton label="预览 / 播放" size="sm" onClick={() => onOpen(row.token, true)}>

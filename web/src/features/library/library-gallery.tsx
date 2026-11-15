@@ -1,6 +1,6 @@
 import * as React from 'react'
 import { Check, Download, Eye, Heart } from 'lucide-react'
-import type { Row } from '@/types'
+import type { DownloadItem, Row } from '@/types'
 import { cn, formatCount, formatDate, rowTitle } from '@/lib/utils'
 import { useUiStore } from '@/store/ui'
 import { Card, CardBody, CardFooter, CardMedia, CardMeta, CardTitle } from '@/components/ui/card'
@@ -8,10 +8,12 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { IconButton } from '@/components/ui/icon-button'
 import { RatingInput } from '@/components/rating-input'
 import { CoverImage } from '@/components/cover-image'
+import { DownloadStatus } from './download-status'
 import { RowContextMenu, type RowMenuActions } from './row-context-menu'
 
 type Props = {
   rows: Row[]
+  downloads: Map<string, DownloadItem>
   selected: string[]
   onToggle: (token: string) => void
   onOpen: (token: string, autoplay?: boolean) => void
@@ -21,7 +23,7 @@ type Props = {
   menu: RowMenuActions
 }
 
-export function LibraryGallery({ rows, selected, onToggle, onOpen, onFav, onRate, onDownload, menu }: Props) {
+export function LibraryGallery({ rows, downloads, selected, onToggle, onOpen, onFav, onRate, onDownload, menu }: Props) {
   const density = useUiStore(s => s.density)
   const multi = useUiStore(s => s.multi)
   const minWidth = density === 'large' ? 220 : density === 'compact' ? 150 : 182
@@ -33,6 +35,7 @@ export function LibraryGallery({ rows, selected, onToggle, onOpen, onFav, onRate
     >
       {rows.map(row => {
         const isSelected = selected.includes(row.token)
+        const dl = downloads.get(row.token)
         return (
           <RowContextMenu key={row.token} row={row} actions={menu}>
             <Card
@@ -56,6 +59,9 @@ export function LibraryGallery({ rows, selected, onToggle, onOpen, onFav, onRate
                   </div>
                 ) : null}
 
+                {row.status === 'new' && dl ? (
+                  <span className="absolute right-2 top-2 z-10"><DownloadStatus row={row} item={dl} /></span>
+                ) : null}
                 <span className="absolute bottom-2 left-2 z-10 rounded-md border border-white/15 bg-black/55 px-2 py-0.5 text-[12px] font-semibold text-white/90 backdrop-blur">
                   {row.duration || '—'}
                 </span>

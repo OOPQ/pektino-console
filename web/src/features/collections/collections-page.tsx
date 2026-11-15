@@ -22,7 +22,7 @@ import { confirmAction } from '@/store/confirm'
 import { useUiStore } from '@/store/ui'
 import { post } from '@/lib/api'
 import { cn, formatCount, formatDate, rowTitle } from '@/lib/utils'
-import type { Row } from '@/types'
+import type { DownloadItem, Row } from '@/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
@@ -63,6 +63,7 @@ export function CollectionsPage() {
   const navigate = useNavigate()
   const actions = useLibraryActions()
   const { data: state } = useAppState()
+  const downloadMap = React.useMemo(() => new Map<string, DownloadItem>((state?.download?.items || []).map(item => [item.token, item])), [state?.download?.items])
   const [selectedId, setSelectedId] = React.useState<number | null>(null)
   const [query, setQuery] = React.useState('')
   const [status, setStatus] = React.useState('all')
@@ -334,6 +335,7 @@ export function CollectionsPage() {
       ) : (
         <>
         <LibraryGallery
+          downloads={downloadMap}
           rows={rows}
           selected={selected}
           onToggle={token => setSelected(s => s.includes(token) ? s.filter(t => t !== token) : [...s, token])}

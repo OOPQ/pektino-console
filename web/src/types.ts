@@ -1,3 +1,14 @@
+export type DownloadItem = {
+  token: string
+  state: string
+  bytes: number
+  expected?: number
+  speed?: number
+  error?: string
+  history?: boolean
+  addedAt?: string
+}
+
 export type Row = {
   token: string
   status: string
@@ -134,16 +145,7 @@ export type AppState = {
     pid?: number
     active?: string[]
     errors?: Array<{ token?: string; error?: string }>
-    items?: Array<{
-      token: string
-      state: string
-      bytes: number
-      expected?: number
-      speed?: number
-      error?: string
-      history?: boolean
-      addedAt?: string
-    }>
+    items?: DownloadItem[]
   }
   job?: Job
   log?: unknown

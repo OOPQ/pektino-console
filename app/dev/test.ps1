@@ -94,22 +94,26 @@ try {
         if ($r.Content -notmatch 'pektino') { throw '页面内容不包含 pektino' }
         "200 text/html ($([math]::Round($r.RawContentLength/1KB,1))KB)"
     }
-    Test-Item 'GET /static/js/main.js' {
-        $r = Invoke-WebRequest "$base/static/js/main.js" -UseBasicParsing -TimeoutSec 10
+    $script:appIndex = Invoke-WebRequest "$base/" -UseBasicParsing -TimeoutSec 10
+    Test-Item 'GET /assets/*.js' {
+        $m = [regex]::Match($script:appIndex.Content, 'src="([^"]+\.js)"')
+        if (-not $m.Success) { throw '首页没有 JS 资源' }
+        $r = Invoke-WebRequest ($base + $m.Groups[1].Value) -UseBasicParsing -TimeoutSec 10
         if ($r.StatusCode -ne 200) { throw "状态码 $($r.StatusCode)" }
-        if ($r.Content -notmatch 'import') { throw '不是 ES module' }
-        "200 application/javascript"
+        "200 application/javascript ($([math]::Round($r.RawContentLength/1KB,1))KB)"
     }
-    Test-Item 'GET /static/app.css' {
-        $r = Invoke-WebRequest "$base/static/app.css" -UseBasicParsing -TimeoutSec 10
+    Test-Item 'GET /assets/*.css' {
+        $m = [regex]::Match($script:appIndex.Content, 'href="([^"]+\.css)"')
+        if (-not $m.Success) { throw '首页没有 CSS 资源' }
+        $r = Invoke-WebRequest ($base + $m.Groups[1].Value) -UseBasicParsing -TimeoutSec 10
         if ($r.StatusCode -ne 200) { throw "状态码 $($r.StatusCode)" }
-        "200 text/css"
+        "200 text/css ($([math]::Round($r.RawContentLength/1KB,1))KB)"
     }
     Test-Item '静态资源路径穿越被拒' {
         # 必须用 --path-as-is：Invoke-WebRequest 会在客户端就把 ..\ 规范化掉，等于没测到服务端
         $curl = (Get-Command curl.exe -ErrorAction SilentlyContinue).Source
         if (-not $curl) { $curl = 'C:\Windows\System32\curl.exe' }
-        $code = (& $curl -s -o NUL -w '%{http_code}' --path-as-is "$base/static/js/../../../../windows/win.ini" 2>$null)
+        $code = (& $curl -s -o NUL -w '%{http_code}' --path-as-is "$base/assets/../../../../windows/win.ini" 2>$null)
         $code = ([string]$code).Trim()
         if ($code -ne '404') { throw "期望 404，实际 $code" }
         "已拒绝 (404)"
@@ -194,7 +198,7 @@ try {
     }
     Test-Item 'POST /api/delete 台账外 token → ok=false' {
         $r = Invoke-RestMethod "$base/api/delete" -Method Post -ContentType 'application/json' `
-            -Body (@{ tokens = @('__nope__') } | ConvertTo-Json) -TimeoutSec 10
+            -Body (@{ tokens = @('__nope__'); purge = $true } | ConvertTo-Json) -TimeoutSec 10
         if ($r.ok -ne $false) { throw '应当返回 ok=false' }
         "ok=false error=$($r.error)"
     }

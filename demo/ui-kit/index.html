@@ -1,0 +1,399 @@
+<!doctype html>
+<html lang="zh-CN" class="wa-dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>UI Kit · 控制台设计规范</title>
+  <script>
+    document.documentElement.classList.add('kit-booting');
+    try {
+      const t = localStorage.getItem('kit-theme');
+      if (t === 'wa-light') { document.documentElement.classList.remove('wa-dark'); document.documentElement.classList.add('wa-light'); }
+    } catch (e) {}
+  </script>
+  <link rel="stylesheet" href="/app/web/vendor/webawesome/styles/layers.css">
+  <link rel="stylesheet" href="/app/web/vendor/webawesome/styles/themes/default.css">
+  <link rel="stylesheet" href="ui-kit.css">
+  <script type="module" src="/app/web/vendor/webawesome/webawesome.loader.js"></script>
+</head>
+<body>
+  <div class="kit-shell">
+    <aside class="kit-rail">
+      <a class="kit-brand" href="#top">
+        <span class="kit-mark">p</span>
+        <span><b>pektino</b><small>ui contract · v1</small></span>
+      </a>
+      <nav class="kit-nav" aria-label="规范目录">
+        <a href="#tokens">01 基础</a>
+        <a href="#buttons">02 按钮</a>
+        <a href="#forms">03 表单</a>
+        <a href="#cards">04 卡片</a>
+        <a href="#table">05 表格</a>
+        <a href="#icons">06 图标</a>
+        <a href="#media">07 媒体</a>
+        <a href="#overlays">08 浮层</a>
+        <a href="#states">09 状态</a>
+      </nav>
+      <div class="kit-rail-foot">
+        <span class="kit-label">主题</span>
+        <wa-switch id="themeSwitch" checked><span id="themeLabel">暗色</span></wa-switch>
+        <a class="kit-back" href="http://127.0.0.1:8791/" target="_blank" rel="noreferrer">打开控制台 ↗</a>
+      </div>
+    </aside>
+
+    <main class="kit-main" id="top">
+      <header class="kit-head">
+        <div>
+          <div class="kit-kicker">UI CONTRACT / 2026-11-15</div>
+          <h1>控制台设计规范</h1>
+          <p>demo 的暗色质感 + 当前控制台的信息密度。先看这一页，确认后再逐屏迁移。</p>
+        </div>
+        <div class="kit-head-tags">
+          <span class="ui-tag">无构建</span>
+          <span class="ui-tag">Web Awesome</span>
+          <span class="ui-tag">Lucide</span>
+          <span class="ui-tag is-on">暗色 / 亮色</span>
+        </div>
+      </header>
+
+      <section class="kit-section" id="tokens">
+        <div class="kit-section-head">
+          <h2><span>01</span>基础</h2>
+          <p>所有页面只从这里取色、圆角、间距和字号。</p>
+        </div>
+        <div class="kit-grid two">
+          <div class="kit-panel">
+            <div class="kit-label">颜色</div>
+            <div class="kit-swatches">
+              <div class="ui-swatch"><i style="--c:var(--ui-bg)"></i><b>bg</b><small>#080c11</small></div>
+              <div class="ui-swatch"><i style="--c:var(--ui-panel)"></i><b>panel</b><small>#101820</small></div>
+              <div class="ui-swatch"><i style="--c:var(--ui-panel-2)"></i><b>panel-2</b><small>#0c131a</small></div>
+              <div class="ui-swatch"><i style="--c:var(--ui-line)"></i><b>line</b><small>#22303d</small></div>
+              <div class="ui-swatch"><i style="--c:var(--ui-accent)"></i><b>accent</b><small>#5b9cff</small></div>
+              <div class="ui-swatch"><i style="--c:var(--ui-good)"></i><b>good</b><small>#3fb950</small></div>
+              <div class="ui-swatch"><i style="--c:var(--ui-warn)"></i><b>warn</b><small>#e3b341</small></div>
+              <div class="ui-swatch"><i style="--c:var(--ui-bad)"></i><b>bad</b><small>#ff7b72</small></div>
+            </div>
+          </div>
+          <div class="kit-panel">
+            <div class="kit-label">字号 / 圆角 / 控件高度</div>
+            <div class="kit-type"><span style="font-size:28px">28</span><span style="font-size:18px">18</span><span style="font-size:14px">14</span><span style="font-size:13px">13 正文</span><span style="font-size:12px">12</span><span style="font-size:11px">11 辅助</span></div>
+            <div class="kit-rules">
+              <span class="ui-radius-chip">控件 9</span>
+              <span class="ui-radius-chip is-card">卡片 14</span>
+              <span class="ui-radius-chip is-modal">浮层 18</span>
+              <span class="ui-radius-chip">控件高 34</span>
+              <span class="ui-radius-chip">紧凑 28</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="kit-section" id="buttons">
+        <div class="kit-section-head">
+          <h2><span>02</span>按钮</h2>
+          <p>语义固定：brand 主操作、outlined 次操作、plain 弱操作、danger 破坏性。图标按钮必须有容器和 tooltip。</p>
+        </div>
+        <div class="kit-grid two">
+          <div class="kit-panel">
+            <div class="kit-label">文字按钮</div>
+            <div class="kit-row">
+              <wa-button size="small" variant="brand">主操作</wa-button>
+              <wa-button size="small" appearance="outlined">次操作</wa-button>
+              <wa-button size="small" appearance="plain">弱操作</wa-button>
+              <wa-button size="small" variant="danger">删除</wa-button>
+              <wa-button size="small" variant="brand" disabled>禁用</wa-button>
+            </div>
+            <div class="kit-table-note">高度 34；表格/队列里用 28 紧凑版；同一屏最多一个 brand。</div>
+          </div>
+          <div class="kit-panel">
+            <div class="kit-label">图标按钮</div>
+            <div class="kit-row">
+              <button class="ui-icon-btn" data-tip="播放" aria-label="播放"><svg class="ui-icon"><use href="/app/web/vendor/lucide/icons.svg#icon-play"></use></svg></button>
+              <button class="ui-icon-btn" data-tip="下载" aria-label="下载"><svg class="ui-icon"><use href="/app/web/vendor/lucide/icons.svg#icon-download"></use></svg></button>
+              <button class="ui-icon-btn" data-tip="复制链接" aria-label="复制链接"><svg class="ui-icon"><use href="/app/web/vendor/lucide/icons.svg#icon-copy"></use></svg></button>
+              <button class="ui-icon-btn" data-tip="定位文件" aria-label="定位文件"><svg class="ui-icon"><use href="/app/web/vendor/lucide/icons.svg#icon-folder-open"></use></svg></button>
+              <button class="ui-icon-btn is-danger" data-tip="删除" aria-label="删除"><svg class="ui-icon"><use href="/app/web/vendor/lucide/icons.svg#icon-trash-2"></use></svg></button>
+            </div>
+            <div class="kit-table-note">34×34 点击区、边框、hover/focus、tooltip、aria-label，缺一不可。</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="kit-section" id="forms">
+        <div class="kit-section-head">
+          <h2><span>03</span>表单</h2>
+          <p>只用 Web Awesome 表单控件，不再出现原生 input/select/checkbox。</p>
+        </div>
+        <div class="kit-panel">
+          <div class="kit-form-grid">
+            <wa-input label="搜索" placeholder="token / 标题 / 来源" size="small">
+              <svg slot="start" class="ui-icon" aria-hidden="true"><use href="/app/web/vendor/lucide/icons.svg#icon-search"></use></svg>
+            </wa-input>
+            <wa-select label="状态" size="small" value="all">
+              <wa-option value="all">全部状态</wa-option>
+              <wa-option value="new">待下载</wa-option>
+              <wa-option value="done">已完成</wa-option>
+            </wa-select>
+            <wa-select label="来源" size="small" value="all">
+              <wa-option value="all">全部来源</wa-option>
+              <wa-option value="local">本地</wa-option>
+            </wa-select>
+            <wa-input label="最短时长（分钟）" type="number" value="10" size="small"></wa-input>
+          </div>
+          <div class="kit-row is-wrap">
+            <wa-checkbox checked>封面</wa-checkbox>
+            <wa-checkbox>紧凑</wa-checkbox>
+            <wa-checkbox disabled>高清（需登录）</wa-checkbox>
+          </div>
+        </div>
+      </section>
+
+      <section class="kit-section" id="cards">
+        <div class="kit-section-head">
+          <h2><span>04</span>卡片</h2>
+          <p>只有一个 Card：画廊/合集用竖卡，队列用横卡变体；媒体比例固定，图片只裁切不拉伸。</p>
+        </div>
+        <div class="kit-grid cards">
+          <article class="ui-card">
+            <div class="ui-card-media is-portrait">
+              <div class="ui-media-ph is-a"></div>
+              <span class="ui-badge-float">已完成</span>
+              <button class="ui-card-play" data-tip="播放" aria-label="播放"><svg class="ui-icon"><use href="/app/web/vendor/lucide/icons.svg#icon-play"></use></svg></button>
+            </div>
+            <div class="ui-card-body">
+              <div class="ui-card-title">示例条目 · 画廊卡</div>
+              <div class="ui-card-meta">19:29 · 1920×1080 · 13 次播放</div>
+              <div class="ui-card-tags"><span class="ui-tag">4K</span><span class="ui-tag">已收藏</span></div>
+            </div>
+            <div class="ui-card-foot">
+              <span class="ui-stars" aria-label="评分 4">★★★★☆</span>
+              <span class="ui-card-actions">
+                <button class="ui-icon-btn is-small" data-tip="播放" aria-label="播放"><svg class="ui-icon"><use href="/app/web/vendor/lucide/icons.svg#icon-play"></use></svg></button>
+                <button class="ui-icon-btn is-small" data-tip="定位" aria-label="定位"><svg class="ui-icon"><use href="/app/web/vendor/lucide/icons.svg#icon-folder-open"></use></svg></button>
+                <button class="ui-icon-btn is-small" data-tip="更多" aria-label="更多"><svg class="ui-icon"><use href="/app/web/vendor/lucide/icons.svg#icon-ellipsis"></use></svg></button>
+              </span>
+            </div>
+          </article>
+
+          <article class="ui-card">
+            <div class="ui-card-media is-portrait">
+              <div class="ui-media-ph is-b"></div>
+              <span class="ui-badge-float is-brand">合集</span>
+            </div>
+            <div class="ui-card-body">
+              <div class="ui-card-title">示例合集 · 合集卡</div>
+              <div class="ui-card-meta">12 条 · 最近更新 2 小时前</div>
+              <div class="ui-card-tags"><span class="ui-tag is-dot" style="--dot:#f59e0b">学习资料</span><span class="ui-tag">公开</span></div>
+            </div>
+            <div class="ui-card-foot">
+              <span class="ui-card-meta">86% 已下载</span>
+              <span class="ui-card-actions">
+                <button class="ui-icon-btn is-small" data-tip="查看" aria-label="查看"><svg class="ui-icon"><use href="/app/web/vendor/lucide/icons.svg#icon-eye"></use></svg></button>
+                <button class="ui-icon-btn is-small" data-tip="编辑" aria-label="编辑"><svg class="ui-icon"><use href="/app/web/vendor/lucide/icons.svg#icon-pencil"></use></svg></button>
+              </span>
+            </div>
+          </article>
+
+          <article class="ui-card is-row">
+            <div class="ui-card-media is-thumb">
+              <div class="ui-media-ph is-c"></div>
+            </div>
+            <div class="ui-card-body">
+              <div class="ui-card-title">示例条目 · 队列卡</div>
+              <div class="ui-card-meta">2.4 / 5.4 GB · 2.1 MB/s</div>
+              <wa-progress-bar value="44"></wa-progress-bar>
+            </div>
+            <div class="ui-card-side">
+              <span class="ui-badge is-live">下载中</span>
+              <button class="ui-icon-btn is-small" data-tip="暂停" aria-label="暂停"><svg class="ui-icon"><use href="/app/web/vendor/lucide/icons.svg#icon-pause"></use></svg></button>
+              <button class="ui-icon-btn is-small is-danger" data-tip="取消" aria-label="取消"><svg class="ui-icon"><use href="/app/web/vendor/lucide/icons.svg#icon-x"></use></svg></button>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="kit-section" id="table">
+        <div class="kit-section-head">
+          <h2><span>05</span>表格</h2>
+          <p>控制台主视图保持表格密度；封面 40×54 固定裁切，行高 58，操作统一图标按钮。</p>
+        </div>
+        <div class="kit-panel is-flush">
+          <div class="ui-table-wrap">
+            <table class="ui-table">
+              <thead><tr>
+                <th style="width:34px"><wa-checkbox aria-label="全选"></wa-checkbox></th>
+                <th style="width:54px">封面</th>
+                <th>标题</th><th style="width:80px">时长</th><th style="width:110px">分辨率</th>
+                <th style="width:80px">状态</th><th style="width:142px">操作</th>
+              </tr></thead>
+              <tbody>
+                <tr>
+                  <td><wa-checkbox checked aria-label="选择"></wa-checkbox></td>
+                  <td><div class="ui-thumb"><div class="ui-media-ph is-a"></div></div></td>
+                  <td><b class="ui-mono">Hqk5l0jvDcK3kyY</b><div class="ui-sub">2026-11-15 16:12</div></td>
+                  <td>24:29</td><td>1920×1080</td><td><span class="ui-badge is-ok">已完成</span></td>
+                  <td><span class="ui-row-actions">
+                    <button class="ui-icon-btn is-small" data-tip="播放" aria-label="播放"><svg class="ui-icon"><use href="/app/web/vendor/lucide/icons.svg#icon-play"></use></svg></button>
+                    <button class="ui-icon-btn is-small" data-tip="定位" aria-label="定位"><svg class="ui-icon"><use href="/app/web/vendor/lucide/icons.svg#icon-folder-open"></use></svg></button>
+                    <button class="ui-icon-btn is-small" data-tip="复制" aria-label="复制"><svg class="ui-icon"><use href="/app/web/vendor/lucide/icons.svg#icon-copy"></use></svg></button>
+                  </span></td>
+                </tr>
+                <tr>
+                  <td><wa-checkbox aria-label="选择"></wa-checkbox></td>
+                  <td><div class="ui-thumb"><div class="ui-media-ph is-b"></div></div></td>
+                  <td><b class="ui-mono">pKgz0xHPLaeHN0M</b><div class="ui-sub">2026-11-15 15:48</div></td>
+                  <td>08:33</td><td>1280×720</td><td><span class="ui-badge is-new">待下载</span></td>
+                  <td><span class="ui-row-actions">
+                    <button class="ui-icon-btn is-small" data-tip="下载" aria-label="下载"><svg class="ui-icon"><use href="/app/web/vendor/lucide/icons.svg#icon-download"></use></svg></button>
+                    <button class="ui-icon-btn is-small" data-tip="复制" aria-label="复制"><svg class="ui-icon"><use href="/app/web/vendor/lucide/icons.svg#icon-copy"></use></svg></button>
+                  </span></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section class="kit-section" id="icons">
+        <div class="kit-section-head">
+          <h2><span>06</span>图标</h2>
+          <p>Lucide 线性图标，本地 sprite；按钮里 17px，表格里 15px，不用 emoji。</p>
+        </div>
+        <div class="kit-panel">
+          <div class="kit-icon-grid" id="iconGrid"></div>
+        </div>
+      </section>
+
+      <section class="kit-section" id="media">
+        <div class="kit-section-head">
+          <h2><span>07</span>媒体</h2>
+          <p>卡片封面 `cover` 裁切；预览 `contain` 留边。任何图/视频都不能被固定宽高拉伸。</p>
+        </div>
+        <div class="kit-grid two">
+          <div class="kit-panel">
+            <div class="kit-label">封面 · object-fit: cover</div>
+            <div class="ui-media-demo is-cover"><img src="media.svg" alt="4:3 示例封面"><span>16:9 框内裁切，不拉伸</span></div>
+          </div>
+          <div class="kit-panel">
+            <div class="kit-label">预览 · object-fit: contain</div>
+            <div class="ui-media-demo is-contain"><img src="media.svg" alt="4:3 示例预览"><span>完整显示，左右留边</span></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="kit-section" id="overlays">
+        <div class="kit-section-head">
+          <h2><span>08</span>浮层</h2>
+          <p>全部 `wa-dialog` / `wa-drawer`；点击空白关闭、Esc 关闭；底部动作固定。</p>
+        </div>
+        <div class="kit-panel">
+          <div class="kit-row">
+            <wa-button size="small" variant="brand" id="openPreview">打开预览弹窗</wa-button>
+            <wa-button size="small" appearance="outlined" id="openQueue">打开队列抽屉</wa-button>
+            <span class="kit-table-note">点击遮罩空白处应关闭；按 Esc 也应关闭。</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="kit-section" id="states">
+        <div class="kit-section-head">
+          <h2><span>09</span>状态</h2>
+          <p>空态、标签、进度、错误提示使用同一套组件。</p>
+        </div>
+        <div class="kit-grid two">
+          <div class="kit-panel">
+            <div class="ui-empty">
+              <svg class="ui-icon"><use href="/app/web/vendor/lucide/icons.svg#icon-file-video"></use></svg>
+              <b>还没有条目</b>
+              <span>获取数据或导入本地视频后会出现在这里。</span>
+              <wa-button size="small" variant="brand">获取数据</wa-button>
+            </div>
+          </div>
+          <div class="kit-panel">
+            <div class="kit-row is-wrap"><span class="ui-badge is-ok">已完成</span><span class="ui-badge is-new">待下载</span><span class="ui-badge is-live">下载中</span><span class="ui-badge is-bad">失败</span><span class="ui-badge">已取消</span></div>
+            <div class="kit-progress-row"><span>队列进度</span><wa-progress-bar value="68"></wa-progress-bar><b>68%</b></div>
+            <div class="ui-alert"><svg class="ui-icon"><use href="/app/web/vendor/lucide/icons.svg#icon-triangle-alert"></use></svg><span>下载失败：连接超时。可以重试或取消这一条。</span></div>
+          </div>
+        </div>
+      </section>
+
+      <footer class="kit-foot">
+        <span>确认这一页后，从「预览 / 抽卡」开始逐屏迁移；每屏你手动验收通过再继续。</span>
+        <a href="#top">回到顶部 ↑</a>
+      </footer>
+    </main>
+  </div>
+
+  <wa-dialog id="kitPreview" class="kit-preview" label="预览详情" light-dismiss>
+    <div class="kit-preview-body">
+      <div class="kit-preview-stage">
+        <img class="kit-preview-media" src="media.svg" alt="4:3 示例预览">
+        <button class="ui-icon-btn is-large is-overlay" data-tip="播放" aria-label="播放"><svg class="ui-icon"><use href="/app/web/vendor/lucide/icons.svg#icon-play"></use></svg></button>
+        <div class="kit-preview-nav">
+          <button class="ui-icon-btn" data-tip="上一项" aria-label="上一项"><svg class="ui-icon"><use href="/app/web/vendor/lucide/icons.svg#icon-chevron-left"></use></svg></button>
+          <button class="ui-icon-btn" data-tip="下一项" aria-label="下一项"><svg class="ui-icon"><use href="/app/web/vendor/lucide/icons.svg#icon-chevron-right"></use></svg></button>
+        </div>
+      </div>
+      <aside class="kit-preview-info">
+        <div class="kit-kicker">ITEM / 1 OF 1209</div>
+        <h3 class="ui-mono">Hqk5l0jvDcK3kyY</h3>
+        <div class="kit-preview-duration">24:29 <span>1920×1080</span></div>
+        <div class="kit-preview-stats">
+          <div><small>站点观看</small><b>20,943</b></div>
+          <div><small>点赞</small><b>321</b></div>
+          <div><small>状态</small><span class="ui-badge is-ok">已完成</span></div>
+          <div><small>评分</small><span class="ui-stars">★★★★☆</span></div>
+        </div>
+        <div class="kit-preview-file">
+          <wa-button size="small" appearance="outlined">定位文件</wa-button>
+          <wa-button size="small" appearance="plain">复制链接</wa-button>
+        </div>
+      </aside>
+    </div>
+    <div slot="footer" class="kit-preview-foot">
+      <span class="kit-table-note">空格播放 / F 全屏 / M 静音 / Ctrl+←→ 切换</span>
+      <span class="kit-row">
+        <wa-button size="small" appearance="outlined">画中画</wa-button>
+        <wa-button size="small" variant="brand">下载</wa-button>
+        <wa-button size="small" appearance="plain" id="kitClosePreview">关闭</wa-button>
+      </span>
+    </div>
+  </wa-dialog>
+
+  <wa-drawer id="kitQueue" class="kit-drawer" label="下载队列" placement="end" light-dismiss>
+    <div class="kit-drawer-body">
+      <div class="kit-drawer-summary"><span>已结束 · 26/26 完成</span><span>并发 8</span></div>
+      <wa-tab-group class="kit-queue-tabs">
+        <wa-tab slot="nav" panel="active" active>进行中 <span>0</span></wa-tab>
+        <wa-tab slot="nav" panel="done">已完成 <span>26</span></wa-tab>
+        <wa-tab slot="nav" panel="failed">失败 <span>0</span></wa-tab>
+      </wa-tab-group>
+      <div class="kit-queue-list">
+        <article class="ui-card is-row">
+          <div class="ui-card-media is-thumb"><div class="ui-media-ph is-a"></div></div>
+          <div class="ui-card-body">
+            <div class="ui-card-title">示例条目 · 队列卡</div>
+            <div class="ui-card-meta">2.4 / 5.4 GB · 2.1 MB/s</div>
+            <wa-progress-bar value="44"></wa-progress-bar>
+          </div>
+          <div class="ui-card-side">
+            <span class="ui-badge is-live">下载中</span>
+            <button class="ui-icon-btn is-small" data-tip="暂停" aria-label="暂停"><svg class="ui-icon"><use href="/app/web/vendor/lucide/icons.svg#icon-pause"></use></svg></button>
+          </div>
+        </article>
+      </div>
+    </div>
+    <div slot="footer" class="kit-drawer-foot">
+      <span class="kit-table-note">失败记录不会自动清空</span>
+      <span class="kit-row">
+        <wa-button size="small" appearance="outlined">全部暂停</wa-button>
+        <wa-button size="small" appearance="plain">清理已完成</wa-button>
+        <wa-button size="small" appearance="plain" id="kitCloseQueue">关闭</wa-button>
+      </span>
+    </div>
+  </wa-drawer>
+
+  <script type="module" src="ui-kit.js"></script>
+</body>
+</html>

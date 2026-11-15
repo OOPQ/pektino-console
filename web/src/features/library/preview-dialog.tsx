@@ -11,6 +11,7 @@ import {
   ExternalLink,
   List,
   Maximize,
+  Minimize,
   Pause,
   Volume2,
   VolumeX,
@@ -60,11 +61,14 @@ export function PreviewDialog({ rows, token, autoplay = false, media, onClose, o
   const [duration, setDuration] = React.useState(0)
   const [isPlaying, setIsPlaying] = React.useState(false)
   const [isMuted, setIsMuted] = React.useState(false)
+  const [volume, setVolume] = React.useState(1)
   const [dragging, setDragging] = React.useState(false)
+  const [isFullscreen, setIsFullscreen] = React.useState(false)
   const [hoverTime, setHoverTime] = React.useState<number | null>(null)
   const [hoverPct, setHoverPct] = React.useState(0)
   const stageRef = React.useRef<HTMLDivElement>(null)
   const longPressRate = useUiStore(s => s.longPressRate)
+  const bumpCoverRev = useUiStore(s => s.bumpCoverRev)
   const videoRef = React.useRef<HTMLVideoElement>(null)
   const qc = useQueryClient()
   const snapshotsQuery = useQuery<{ items: Snapshot[] }>({
@@ -149,7 +153,7 @@ export function PreviewDialog({ rows, token, autoplay = false, media, onClose, o
       if (e.ctrlKey) return
       if (e.key === ' ') {
         e.preventDefault()
-        e.stopPropagation()
+        e.stopImmediatePropagation()
         if (e.repeat) return
         spaceAt = performance.now()
         const v = videoRef.current
@@ -164,7 +168,7 @@ export function PreviewDialog({ rows, token, autoplay = false, media, onClose, o
         const v = videoRef.current
         if (!v) return
         e.preventDefault()
-        e.stopPropagation()
+        e.stopImmediatePropagation()
         if (e.key === 'ArrowLeft') v.currentTime = Math.max(0, v.currentTime - 5)
         if (e.key === 'ArrowRight') v.currentTime = Math.min(v.duration || Infinity, v.currentTime + 5)
         if (e.key === 'ArrowUp') { v.volume = Math.min(1, v.volume + 0.05); showVolume(v) }
@@ -173,7 +177,7 @@ export function PreviewDialog({ rows, token, autoplay = false, media, onClose, o
       }
       if (/^[1-5]$/.test(e.key)) {
         e.preventDefault()
-        e.stopPropagation()
+        e.stopImmediatePropagation()
         const value = Number(e.key)
         void post<{ ok: boolean; error?: string }>('/api/rate', { tokens: [token], value }).then(r => {
           if (r.ok) { toast.success(`已评分 ${value} 星`); qc.invalidateQueries({ queryKey: ['state'] }) }
@@ -183,7 +187,7 @@ export function PreviewDialog({ rows, token, autoplay = false, media, onClose, o
       }
       if (e.key === '0') {
         e.preventDefault()
-        e.stopPropagation()
+        e.stopImmediatePropagation()
         void post<{ ok: boolean; error?: string }>('/api/rate', { tokens: [token], value: 0 }).then(r => {
           if (r.ok) { toast.success('已清除评分'); qc.invalidateQueries({ queryKey: ['state'] }) }
           else toast.error(r.error || '评分失败')
@@ -193,12 +197,12 @@ export function PreviewDialog({ rows, token, autoplay = false, media, onClose, o
       const v = videoRef.current
       if (!v) return
       if (e.key === 'm' || e.key === 'M') { v.muted = !v.muted; showVolume(v) }
-      if (e.key === 'f' || e.key === 'F') { requestStageFullscreen(); }
+      if (e.key === 'f' || e.key === 'F') { e.preventDefault(); e.stopImmediatePropagation(); toggleStageFullscreen(); }
     }
     const onKeyUp = (e: KeyboardEvent) => {
       if (e.key !== ' ') return
       e.preventDefault()
-        e.stopPropagation()
+        e.stopImmediatePropagation()
       const v = videoRef.current
       if (!v) return
       const held = performance.now() - spaceAt
@@ -218,6 +222,12 @@ export function PreviewDialog({ rows, token, autoplay = false, media, onClose, o
       window.clearTimeout(hintTimer)
     }
   }, [token, canPlay, qc, longPressRate])
+
+  React.useEffect(() => {
+    const onChange = () => setIsFullscreen(Boolean(document.fullscreenElement))
+    document.addEventListener('fullscreenchange', onChange)
+    return () => document.removeEventListener('fullscreenchange', onChange)
+  }, [])
 
   if (!row) return null
 
@@ -241,6 +251,7 @@ export function PreviewDialog({ rows, token, autoplay = false, media, onClose, o
       if (!r.ok) throw new Error(r.error || '快照失败')
       toast.success(`快照已保存${r.time != null ? ` · ${formatTime(r.time)}` : ''}`)
       qc.invalidateQueries({ queryKey: ['snapshots', row.token] })
+      bumpCoverRev()
     } catch (e) {
       toast.error((e as Error).message)
     } finally {
@@ -255,6 +266,20 @@ export function PreviewDialog({ rows, token, autoplay = false, media, onClose, o
       if (!r.ok) throw new Error(r.error || '删除失败')
       toast.success('快照已删除')
       qc.invalidateQueries({ queryKey: ['snapshots', row.token] })
+      bumpCoverRev()
+    } catch (e) {
+      toast.error((e as Error).message)
+    }
+  }
+
+  const setSnapshotCover = async (name: string) => {
+    try {
+      const r = await post<{ ok: boolean; error?: string }>('/api/snapshot/cover', { token: row.token, name })
+      if (!r.ok) throw new Error(r.error || '设置封面失败')
+      toast.success(name ? '已设为封面' : '已恢复默认封面')
+      qc.invalidateQueries({ queryKey: ['snapshots', row.token] })
+      bumpCoverRev()
+      bumpCoverRev()
     } catch (e) {
       toast.error((e as Error).message)
     }
@@ -329,8 +354,17 @@ export function PreviewDialog({ rows, token, autoplay = false, media, onClose, o
 
   const timeFromPointer = (clientX: number, el: HTMLElement) => {
     const rect = el.getBoundingClientRect()
-    const pct = Math.max(0, Math.min(1, (clientX - rect.left) / Math.max(1, rect.width)))
-    return { pct, time: pct * totalDuration }
+    let pct = Math.max(0, Math.min(1, (clientX - rect.left) / Math.max(1, rect.width)))
+    let time = pct * totalDuration
+    if (snapshots.length && totalDuration > 0) {
+      const threshold = Math.max(0.7, totalDuration * 0.006)
+      const nearest = snapshots.reduce((best, s) => Math.abs(s.time - time) < Math.abs(best.time - time) ? s : best, snapshots[0])
+      if (Math.abs(nearest.time - time) <= threshold) {
+        time = nearest.time
+        pct = time / totalDuration
+      }
+    }
+    return { pct, time }
   }
 
   const seekFromPointer = (clientX: number, el: HTMLElement) => {
@@ -340,13 +374,18 @@ export function PreviewDialog({ rows, token, autoplay = false, media, onClose, o
     seekTo(time)
   }
 
-  const requestStageFullscreen = () => {
+  const toggleStageFullscreen = () => {
     const el = stageRef.current as (HTMLDivElement & { webkitRequestFullscreen?: () => Promise<void> }) | null
     if (!el) return
+    if (document.fullscreenElement) {
+      void document.exitFullscreen?.().catch(() => {})
+      return
+    }
     const request = el.requestFullscreen || el.webkitRequestFullscreen
     if (!request) return
     void Promise.resolve(request.call(el)).catch(() => {})
   }
+
 
   return (
     <>
@@ -404,7 +443,7 @@ export function PreviewDialog({ rows, token, autoplay = false, media, onClose, o
               onPlaying={() => { setVideoReady(true); setIsPlaying(true) }}
               onPause={() => setIsPlaying(false)}
               onPlay={() => setIsPlaying(true)}
-              onVolumeChange={e => setIsMuted(e.currentTarget.muted)}
+              onVolumeChange={e => { setIsMuted(e.currentTarget.muted); setVolume(e.currentTarget.volume) }}
               onCanPlay={() => setVideoReady(true)}
               onError={() => { setVideoError(true); setPlaying(false); setIsPlaying(false) }}
               className={cn(
@@ -449,8 +488,18 @@ export function PreviewDialog({ rows, token, autoplay = false, media, onClose, o
                   <IconButton label={isMuted ? '取消静音' : '静音'} size="sm" onClick={() => { const v = videoRef.current; if (!v) return; v.muted = !v.muted; setIsMuted(v.muted) }}>
                     {isMuted ? <VolumeX className="size-3.5" /> : <Volume2 className="size-3.5" />}
                   </IconButton>
-                  <IconButton label="全屏" size="sm" onClick={requestStageFullscreen}>
-                    <Maximize className="size-3.5" />
+                  <input
+                    type="range"
+                    min={0}
+                    max={1}
+                    step={0.01}
+                    value={isMuted ? 0 : volume}
+                    aria-label="音量"
+                    onChange={e => { const v = videoRef.current; const next = Number(e.target.value); setVolume(next); setIsMuted(next === 0); if (v) { v.volume = next; v.muted = next === 0 } }}
+                    className="h-1 w-16 cursor-pointer accent-[color:var(--primary)]"
+                  />
+                  <IconButton label={isFullscreen ? '退出全屏' : '全屏'} size="sm" onClick={toggleStageFullscreen}>
+                    {isFullscreen ? <Minimize className="size-3.5" /> : <Maximize className="size-3.5" />}
                   </IconButton>
                 </div>
               </div>
@@ -570,7 +619,7 @@ export function PreviewDialog({ rows, token, autoplay = false, media, onClose, o
             <Button
               size="sm"
               variant="outline"
-              className={cn(row.fav === '1' && 'border-[color:color-mix(in_srgb,var(--warning)_40%,var(--border))] text-[color:var(--warning)]')}
+              className={cn(row.fav === '1' && 'border-[color:color-mix(in_srgb,var(--danger)_40%,var(--border))] text-[color:var(--danger)]')}
               onClick={() => onFav(row)}
             >
               <Star className={cn('size-3.5', row.fav === '1' && 'fill-current')} />
@@ -597,6 +646,7 @@ export function PreviewDialog({ rows, token, autoplay = false, media, onClose, o
       snapshots={snapshots}
       onSeek={time => { setSeek(time); setPlaying(true); setTimelineOpen(false) }}
       onDelete={deleteSnapshot}
+      onCover={setSnapshotCover}
     />
     {createPortal(
       <div className="pointer-events-none fixed inset-y-0 left-2 right-2 z-[75] flex items-center justify-between">
@@ -619,45 +669,67 @@ function TimelineDialog({
   snapshots,
   onSeek,
   onDelete,
+  onCover,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   snapshots: Snapshot[]
   onSeek: (time: number) => void
   onDelete: (name: string) => void
+  onCover: (name: string) => void
 }) {
+  const ordered = React.useMemo(() => [...snapshots].sort((a, b) => a.time - b.time), [snapshots])
+  const hasCover = ordered.some(s => s.isCover)
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         title="播放时间轴"
-        description={`${snapshots.length} 个进度快照`}
-        className="w-[min(620px,calc(100vw-40px))]"
+        description={`${snapshots.length} 个进度快照 · 按时间串联`}
+        className="w-[min(700px,calc(100vw-40px))]"
         footer={
           <div className="flex w-full items-center justify-between gap-2">
-            <span className="text-[9.5px] text-[color:var(--subtle)]">快照保存在项目 data/snapshots</span>
+            <Button size="sm" variant="outline" onClick={() => onCover('')} disabled={!hasCover}>恢复默认封面</Button>
+            <span className="hidden text-[9.5px] text-[color:var(--subtle)] sm:inline">快照保存在项目 data/snapshots</span>
             <Button size="sm" variant="outline" onClick={() => onOpenChange(false)}>关闭</Button>
           </div>
         }
       >
-        <div className="max-h-[460px] space-y-2 overflow-auto p-4">
-          {!snapshots.length ? (
-            <div className="py-10 text-center text-[11px] text-[color:var(--subtle)]">还没有快照，播放时点「快照」记录当前进度。</div>
-          ) : snapshots.map(s => (
-            <div key={s.name} className="flex items-center gap-2.5 rounded-lg border border-[color:var(--border)] bg-[color:var(--surface-2)] p-2">
-              <img src={s.url} alt="" className="aspect-video w-[136px] shrink-0 rounded-md object-cover" loading="lazy" />
-              <div className="min-w-0 flex-1">
-                <div className="font-mono text-[14px] font-semibold text-[color:var(--foreground)]">{formatTime(s.time)}</div>
-                <div className="mt-0.5 text-[9px] text-[color:var(--subtle)]">{s.createdAt}</div>
-              </div>
-              <Button size="sm" variant="outline" onClick={() => onSeek(s.time)}>跳转</Button>
-              <Button size="sm" variant="ghost" className="text-[color:var(--danger)]" onClick={() => onDelete(s.name)}>删除</Button>
+        <div className="max-h-[500px] overflow-auto p-4">
+          {!ordered.length ? (
+            <div className="py-12 text-center text-[11px] text-[color:var(--subtle)]">还没有快照，播放时点「快照」记录当前进度。</div>
+          ) : (
+            <div className="relative pl-8">
+              <div className="absolute bottom-3 left-[11px] top-3 w-px bg-[color:var(--border-strong)]" />
+              {ordered.map((s, index) => (
+                <div key={s.name} className="relative pb-3 last:pb-0">
+                  <span className={cn('absolute -left-8 top-3 grid size-6 place-items-center rounded-full border text-[9px] font-semibold', s.isCover ? 'border-[color:var(--danger)] bg-[color:var(--danger)] text-white' : 'border-[color:var(--border-strong)] bg-[color:var(--surface)] text-[color:var(--subtle)]')}>{index + 1}</span>
+                  <div className={cn('rounded-lg border bg-[color:var(--surface-2)] p-2 transition-colors', s.isCover ? 'border-[color:color-mix(in_srgb,var(--danger)_45%,var(--border))]' : 'border-[color:var(--border)]')}>
+                    <div className="flex items-center gap-2.5">
+                      <img src={s.url} alt="" className="aspect-video w-[128px] shrink-0 rounded-md object-cover" loading="lazy" />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono text-[15px] font-semibold text-[color:var(--foreground)]">{formatTime(s.time)}</span>
+                          {s.isCover ? <span className="rounded border border-[color:color-mix(in_srgb,var(--danger)_45%,var(--border))] px-1 py-0.5 text-[8px] text-[color:var(--danger)]">当前封面</span> : null}
+                        </div>
+                        <div className="mt-0.5 text-[9px] text-[color:var(--subtle)]">{s.createdAt}</div>
+                      </div>
+                      <div className="flex shrink-0 flex-col gap-1">
+                        <Button size="sm" variant="outline" className="h-7" onClick={() => onSeek(s.time)}>跳转</Button>
+                        <Button size="sm" variant="ghost" className="h-7" onClick={() => onCover(s.isCover ? '' : s.name)}>{s.isCover ? '默认封面' : '设为封面'}</Button>
+                        <Button size="sm" variant="ghost" className="h-7 text-[color:var(--danger)]" onClick={() => onDelete(s.name)}>删除</Button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
-          ))}
+          )}
         </div>
       </DialogContent>
     </Dialog>
   )
 }
+
 function Stat({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-[9px] border border-[color:var(--border)] bg-[color:var(--surface-2)] px-2.5 py-1.5">

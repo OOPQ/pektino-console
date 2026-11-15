@@ -12,7 +12,7 @@ import type { Row } from '@/types'
 import { cn, formatCount, formatDate, rowTitle, statusOf } from '@/lib/utils'
 import { Checkbox } from '@/components/ui/checkbox'
 import { IconButton } from '@/components/ui/icon-button'
-import { Stars } from '@/components/stars'
+import { RatingInput } from '@/components/rating-input'
 import { StatusBadge } from '@/components/status-badge'
 import { CoverImage } from '@/components/cover-image'
 import type { SortDir, SortKey } from './library-filters'
@@ -25,6 +25,7 @@ type Props = {
   onTogglePage: (checked: boolean) => void
   onOpen: (token: string, autoplay?: boolean) => void
   onFav: (row: Row) => void
+  onRate: (row: Row, value: number) => void
   sortKey: SortKey
   sortDir: SortDir
   onSort: (key: SortKey) => void
@@ -73,6 +74,7 @@ export function LibraryTable({
   onTogglePage,
   onOpen,
   onFav,
+  onRate,
   sortKey,
   sortDir,
   onSort,
@@ -114,7 +116,8 @@ export function LibraryTable({
             <th className="w-[92px] px-2 py-2 text-left text-[9.5px] tracking-[.4px] text-[color:var(--subtle)]">分辨率</th>
             <SortHead label="观看" col="views" sortKey={sortKey} sortDir={sortDir} onSort={onSort} className="w-16" />
             <SortHead label="点赞" col="likes" sortKey={sortKey} sortDir={sortDir} onSort={onSort} className="w-16" />
-            <th className="w-[74px] px-2 py-2 text-left text-[9.5px] tracking-[.4px] text-[color:var(--subtle)]">评分</th>
+            <SortHead label="评分" col="rating" sortKey={sortKey} sortDir={sortDir} onSort={onSort} className="w-[86px]" />
+            <SortHead label="入库" col="first_seen" sortKey={sortKey} sortDir={sortDir} onSort={onSort} className="w-[104px]" />
             <th className="w-[72px] px-2 py-2 text-left text-[9.5px] tracking-[.4px] text-[color:var(--subtle)]">状态</th>
             <th className="w-[104px] px-2 py-2 text-right text-[9.5px] tracking-[.4px] text-[color:var(--subtle)]">操作</th>
           </tr>
@@ -132,7 +135,7 @@ export function LibraryTable({
                 )}
               >
                 {multi ? (
-                  <td className="px-2 py-1.5">
+                  <td className="px-2 py-2.5">
                     <Checkbox
                       aria-label={`选择 ${rowTitle(row)}`}
                       checked={isSelected}
@@ -140,12 +143,12 @@ export function LibraryTable({
                     />
                   </td>
                 ) : null}
-                <td className="px-2 py-1.5">
+                <td className="px-2 py-2.5">
                   <button type="button" onClick={() => onOpen(row.token, true)} className="block" aria-label="打开预览">
-                    <CoverImage token={row.token} alt={rowTitle(row)} className="h-[54px] w-10 rounded-[7px]" />
+                    <CoverImage token={row.token} alt={rowTitle(row)} className="h-[62px] w-[46px] rounded-[7px]" />
                   </button>
                 </td>
-                <td className="min-w-0 px-2 py-1.5">
+                <td className="min-w-0 px-2 py-2.5">
                   <button type="button" onClick={() => onOpen(row.token)} className="block max-w-full text-left">
                     <div className="truncate text-[11.5px] font-medium text-[color:var(--foreground)] hover:text-[color:var(--primary-2)]">
                       {row.title?.trim() || row.token}
@@ -162,9 +165,10 @@ export function LibraryTable({
                 <td className="px-2 py-1.5 text-[10px] text-[color:var(--muted)]">{row.res || '—'}</td>
                 <td className="px-2 py-1.5 text-[10px] text-[color:var(--muted)]">{formatCount(row.views)}</td>
                 <td className="px-2 py-1.5 text-[10px] text-[color:var(--muted)]">{formatCount(row.likes)}</td>
-                <td className="px-2 py-1.5"><Stars value={row.rating} /></td>
-                <td className="px-2 py-1.5"><StatusBadge status={row.status} /></td>
-                <td className="px-2 py-1.5">
+                <td className="px-2 py-2.5"><RatingInput value={row.rating} onChange={value => onRate(row, value)} /></td>
+                <td className="px-2 py-2.5 text-[10px] text-[color:var(--muted)]">{formatDate(row.first_seen)}</td>
+                <td className="px-2 py-2.5"><StatusBadge status={row.status} /></td>
+                <td className="px-2 py-2.5">
                   <div className="flex items-center justify-end gap-0.5 opacity-70 transition-opacity group-hover:opacity-100">
                     <IconButton label="预览 / 播放" size="sm" onClick={() => onOpen(row.token, true)}>
                       <Play className="size-3.5" />
@@ -172,7 +176,7 @@ export function LibraryTable({
                     <IconButton
                       label={row.fav === '1' ? '取消收藏' : '收藏'}
                       size="sm"
-                      className={row.fav === '1' ? 'text-[color:var(--warning)]' : undefined}
+                      className={row.fav === '1' ? 'text-[color:var(--danger)]' : 'text-[color:var(--muted)]'}
                       onClick={() => onFav(row)}
                     >
                       <Star className={cn('size-3.5', row.fav === '1' && 'fill-current')} />

@@ -77,6 +77,7 @@ export type AppSettings = {
 }
 
 export type Snapshot = {
+  isCover?: boolean
   name: string
   time: number
   createdAt: string

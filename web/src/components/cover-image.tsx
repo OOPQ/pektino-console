@@ -1,6 +1,7 @@
 import * as React from 'react'
 import { ImageOff } from 'lucide-react'
 import { cn, coverUrl } from '@/lib/utils'
+import { useUiStore } from '@/store/ui'
 
 type CoverImageProps = {
   token: string
@@ -21,13 +22,14 @@ export function CoverImage({
   fit = 'cover',
   eager = false,
 }: CoverImageProps) {
+  const coverRev = useUiStore(s => s.coverRev)
   const [failed, setFailed] = React.useState(false)
   const [loaded, setLoaded] = React.useState(false)
 
   React.useEffect(() => {
     setFailed(false)
     setLoaded(false)
-  }, [token, full])
+  }, [token, full, coverRev])
 
   return (
     <div className={cn('relative overflow-hidden bg-[#070b10]', className)}>
@@ -38,7 +40,7 @@ export function CoverImage({
         </div>
       ) : (
         <img
-          src={coverUrl(token, full)}
+          src={`${coverUrl(token, full)}&v=${coverRev}`}
           alt={alt}
           loading={eager ? 'eager' : 'lazy'}
           decoding="async"

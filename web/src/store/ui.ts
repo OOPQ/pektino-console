@@ -12,6 +12,7 @@ type UiState = {
   density: Density
   multi: boolean
   longPressRate: number
+  coverRev: number
   selected: string[]
   previewToken: string | null
   previewAutoplay: boolean
@@ -20,6 +21,7 @@ type UiState = {
   setTheme: (theme: Theme) => void
   setDensity: (density: Density) => void
   setLongPressRate: (rate: number) => void
+  bumpCoverRev: () => void
   setMulti: (multi: boolean) => void
   toggleSelected: (token: string) => void
   setSelected: (tokens: string[]) => void
@@ -44,6 +46,7 @@ export const useUiStore = create<UiState>()(
       density: 'large',
       multi: false,
       longPressRate: 2,
+      coverRev: 0,
       selected: [],
       previewToken: null,
       previewAutoplay: false,
@@ -55,6 +58,7 @@ export const useUiStore = create<UiState>()(
       },
       setDensity: density => set({ density }),
       setLongPressRate: longPressRate => set({ longPressRate }),
+      bumpCoverRev: () => set(s => ({ coverRev: s.coverRev + 1 })),
       setMulti: multi => set(multi ? { multi } : { multi, selected: [] }),
       toggleSelected: token => set(s => ({
         selected: s.selected.includes(token) ? s.selected.filter(t => t !== token) : [...s.selected, token],

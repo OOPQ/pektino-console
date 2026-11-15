@@ -12,6 +12,7 @@ import {
   Play,
   Star,
   Trash2,
+  X,
 } from 'lucide-react'
 import type { Row } from '@/types'
 import { cn } from '@/lib/utils'
@@ -27,6 +28,7 @@ export type RowMenuActions = {
   copy: (row: Row) => void
   reveal: (row: Row) => void
   markDone: (row: Row) => void
+  removeFromCollection?: (row: Row) => void
 }
 
 const itemClass =
@@ -57,12 +59,17 @@ export function RowContextMenu({
             <Download className="size-3.5" /> 下载
           </ContextMenuPrimitive.Item>
           <ContextMenuPrimitive.Item className={itemClass} onSelect={() => actions.fav(row)}>
-            <Heart className={cn('size-3.5', row.fav === '1' && 'fill-current text-[color:var(--warning)]')} />
+            <Heart className={cn('size-3.5', row.fav === '1' && 'fill-current text-[color:var(--danger)]')} />
             {row.fav === '1' ? '取消收藏' : '收藏'}
           </ContextMenuPrimitive.Item>
           <ContextMenuPrimitive.Item className={itemClass} onSelect={() => actions.collection(row)}>
             <ListPlus className="size-3.5" /> 加入合集
           </ContextMenuPrimitive.Item>
+          {actions.removeFromCollection ? (
+            <ContextMenuPrimitive.Item className={itemClass} onSelect={() => actions.removeFromCollection!(row)}>
+              <X className="size-3.5" /> 移除合集
+            </ContextMenuPrimitive.Item>
+          ) : null}
           <ContextMenuPrimitive.Sub>
             <ContextMenuPrimitive.SubTrigger className={itemClass}>
               <Star className="size-3.5" /> 评分

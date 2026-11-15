@@ -79,7 +79,7 @@ export function LibraryGallery({ rows, selected, onToggle, onOpen, onFav, onRate
                   <IconButton
                     label={row.fav === '1' ? '取消收藏' : '收藏'}
                     size="sm"
-                    className={cn('border-white/20 bg-black/55 text-white backdrop-blur hover:bg-black/70', row.fav === '1' && 'text-[color:var(--warning)]')}
+                    className={cn('border-white/20 bg-black/55 text-white backdrop-blur hover:bg-black/70', row.fav === '1' && 'text-[color:var(--danger)]')}
                     onClick={() => onFav(row)}
                   >
                     <Heart className={cn('size-3.5', row.fav === '1' && 'fill-current')} />

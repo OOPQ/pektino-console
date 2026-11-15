@@ -127,6 +127,31 @@ $TmpCsv = Join-Path $WS.DataDir '.scrape.csv'
 $CoverDir = $WS.Covers
 $ThumbDir = $WS.Thumbs
 $ProgressFile = Join-Path $WS.DataDir 'progress.json'
+function Get-SnapshotCoverName([string]$Token) {
+    if (-not (Test-Path -LiteralPath $CoverMapFile)) { return '' }
+    try {
+        $map = Get-Content -LiteralPath $CoverMapFile -Raw -Encoding UTF8 | ConvertFrom-Json
+        $prop = $map.PSObject.Properties[$Token]
+        if ($prop) { return [string]$prop.Value }
+    } catch { }
+    return ''
+}
+
+function Set-SnapshotCoverName([string]$Token, [string]$Name) {
+    $map = @{}
+    if (Test-Path -LiteralPath $CoverMapFile) {
+        try {
+            $old = Get-Content -LiteralPath $CoverMapFile -Raw -Encoding UTF8 | ConvertFrom-Json
+            foreach ($p in $old.PSObject.Properties) { $map[$p.Name] = [string]$p.Value }
+        } catch { }
+    }
+    if ($Name) { $map[$Token] = $Name } else { $map.Remove($Token) }
+    if ($map.Count -eq 0) {
+        Remove-Item -LiteralPath $CoverMapFile -Force -ErrorAction SilentlyContinue
+    } else {
+        [IO.File]::WriteAllText($CoverMapFile, ($map | ConvertTo-Json -Depth 3), [Text.UTF8Encoding]::new($false))
+    }
+}
 $KnownFile = Join-Path $WS.DataDir '.known.txt'
 $ClientLog = Join-Path $WS.Logs 'client.log'
 $DlScript = Join-Path $Root 'cli\download.ps1'
@@ -138,6 +163,7 @@ $DlPauseItems = Join-Path $WS.DataDir '.dl-pause-items.json'
 $DlAdd = Join-Path $WS.DataDir '.dl-add.json'
 $DeletedPath = Join-Path $WS.DataDir 'deleted.json'
 $SnapshotDir = Join-Path $WS.DataDir 'snapshots'
+$CoverMapFile = Join-Path $WS.DataDir 'cover-map.json'
 
 # ---------- 内存态 ----------
 # 配置只管代理/并发；内容目录固定在项目里（$WS.Content），不再可配置
@@ -329,6 +355,7 @@ function Handle-Request {
 
     if ($method -eq 'GET' -and $path -eq '/api/snapshots') {
         $tk = [string]$Req.Query['token']
+        $coverName = Get-SnapshotCoverName $tk
         $items = @()
         if ($tk -match '^[A-Za-z0-9_\-]+$' -and (Test-Path $SnapshotDir)) {
             $items = @(Get-ChildItem -LiteralPath $SnapshotDir -File -Filter ($tk + '_*.jpg') -ErrorAction SilentlyContinue |
@@ -341,6 +368,7 @@ function Handle-Request {
                             name = $_.Name
                             time = [double]$m.Groups['time'].Value
                             createdAt = $_.LastWriteTime.ToString('yyyy-MM-dd HH:mm:ss')
+                            isCover = ($coverName -eq $_.Name)
                             url = '/api/snapshot/image?token=' + [uri]::EscapeDataString($tk) + '&name=' + [uri]::EscapeDataString($_.Name)
                         }
                     }
@@ -428,6 +456,14 @@ function Handle-Request {
         $tk = [string]$Req.Query['token']
         $full = ($Req.Query['full'] -eq '1')
         if (Test-SafeTokenName $tk) {
+            $coverName = Get-SnapshotCoverName $tk
+            if ($coverName) {
+                $snapFile = Join-Path $SnapshotDir $coverName
+                if ((Test-Path -LiteralPath $snapFile) -and $coverName -like ($tk + '_*')) {
+                    Send-Bytes -Stream $Stream -Bytes ([System.IO.File]::ReadAllBytes($snapFile)) -ContentType 'image/jpeg' -ExtraHeaders @{ 'Cache-Control' = 'no-store' }
+                    return
+                }
+            }
             $thumb = Join-Path $ThumbDir ($tk + '.jpg')
             $orig = Join-Path $CoverDir ($tk + '.jpg')
             $file = $null
@@ -596,6 +632,29 @@ function Handle-Request {
                 }
                 $file = Join-Path $SnapshotDir $name
                 if (Test-Path -LiteralPath $file) { Remove-Item -LiteralPath $file -Force }
+                if ((Get-SnapshotCoverName $tk) -eq $name) { Set-SnapshotCoverName $tk '' }
+                Send-Json -Stream $Stream -Object @{ ok = $true; name = $name }
+                return
+            }
+            '/api/snapshot/cover' {
+                $tk = ([string]$body.token).Trim()
+                $name = ([string]$body.name).Trim()
+                if ($tk -notmatch '^[A-Za-z0-9_\-]+$') {
+                    Send-Json -Stream $Stream -Object @{ ok = $false; error = 'token 不合法' }
+                    return
+                }
+                if ($name) {
+                    if ($name -notmatch '^[A-Za-z0-9_.\-]+\.jpg$' -or $name -notlike ($tk + '_*')) {
+                        Send-Json -Stream $Stream -Object @{ ok = $false; error = '快照名称不合法' }
+                        return
+                    }
+                    $file = Join-Path $SnapshotDir $name
+                    if (-not (Test-Path -LiteralPath $file)) {
+                        Send-Json -Stream $Stream -Object @{ ok = $false; error = '快照不存在' }
+                        return
+                    }
+                }
+                Set-SnapshotCoverName $tk $name
                 Send-Json -Stream $Stream -Object @{ ok = $true; name = $name }
                 return
             }

@@ -286,7 +286,7 @@ export function LibraryPage() {
         <StatCard icon={FolderCheck} label="已完成" value={formatCount(stats?.done || 0)} active={status === 'done'} onClick={() => { setStatus('done'); setFlag('none') }} />
         <StatCard icon={Archive} label="在磁盘" value={formatCount(stats?.downloaded || 0)} active={flag === 'have'} onClick={() => { setStatus('all'); setFlag('have') }} />
         <StatCard icon={FolderX} label="未下载" value={formatCount(stats?.missing || 0)} active={flag === 'miss'} onClick={() => { setStatus('all'); setFlag('miss') }} />
-        <StatCard icon={Heart} label="收藏" value={formatCount(stats?.favorites || 0)} tone="warning" active={flag === 'fav'} onClick={() => { setStatus('all'); setFlag('fav') }} />
+        <StatCard icon={Heart} label="收藏" value={formatCount(stats?.favorites || 0)} tone="danger" active={flag === 'fav'} onClick={() => { setStatus('all'); setFlag('fav') }} />
         <StatCard icon={Clock3} label="总时长(h)" value={Number(stats?.hours || 0).toFixed(1)} sub={`今日 +${stats?.todayAdded || 0}`} />
       </div>
 
@@ -425,6 +425,7 @@ export function LibraryPage() {
             onTogglePage={togglePage}
             onOpen={openPreview}
             onFav={onFav}
+            onRate={menu.rate}
             multi={multi}
             menu={menu}
             sortKey={sortKey}

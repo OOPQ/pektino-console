@@ -8,6 +8,8 @@ import {
   PanelLeftOpen,
   RefreshCw,
   Settings,
+  Sun,
+  Moon,
   Trash2,
 } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
@@ -15,7 +17,6 @@ import { useAppState } from '@/features/use-app-state'
 import { useUiStore } from '@/store/ui'
 import { cn, formatCount } from '@/lib/utils'
 import { IconButton } from '@/components/ui/icon-button'
-import { Switch } from '@/components/ui/switch'
 import { Button } from '@/components/ui/button'
 
 const NAV = [
@@ -101,13 +102,15 @@ function Sidebar() {
           ) : null}
         </div>
         <div className={cn('flex items-center gap-2 px-1', collapsed && 'justify-center')}>
-          {!collapsed ? <span className="text-[9.5px] text-[color:var(--subtle)]">暗色 / 亮色</span> : null}
-          <Switch
-            checked={theme === 'dark'}
-            onCheckedChange={checked => setTheme(checked ? 'dark' : 'light')}
-            aria-label="切换明暗主题"
-            className={cn(collapsed && 'mx-auto')}
-          />
+          {!collapsed ? <span className="text-[9.5px] text-[color:var(--subtle)]">主题</span> : null}
+          <div className="flex items-center gap-0.5 rounded-lg border border-[color:var(--border)] bg-[color:var(--surface-2)] p-0.5">
+            <button type="button" aria-label="亮色主题" title="亮色" onClick={() => setTheme('light')} className={cn('grid size-6 place-items-center rounded-md transition-colors', theme === 'light' ? 'bg-[color:var(--surface-3)] text-[color:var(--foreground)]' : 'text-[color:var(--subtle)] hover:text-[color:var(--foreground)]')}>
+              <Sun className="size-3.5" />
+            </button>
+            <button type="button" aria-label="暗色主题" title="暗色" onClick={() => setTheme('dark')} className={cn('grid size-6 place-items-center rounded-md transition-colors', theme === 'dark' ? 'bg-[color:var(--surface-3)] text-[color:var(--foreground)]' : 'text-[color:var(--subtle)] hover:text-[color:var(--foreground)]')}>
+              <Moon className="size-3.5" />
+            </button>
+          </div>
         </div>
       </div>
     </aside>

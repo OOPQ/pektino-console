@@ -6,6 +6,7 @@ import {
   Eye,
   Heart,
   Layers,
+  ListChecks,
   Pencil,
   Play,
   Plus,
@@ -36,6 +37,8 @@ import { Stars } from '@/components/stars'
 import { StatusBadge } from '@/components/status-badge'
 import { CoverImage } from '@/components/cover-image'
 import { PreviewDialog } from '@/features/library/preview-dialog'
+import { LibraryGallery } from '@/features/library/library-gallery'
+import type { RowMenuActions } from '@/features/library/row-context-menu'
 
 type Collection = {
   id: number
@@ -70,6 +73,8 @@ export function CollectionsPage() {
   const [editColor, setEditColor] = React.useState(COLORS[0])
   const [busy, setBusy] = React.useState(false)
   const [selected, setSelected] = React.useState<string[]>([])
+  const multi = useUiStore(s => s.multi)
+  const setMulti = useUiStore(s => s.setMulti)
 
   const openPreview = useUiStore(s => s.openPreview)
   const previewToken = useUiStore(s => s.previewToken)
@@ -96,6 +101,10 @@ export function CollectionsPage() {
   React.useEffect(() => {
     setSelected([])
   }, [selectedId])
+
+  React.useEffect(() => {
+    if (!multi) setSelected([])
+  }, [multi])
 
   const itemsQuery = useQuery<{ ok: boolean; id: number; tokens: string[] }>({
     queryKey: ['collection-items', current?.id],
@@ -229,6 +238,20 @@ export function CollectionsPage() {
     }
   }
 
+  const menu: RowMenuActions = {
+    open: openPreview,
+    download: row => { void actions.download([row.token]) },
+    fav: row => { void actions.fav([row.token], row.fav !== '1') },
+    collection: row => { void row; toast.info('在台账中右键加入其他合集') },
+    watched: row => { void actions.watched([row.token], !row.last_play) },
+    rate: (row, value) => { void actions.rate([row.token], value) },
+    recycle: row => { void actions.recycle([row.token]) },
+    copy: row => { void copy(row) },
+    reveal: row => { void actions.reveal(row.token) },
+    markDone: row => { void actions.mark([row.token], 'done') },
+    removeFromCollection: row => { void removeItem(row) },
+  }
+
   const openCollectionInLibrary = () => {
     if (current) navigate(`/?collection=${current.id}`)
   }
@@ -283,6 +306,7 @@ export function CollectionsPage() {
           <Input value={query} onChange={e => setQuery(e.target.value)} placeholder="过滤 token / 标题" className="pl-8" />
         </div>
         <Select value={status} onValueChange={setStatus} options={COLLECTION_STATUS} className="w-[116px]" aria-label="合集状态筛选" />
+        <Button size="sm" variant={multi ? 'outline' : 'ghost'} onClick={() => setMulti(!multi)}><ListChecks className="size-3.5" /> 多选</Button>
         <Button size="sm" variant="ghost" onClick={() => { setQuery(''); setStatus('all') }} disabled={!query && status === 'all'}><RotateCcw className="size-3.5" /> 重置</Button>
       </div>
 
@@ -308,65 +332,26 @@ export function CollectionsPage() {
           </div>
         </div>
       ) : (
-        <div className="grid grid-cols-[repeat(auto-fill,minmax(168px,1fr))] gap-3">
-          {rows.map(row => (
-            <Card key={row.token} className="group overflow-hidden">
-              <CardMedia className="aspect-[3/4]">
-                <button type="button" className="absolute inset-0" onClick={() => openPreview(row.token, true)} aria-label="打开预览">
-                  <CoverImage token={row.token} full alt={rowTitle(row)} className="absolute inset-0" />
-                </button>
-                <div className="absolute left-2 top-2 z-10" onClick={e => e.stopPropagation()}>
-                  <Checkbox
-                    aria-label={`选择 ${rowTitle(row)}`}
-                    checked={selected.includes(row.token)}
-                    onCheckedChange={() => setSelected(s => s.includes(row.token) ? s.filter(t => t !== row.token) : [...s, row.token])}
-                    className="size-[18px] border-white/70 bg-white/90 text-[#111] data-[state=checked]:bg-[color:var(--primary)] data-[state=checked]:text-white"
-                  />
-                </div>
-                <div className="absolute right-2 top-2 z-10" onClick={e => e.stopPropagation()}>
-                  <StatusBadge status={row.status} />
-                </div>
-                <div className="absolute right-2 top-9 z-10" onClick={e => e.stopPropagation()}>
-                  <IconButton label="移出合集" size="sm" tone="danger" className="border-white/20 bg-black/55 text-white backdrop-blur" onClick={() => removeItem(row)}>
-                    <X className="size-3.5" />
-                  </IconButton>
-                </div>
-                <div className="absolute inset-x-2 bottom-2 z-10 flex items-center justify-between" onClick={e => e.stopPropagation()}>
-                  <Button size="sm" variant="outline" className="h-7 border-white/20 bg-black/55 px-2 text-[10px] text-white backdrop-blur hover:bg-black/70" onClick={() => openPreview(row.token, true)}>
-                    <Play className="size-3 fill-current" /> 播放
-                  </Button>
-                  <IconButton label={row.fav === '1' ? '取消收藏' : '收藏'} size="sm" className="border-white/20 bg-black/55 text-white backdrop-blur" onClick={() => actions.fav([row.token], row.fav !== '1')}>
-                    <Heart className={cn('size-3.5', row.fav === '1' && 'fill-current text-[color:var(--warning)]')} />
-                  </IconButton>
-                </div>
-              </CardMedia>
-              <CardBody className="pb-2">
-                <div className="truncate text-[11.5px] font-medium">{row.title?.trim() || row.token}</div>
-                <div className="mt-1 truncate text-[9px] text-[color:var(--subtle)]">
-                  {row.duration || '—'} · {row.res || '—'} · {formatDate(row.first_seen)}
-                </div>
-                <div className="mt-1 flex items-center gap-2 text-[9px] text-[color:var(--subtle)]">
-                  <span className="inline-flex items-center gap-1"><Eye className="size-3" /> {formatCount(row.views)}</span>
-                  <span className="inline-flex items-center gap-1"><Heart className="size-3" /> {formatCount(row.likes)}</span>
-                </div>
-              </CardBody>
-              <CardFooter className="py-1.5">
-                <Stars value={row.rating} />
-                <div className="flex items-center gap-0.5" onClick={e => e.stopPropagation()}>
-                  <IconButton label="复制链接" size="sm" onClick={() => copy(row)}><Copy className="size-3.5" /></IconButton>
-                </div>
-              </CardFooter>
-            </Card>
-          ))}
-          {!rows.length ? (
-            <div className="col-span-full grid min-h-[220px] place-items-center rounded-[var(--radius-card)] border border-[color:var(--border)] bg-[color:var(--surface)]">
-              <div className="text-center">
-                <div className="text-[12px] font-medium">这个合集还没有条目</div>
-                <div className="mt-1 text-[10px] text-[color:var(--subtle)]">在台账选择条目 → 加入合集，或从顶部选择其他合集。</div>
-              </div>
+        <>
+        <LibraryGallery
+          rows={rows}
+          selected={selected}
+          onToggle={token => setSelected(s => s.includes(token) ? s.filter(t => t !== token) : [...s, token])}
+          onOpen={openPreview}
+          onFav={row => { void actions.fav([row.token], row.fav !== '1') }}
+          onRate={(row, value) => { void actions.rate([row.token], value) }}
+          onDownload={row => { void actions.download([row.token]) }}
+          menu={menu}
+        />
+        {!rows.length ? (
+          <div className="grid min-h-[220px] place-items-center rounded-[var(--radius-card)] border border-[color:var(--border)] bg-[color:var(--surface)]">
+            <div className="text-center">
+              <div className="text-[12px] font-medium">这个合集还没有条目</div>
+              <div className="mt-1 text-[10px] text-[color:var(--subtle)]">在台账选择条目 → 加入合集，或从顶部选择其他合集。</div>
             </div>
-          ) : null}
-        </div>
+          </div>
+        ) : null}
+        </>
       )}
 
       <Dialog open={editorOpen} onOpenChange={setEditorOpen}>

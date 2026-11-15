@@ -142,6 +142,7 @@ export type AppState = {
       speed?: number
       error?: string
       history?: boolean
+      addedAt?: string
     }>
   }
   job?: Job

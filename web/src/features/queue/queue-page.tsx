@@ -34,7 +34,7 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { PreviewDialog } from '@/features/library/preview-dialog'
 
 type Tab = 'active' | 'done' | 'failed' | 'cancelled'
-type DItem = { token: string; state: string; bytes: number; error?: string; history?: boolean }
+type DItem = { token: string; state: string; bytes: number; error?: string; history?: boolean; addedAt?: string }
 
 const ACTIVE = new Set(['downloading', 'queued', 'paused'])
 
@@ -69,9 +69,13 @@ export function QueuePage() {
   const list = groups[tab]
   const queueGroups = React.useMemo(() => {
     const map = new Map<string, DItem[]>()
-    for (const item of list) {
+    const ordered = [...list].sort((a, b) => {
+      const at = (x: DItem) => x.addedAt || rowMap.get(x.token)?.first_seen || ''
+      return at(b).localeCompare(at(a))
+    })
+    for (const item of ordered) {
       const row = rowMap.get(item.token)
-      const raw = row?.file_date || row?.last_seen || row?.first_seen || ''
+      const raw = item.addedAt || row?.first_seen || row?.last_seen || ''
       const date = raw.slice(0, 10) || '未知日期'
       if (!map.has(date)) map.set(date, [])
       map.get(date)!.push(item)

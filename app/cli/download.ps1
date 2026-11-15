@@ -182,7 +182,7 @@ if ($Proxy) { $env:http_proxy = $Proxy; $env:https_proxy = $Proxy }
 $states = @{}   # token -> @{ state; bytes; expected; error }
 $queueMap = @{}
 foreach ($it in $queue) {
-    $states[[string]$it.token] = @{ state = 'queued'; bytes = 0; expected = 0; error = ''; dir = '' }
+$states[[string]$it.token] = @{ state = 'queued'; bytes = 0; expected = 0; error = ''; dir = ''; addedAt = [string]$it.addedAt }
     # 重试时要用到原 item（url/file），之前没填导致重试 curl 没 URL 可用
     $queueMap[[string]$it.token] = $it
 }
@@ -536,13 +536,13 @@ try {
                 # 失败/失效/已取消的 token 允许原地重试
                 if (@('failed', 'dead', 'cancelled') -contains $cur) {
                     $queueMap[$tk] = $it
-                    $states[$tk] = @{ state = 'queued'; bytes = 0; expected = 0; error = '' }
+$states[$tk] = @{ state = 'queued'; bytes = 0; expected = 0; error = ''; addedAt = [string]$it.addedAt }
                     $pending.Enqueue($it)
                 }
                 continue
             }
             $queueMap[$tk] = $it
-            $states[$tk] = @{ state = 'queued'; bytes = 0; expected = 0; error = '' }
+$states[$tk] = @{ state = 'queued'; bytes = 0; expected = 0; error = ''; addedAt = [string]$it.addedAt }
             $pending.Enqueue($it)
         }
 
@@ -741,7 +741,7 @@ try {
             items     = @(@($history) + @($states.Keys | ForEach-Object {
                     $sp = 0
                     if ($jobs.ContainsKey($_)) { $sp = $jobs[$_].speed }
-                    [pscustomobject]@{ token = $_; state = $states[$_].state; bytes = $states[$_].bytes; expected = $states[$_].expected; speed = $sp; error = $states[$_].error }
+[pscustomobject]@{ token = $_; state = $states[$_].state; bytes = $states[$_].bytes; expected = $states[$_].expected; speed = $sp; error = $states[$_].error; addedAt = [string]$states[$_].addedAt }
                 }))
             startedAt = $startAt
             updatedAt = (Get-Date).ToString('s')
@@ -759,7 +759,7 @@ try {
         running = $false; paused = $false; phase = 'done'; total = ($states.Count + $history.Count);
         done = ($doneCount + $histDoneCount); failed = ($failCount + $histFailedCount);
         bytes = $bytes; speed = 0; errors = @($errs | Select-Object -Last 20); startedAt = $startAt;
-        items = @(@($history) + @($states.Keys | ForEach-Object { [pscustomobject]@{ token = $_; state = $states[$_].state; bytes = $states[$_].bytes; error = $states[$_].error } }));
+        items = @(@($history) + @($states.Keys | ForEach-Object { [pscustomobject]@{ token = $_; state = $states[$_].state; bytes = $states[$_].bytes; error = $states[$_].error; addedAt = [string]$states[$_].addedAt } }));
         finishedAt = (Get-Date).ToString('s')
     }
     exit 0

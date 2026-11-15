@@ -25,7 +25,7 @@ export function BinPage() {
   const visible = rows.filter(r => {
     const q = query.trim().toLowerCase()
     return !q || [r.token, r.title, r.source].join(' ').toLowerCase().includes(q)
-  })
+  }).sort((a, b) => (b.recycled_at || '').localeCompare(a.recycled_at || ''))
   const totalBytes = rows.reduce((sum, r) => sum + (Number(r.file_size) || 0), 0)
   const groups = React.useMemo(() => {
     const map = new Map<string, Row[]>()

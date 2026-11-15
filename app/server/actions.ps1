@@ -1093,6 +1093,7 @@ function Start-Download {
                 section   = [string]$dl.section
                 page_url  = [string]$t.page_url
                 sd        = [bool]$dl.sd
+                addedAt   = (Get-Date).ToString('yyyy-MM-dd HH:mm:ss')
             })
     }
     if ($vipCount -gt 0) {
@@ -1132,7 +1133,7 @@ function Start-Download {
                 foreach ($a in $add) { $addTokens[[string]$a.token] = $true }
                 $baseItems = @($items | Where-Object { -not $addTokens.ContainsKey([string]$_.token) })
                 $merged = @($baseItems) + @($add | ForEach-Object {
-                        [pscustomobject]@{ token = $_.token; state = 'queued'; bytes = 0; expected = 0; speed = 0; error = '' }
+[pscustomobject]@{ token = $_.token; state = 'queued'; bytes = 0; expected = 0; speed = 0; error = ''; addedAt = [string]$_.addedAt }
                     })
                 $doneCount = @($merged | Where-Object { $_.state -eq 'done' }).Count
                 $failedCount = @($merged | Where-Object { $_.state -eq 'failed' -or $_.state -eq 'dead' }).Count
@@ -1192,7 +1193,7 @@ function Start-Download {
     $historyFailed = @($history | Where-Object { $_.state -eq 'failed' -or $_.state -eq 'dead' }).Count
     $now = (Get-Date).ToString('s')
     $initItems = @(@($history) + @($queue | ForEach-Object {
-                [pscustomobject]@{ token = $_.token; state = 'queued'; bytes = 0; expected = 0; speed = 0; error = '' }
+[pscustomobject]@{ token = $_.token; state = 'queued'; bytes = 0; expected = 0; speed = 0; error = ''; addedAt = [string]$_.addedAt }
             }))
     $init = [ordered]@{
         running = $true; paused = $false; phase = 'download'

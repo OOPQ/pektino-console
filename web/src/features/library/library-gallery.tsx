@@ -1,5 +1,5 @@
 import * as React from 'react'
-import { Copy, Eye, Heart, ListPlus, Play, Star } from 'lucide-react'
+import { Copy, Download, Eye, Heart, ListPlus, Play, Star } from 'lucide-react'
 import type { Row } from '@/types'
 import { cn, formatCount, formatDate, rowTitle } from '@/lib/utils'
 import { Card, CardBody, CardFooter, CardMedia, CardMeta, CardTitle } from '@/components/ui/card'
@@ -68,14 +68,24 @@ export function LibraryGallery({ rows, selected, onToggle, onOpen, onFav, onColl
                 >
                   <Play className="size-3 fill-current" /> 播放
                 </Button>
-                <IconButton
-                  label={row.fav === '1' ? '取消收藏' : '收藏'}
-                  size="sm"
-                  className={cn('border-white/20 bg-black/55 text-white backdrop-blur hover:bg-black/70', row.fav === '1' && 'text-[color:var(--warning)]')}
-                  onClick={() => onFav(row)}
-                >
-                  <Star className={cn('size-3.5', row.fav === '1' && 'fill-current')} />
-                </IconButton>
+                <div className="flex items-center gap-1">
+                  <IconButton
+                    label="下载"
+                    size="sm"
+                    className="border-white/20 bg-black/55 text-white backdrop-blur hover:bg-black/70"
+                    onClick={() => onDownload(row)}
+                  >
+                    <Download className="size-3.5" />
+                  </IconButton>
+                  <IconButton
+                    label={row.fav === '1' ? '取消收藏' : '收藏'}
+                    size="sm"
+                    className={cn('border-white/20 bg-black/55 text-white backdrop-blur hover:bg-black/70', row.fav === '1' && 'text-[color:var(--warning)]')}
+                    onClick={() => onFav(row)}
+                  >
+                    <Star className={cn('size-3.5', row.fav === '1' && 'fill-current')} />
+                  </IconButton>
+                </div>
               </div>
             </CardMedia>
             <CardBody className="pb-2">

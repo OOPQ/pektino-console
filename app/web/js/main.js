@@ -1,5 +1,5 @@
 /* main.js — 数据加载、工具条、批量操作、初始化 */
-import { $, state, PREFS, savePrefs, api, toast, onEvent, confirmDialog, escHtml } from './core.js';
+import { $, state, PREFS, savePrefs, api, toast, onEvent, confirmDialog, escHtml, openOverlay, closeOverlay } from './core.js';
 import { render, markActiveKpi, initTable, visible } from './table.js';
 import { initRows } from './rows.js';
 import { initPanels, connectSse, openLightbox, refreshPreviewActions } from './panels.js';
@@ -400,7 +400,7 @@ function initDownloadQueue() {
       const done = items.some(i => i.state === 'done');
       setQueueTab(pending ? 'active' : failed ? 'failed' : done ? 'done' : 'active', false);
     }
-    $('#dlDrawer').classList.add('on');
+    openOverlay('#dlDrawer');
     // 打开时强制重建一次：关闭期间列表没有跟着刷新
     renderDownloadQueue(state.DOWNLOAD || {}, { force: true });
   };
@@ -408,8 +408,7 @@ function initDownloadQueue() {
   $('#btnDlQueue').onclick = openDrawer;
   // 进度条本身也可以点开队列（✕ 按钮除外）
   $('#prog').addEventListener('click', e => { if (!e.target.closest('button')) openDrawer(); });
-  $('#dlClose').onclick = () => $('#dlDrawer').classList.remove('on');
-  $('#dlDrawer').onclick = e => { if (e.target.id === 'dlDrawer') $('#dlDrawer').classList.remove('on'); };
+  ['wa-hide', 'wa-after-hide'].forEach(ev => $('#dlDrawer').addEventListener(ev, () => $('#dlDrawer').classList.remove('on')));
   $('#dqTabs').onclick = e => {
     const b = e.target.closest('[data-qtab]');
     if (b) setQueueTab(b.dataset.qtab, true);
@@ -942,7 +941,7 @@ async function openDownloadConfirm() {
   $('#dlcLimit').max = String(p.count);
   $('#dlcLimit').value = String(Math.min(p.count, 20));
   updateDlcHint();
-  $('#dlConfirm').classList.add('on');
+  openOverlay('#dlConfirm');
 }
 
 function updateDlcHint() {
@@ -957,7 +956,7 @@ function updateDlcHint() {
 }
 
 function closeDownloadConfirm() {
-  $('#dlConfirm').classList.remove('on');
+  closeOverlay('#dlConfirm');
   dlPreview = null;
 }
 
@@ -1139,7 +1138,7 @@ function initToolbar() {
   $('#btnCancelJob').onclick = doCancelJob;
   $('#btnDownload').onclick = openDownloadConfirm;
   $('#dlcCancel').onclick = closeDownloadConfirm;
-  $('#dlConfirm').onclick = e => { if (e.target.id === 'dlConfirm') closeDownloadConfirm(); };
+  ['wa-hide', 'wa-after-hide'].forEach(ev => $('#dlConfirm').addEventListener(ev, () => $('#dlConfirm').classList.remove('on')));
   $('#dlcLimit').oninput = updateDlcHint;
   $('#dlcStart').onclick = () => {
     const p = dlPreview;
@@ -1360,7 +1359,7 @@ function initSidebar() {
 
   const closePanels = () => {
     ['#dlDrawer', '#colBrowser', '#binDrawer', '#drawer', '#colPick', '#colEdit', '#dlConfirm', '#confirmModal']
-      .forEach(sel => { const el = $(sel); if (el) el.classList.remove('on'); });
+      .forEach(sel => closeOverlay(sel));
     if ($('#lightbox').classList.contains('on')) $('#lbClose').click();
     if ($('#gacha').classList.contains('on')) $('#gClose').click();
   };

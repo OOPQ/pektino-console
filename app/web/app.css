@@ -1059,3 +1059,138 @@ html.wa-light .lightbox .box > .pmeta-bar.lb-head,html.wa-light .lightbox .lb-fo
 #dlDrawer .dq-foot-note{margin-left:auto;font-size:9.5px;color:var(--faint);white-space:nowrap}
 html.wa-light #dlDrawer .dq-head{border-color:#e3eaf2}
 html.wa-light #dlDrawer .dq-tools{background:#f7fafd;border-color:#e1e8f0}
+
+/* ---------- Web Awesome 预览浮窗 ---------- */
+.wa-pv{--width:min(1100px,96vw)}
+.wa-pv::part(dialog){
+  background:linear-gradient(180deg,rgba(17,24,32,.98),rgba(11,17,24,.98));
+  border:1px solid #26313d;border-radius:20px;
+  box-shadow:0 30px 90px rgba(0,0,0,.6);color:var(--text);
+}
+.wa-pv::part(header){padding:14px 18px 11px;border-bottom:1px solid rgba(255,255,255,.08)}
+.wa-pv::part(title){font-size:13px;font-weight:650;letter-spacing:.2px}
+.wa-pv::part(body){padding:0;overflow:hidden;display:flex}
+.wa-pv::part(footer){padding:0 18px 12px;border-top:1px solid rgba(255,255,255,.08)}
+.wa-pv::part(close-button){color:var(--dim)}
+.wa-pv .box{display:grid;grid-template-columns:minmax(0,1fr) 330px;gap:20px;padding:14px;position:relative;align-items:stretch;width:100%;max-width:100%;min-width:0;min-height:0;flex:1 1 auto;grid-template-rows:minmax(0,1fr)}
+.wa-pv .box > .lbMedia{
+  min-width:0;min-height:0;height:100%;display:flex;align-items:center;justify-content:center;
+  overflow:hidden;padding:8px;border:1px solid rgba(255,255,255,.08);border-radius:14px;background:#080c11;
+}
+.wa-pv .lbMedia img{max-height:72vh;border-radius:10px;box-shadow:none;margin:0}
+.wa-pv .lbMedia video{border-radius:10px}
+.wa-pv .box > .meta{
+  min-width:0;min-height:0;display:flex;flex-direction:column;gap:5px;overflow:auto;padding:2px 2px 0;
+}
+.wa-pv .box > .meta > *{flex:0 0 auto}
+.wa-pv .box > .meta h3{margin:0;font-size:17px;line-height:1.35;word-break:break-all;overflow:hidden;max-height:2.7em}
+.wa-pv .box > .meta .mtoken{font-family:ui-monospace,Consolas,monospace;font-size:10.5px;line-height:1.35;color:var(--faint);word-break:break-all}
+.wa-pv .pv-topline{font-size:10px;color:var(--faint);min-height:0}
+.wa-pv .pv-topline:empty{display:none}
+.wa-pv .box > .meta .mstats .mhead b{font-size:30px}\n.wa-pv .mstats-grid{gap:6px}\n.wa-pv .mstat{padding:7px 9px}
+.wa-pv .box > .meta .actions{display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-top:2px;padding-top:7px;border-top:1px solid rgba(255,255,255,.08)}
+.wa-pv .box > .meta .actions button{width:100%;height:34px;padding:0 10px;border-radius:9px;white-space:nowrap;font-size:12px;background:var(--panel2);border:1px solid var(--line);color:var(--text)}
+.wa-pv .box > .meta .actions button.accent{background:linear-gradient(180deg,#5b9cff,#2f6fce);border-color:#2f6fce;color:#fff;font-weight:650}
+.wa-pv .lb-foot{margin:0;padding:9px 0 0;border:0;font-size:10px;color:var(--faint)}
+.wa-pv .lbNav.prev{left:-54px}
+.wa-pv .lbNav.next{right:-54px}
+@media (max-width:900px){
+  .wa-pv .box{grid-template-columns:1fr;gap:12px;padding:12px}
+  .wa-pv .box > .lbMedia{max-height:52vh}
+  .wa-pv .box > .meta{max-height:none}
+  .wa-pv .lbNav.prev{left:4px}.wa-pv .lbNav.next{right:4px}
+}
+html.wa-light .wa-pv::part(dialog){background:linear-gradient(180deg,#fff,#f8fbfe);border-color:#d6e0ea;box-shadow:0 30px 90px rgba(30,50,80,.22)}
+html.wa-light .wa-pv::part(header),html.wa-light .wa-pv::part(footer){border-color:#e3eaf2}
+html.wa-light .wa-pv .box > .meta .actions,html.wa-light .wa-pv .box > .meta .actions button{border-color:#e1e8f0}
+html.wa-light .wa-pv .box > .meta .actions button{background:#f8fbfe;color:var(--text)}
+/* ---------- Web Awesome 下载队列抽屉 ---------- */
+.wa-dq::part(dialog){
+  width:min(480px,94vw);max-width:94vw;
+  background:linear-gradient(180deg,var(--panel),var(--panel2));
+  border-left:1px solid #26313d;color:var(--text);
+}
+.wa-dq::part(header){padding:15px 18px 12px;border-bottom:1px solid rgba(255,255,255,.08)}
+.wa-dq::part(title){font-size:13px;font-weight:650}
+.wa-dq::part(body){padding:0;display:flex;flex-direction:column;overflow:hidden}
+.wa-dq::part(footer){padding:0;border-top:0}
+.wa-dq .dq-body{display:flex;flex-direction:column;min-height:0;flex:1 1 auto;overflow:hidden}
+.wa-dq .dq-summary{padding:12px 18px 2px;font-size:11px;color:var(--dim)}
+.wa-dq .dq-tabs{margin:4px 18px 0;flex:0 0 auto}
+.wa-dq .dq-panel{flex:1 1 auto;min-height:0;overflow:auto;padding:10px 18px 12px}
+.wa-dq .dq-tools{width:100%;box-sizing:border-box;padding:11px 18px;border-top:1px solid var(--line);background:color-mix(in srgb,var(--panel2) 55%,transparent);display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.wa-dq .dq-foot-note{margin-left:auto;font-size:9.5px;color:var(--faint);white-space:nowrap}
+html.wa-light .wa-dq::part(dialog){border-color:#d6e0ea;background:linear-gradient(180deg,#fff,#f8fbfe)}
+html.wa-light .wa-dq .dq-tools{background:#f7fafd;border-color:#e1e8f0}
+/* ---------- Web Awesome 嵌套弹窗 ---------- */
+.wa-col-edit,.wa-col-pick,.wa-dlc,.wa-confirm{
+  background:transparent!important;border:0!important;box-shadow:none!important;
+}
+.wa-col-edit{--width:min(440px,94vw)}
+.wa-col-pick{--width:min(460px,94vw)}
+.wa-dlc{--width:min(440px,94vw)}
+.wa-confirm{--width:min(420px,94vw)}
+.wa-col-edit::part(dialog),.wa-col-pick::part(dialog),.wa-dlc::part(dialog),.wa-confirm::part(dialog){
+  background:linear-gradient(180deg,var(--panel),var(--panel2));
+  border:1px solid #26313d;border-radius:16px;color:var(--text);
+  box-shadow:0 24px 70px rgba(0,0,0,.5);
+}
+.wa-col-edit::part(header),.wa-col-pick::part(header),.wa-dlc::part(header),.wa-confirm::part(header){
+  padding:14px 18px 11px;border-bottom:1px solid rgba(255,255,255,.08);
+}
+.wa-col-edit::part(title),.wa-col-pick::part(title),.wa-dlc::part(title),.wa-confirm::part(title){font-size:13px;font-weight:650}
+.wa-col-edit::part(body),.wa-col-pick::part(body),.wa-dlc::part(body),.wa-confirm::part(body){padding:0}
+.wa-col-edit::part(footer),.wa-col-pick::part(footer),.wa-dlc::part(footer),.wa-confirm::part(footer){padding:0;border-top:0}
+.wa-col-edit::part(close-button),.wa-col-pick::part(close-button),.wa-dlc::part(close-button),.wa-confirm::part(close-button){color:var(--dim)}
+
+.wa-col-edit .coledit-box,.wa-col-pick .colpick-box,.wa-dlc .dlc-box{
+  width:auto;max-width:none;padding:16px 18px;background:none;border:0;box-shadow:none;border-radius:0;
+}
+.wa-col-edit .coledit-preview{justify-content:flex-start;gap:8px}
+.wa-col-edit #colEditCount{margin-left:auto;color:var(--faint);font-size:10px}
+.wa-col-edit .field{margin-bottom:12px}
+.wa-col-edit .field label{font-size:10px;color:var(--faint)}
+.wa-col-edit .coledit-actions,.wa-col-pick .coledit-actions,.wa-dlc .coledit-actions{width:100%;box-sizing:border-box;
+  display:grid;grid-template-columns:1fr 1fr;gap:7px;padding:12px 18px;
+  border-top:1px solid rgba(255,255,255,.08);background:color-mix(in srgb,var(--panel2) 55%,transparent);
+}
+.wa-col-edit .coledit-actions button,.wa-col-pick .coledit-actions button,.wa-dlc .coledit-actions button{height:34px;border-radius:9px;font-size:12px}
+.wa-col-edit .coledit-actions #colEditSave,.wa-dlc .coledit-actions #dlcStart{background:linear-gradient(180deg,#5b9cff,#2f6fce);border-color:#2f6fce;color:#fff;font-weight:650}
+.wa-col-pick .colpick-summary{padding:2px 0 10px;color:var(--dim);font-size:11px}
+.wa-col-pick .col-list{margin-bottom:10px}
+.wa-col-pick .colpick-new{display:flex;gap:6px}
+.wa-col-pick .colpick-new input{flex:1}
+.wa-col-pick .colpick-new button{height:34px;border-radius:9px;background:linear-gradient(180deg,#5b9cff,#2f6fce);border-color:#2f6fce;color:#fff;font-weight:600;white-space:nowrap}
+.wa-dlc .dlc-box .sub{color:var(--dim)}
+.wa-dlc .dlc-limit{display:flex;align-items:center;gap:8px;margin-top:12px}
+.wa-dlc .dlc-limit input{width:90px}
+.wa-confirm .confirm-msg{margin:16px 18px 18px;color:var(--dim);font-size:12px;line-height:1.7;white-space:pre-line;max-height:45vh;overflow:auto}
+.wa-confirm .confirm-actions{width:100%;box-sizing:border-box;display:grid;grid-template-columns:1fr 1fr;gap:7px;padding:12px 18px;border-top:1px solid rgba(255,255,255,.08)}
+.wa-confirm .confirm-actions button{height:34px;border-radius:9px;font-size:12px}
+.wa-confirm .confirm-actions #confirmOk{background:linear-gradient(180deg,#5b9cff,#2f6fce);border-color:#2f6fce;color:#fff;font-weight:650}
+.wa-confirm .confirm-actions #confirmOk.danger{background:linear-gradient(180deg,#ff8b84,#d54848);border-color:#d54848;color:#fff}
+
+html.wa-light .wa-col-edit::part(dialog),html.wa-light .wa-col-pick::part(dialog),
+html.wa-light .wa-dlc::part(dialog),html.wa-light .wa-confirm::part(dialog){
+  background:linear-gradient(180deg,#fff,#f8fbfe);border-color:#d6e0ea;box-shadow:0 24px 70px rgba(30,50,80,.2);
+}
+html.wa-light .wa-col-edit .coledit-actions,html.wa-light .wa-col-pick .coledit-actions,
+html.wa-light .wa-dlc .coledit-actions,html.wa-light .wa-confirm .confirm-actions{background:#f7fafd;border-color:#e1e8f0}
+/* ---------- Web Awesome 合集浏览 ---------- */
+.wa-colb{--width:min(1460px,96vw);background:transparent!important;border:0!important;box-shadow:none!important}
+.wa-colb::part(dialog){
+  height:90vh;background:linear-gradient(180deg,var(--panel),var(--panel2));
+  border:1px solid #26313d;border-radius:18px;color:var(--text);
+  box-shadow:0 28px 80px rgba(0,0,0,.58);
+}
+.wa-colb::part(header){padding:14px 18px 11px;border-bottom:1px solid rgba(255,255,255,.08)}
+.wa-colb::part(title){font-size:13px;font-weight:650}
+.wa-colb::part(body){padding:0;display:flex;overflow:hidden}
+.wa-colb::part(close-button){color:var(--dim)}
+.wa-colb .colb-box{width:100%;height:100%;padding:0;background:none;border:0;border-radius:0;display:flex;flex-direction:column;min-height:0}
+.wa-colb .colb-tabs{padding:12px 18px 0;margin:0;max-width:none;flex:0 0 auto}
+.wa-colb .colb-tools{margin:10px 18px 0;padding:9px 10px;border:1px solid var(--line);border-radius:11px;background:rgba(255,255,255,.02);flex:0 0 auto}
+.wa-colb .colb-body{flex:1 1 auto;min-height:0;overflow:auto;padding:14px 18px 16px}
+.wa-colb .colb-grid{grid-template-columns:repeat(auto-fill,minmax(168px,1fr))}
+html.wa-light .wa-colb::part(dialog){background:linear-gradient(180deg,#fff,#f8fbfe);border-color:#d6e0ea;box-shadow:0 28px 80px rgba(30,50,80,.2)}
+html.wa-light .wa-colb .colb-tools{background:#f7fafd;border-color:#e1e8f0}

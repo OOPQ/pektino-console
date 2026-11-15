@@ -157,22 +157,21 @@ c4cf594 feat(player): 自动续播 + 音量记忆（v2.1.0 tag）
 
 - 已把 **Web Awesome 3.14** 本地化到 `app\web\vendor\webawesome`（约 2.3 MB，含 LICENSE；不依赖 CDN），
   `index.html` 只加载 `styles/layers.css`、`styles/themes/default.css` 和 `webawesome.loader.js`；没有加载会重置原生控件的 `native.css`。
-- 顶栏新增 `wa-switch` 明暗切换：`PREFS.theme` 持久化，`<head>` 内联脚本在 CSS 前定 `wa-dark` / `wa-light`，避免刷新闪屏；
+- 侧栏底部新增 `wa-switch` 明暗切换：`PREFS.theme` 持久化，`<head>` 内联脚本在 CSS 前定 `wa-dark` / `wa-light`，避免刷新闪屏；
   `app.css` 末尾增加 `html.wa-light` 整套变量和主要硬编码颜色的覆盖（表格、菜单、灯箱、抽屉、合集、队列）。
-- 预览/抽卡：整块浮窗（全宽 `.lb-head`、媒体框、跨栏 `.lb-foot`），信息栏 330px；只点背景遮罩关闭，点浮窗内部空白不关。
-- 下载队列：`#dlDrawer .sheet` flex 布局，header/tab/footer 常驻，`.dq-panel` 中间滚动；footer 放暂停/取消/清理/重试/并发。
+- **真正改用 Web Awesome 组件**：
+  - 预览/抽卡：`<wa-dialog>`（1100px，built-in header/footer），body 内 1100px 网格 + 330px 信息栏；媒体框、跨栏快捷键；保留上下条、视频、画中画、从头播放、快捷键。只点背景关闭。
+  - 下载队列：`<wa-drawer>`（480px，built-in header），body 摘要 + tab + 滚动列表，footer 放暂停/取消/清理/重试/并发。
+  - 合集浏览/编辑/选择：`<wa-dialog>`（1460px / 440px / 460px，90vh 浏览），built-in header/close。
+  - 开始下载 / 通用确认：`<wa-dialog>`，确认框动态 label，built-in close 也会 resolve(false)。
+  - 开关用 `openOverlay` / `closeOverlay`（core.js）：同时维护原 `.on` 和 WA `open`，`wa-hide` 事件回同步 `.on`，侧栏 MutationObserver 继续工作。
+  - 设置 / 回收站 / 获取数据 / 链接抓取仍是自定义抽屉/弹窗，已换皮，下一批可继续转 WA。
 - 通用控件：输入框 / 下拉 / 勾选框统一高度、圆角、焦点环；下拉自定义箭头，勾选框支持选中 / 半选 / 禁用；工具栏里的复选框不再被 `.bar input{height}` 拉高。
-- 浮层统一：`ui-head`（kicker + 标题 + 关闭 X）、表单卡片、圆角面板、渐变主按钮；已覆盖合集浏览/选择/编辑、设置、回收站、获取数据、链接抓取、下载确认、确认框、队列和预览。
 - 主框架：左侧主菜单（媒体库 / 下载队列 / 合集 / 回收站 / 设置）+ 标题栏收起按钮（216 ↔ 64px，`PREFS.sidebarCollapsed`）；
   菜单通过 MutationObserver 同步当前抽屉/弹窗，关闭后回到媒体库；下载/合集/回收站数量从原角标同步。
 - 主框架：品牌顶栏 + 状态胶囊、9 列 KPI、渐变主按钮、圆角表格 / 行悬停 / 操作列按钮、画廊卡片和分页同步 demo 皮肤。
-- 预览/抽卡：右侧面板 320px、顶部「条目详情 / 抽卡」+ 序号提示 + 关闭 X，面板 16px 圆角、sticky 头、34px 操作按钮；
-  `#lbCloseTop` / `#gCloseTop` 已绑定；保留 `#lbPrev` / `#lbNext`、Ctrl+←/→、视频、画中画、从头播放和全部快捷键。
-- 合集编辑：440px 弹窗式面板、顶部关闭 X、26px 色卡、34px 操作按钮；`#colEditX` 绑定关闭。
-- 下载队列：480px 抽屉 + 「进行中 / 已完成 / 失败 / 已取消」tab（带数量），打开时按队列状态自动选 tab；
-  卡片有状态胶囊、进度条；重试成功后自动切回「进行中」。
-- 验证：`tmp-ui6`（临时项目/端口）通过主题持久化、预览标题/副标题/上下条/下载按钮、合集编辑关闭与色卡保存同步；
-  `app\dev\test.ps1` 25/25；真实页面 1217 行正常。
+- 验证：本轮手动验证 `wa-dialog` / `wa-drawer` 的打开、堆叠、built-in 关闭 / Esc、`.on` 回同步、侧栏高亮与页面标题；
+  合集编辑打开/保存关闭、预览上下条、主题切换、队列 tab 和 footer 正常；`app\dev\test.ps1` 25/25；真实页面 1217 行正常。
 - demo 已保留到 `demo\ui-refresh`（入库，静态参考稿）；本地 `8731` 仍从 `tools\out\ui-demo` 提供同一份内容，不影响业务。
 
 ### 下一批候选（尚未做）

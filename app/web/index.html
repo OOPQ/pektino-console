@@ -253,19 +253,13 @@
 </div>
 
 <!-- ===== 通用确认弹窗 ===== -->
-<div class="modal" id="confirmModal">
-  <div class="modal-box confirm-box">
-    <div class="ui-head">
-      <div class="ui-title"><span class="ui-kicker">CONFIRM</span><h3 id="confirmTitle">请确认</h3></div>
-      <button type="button" class="ui-x" id="confirmX" data-ui-close="#confirmCancel" title="关闭">×</button>
-    </div>
-    <div class="confirm-msg" id="confirmMsg"></div>
-    <div class="modal-actions">
-      <button class="primary" id="confirmOk">确认</button>
-      <button class="ghost" id="confirmCancel">取消</button>
-    </div>
+<wa-dialog id="confirmModal" class="wa-confirm" label="请确认">
+  <div class="confirm-msg" id="confirmMsg"></div>
+  <div slot="footer" class="confirm-actions">
+    <button class="primary" id="confirmOk">确认</button>
+    <button class="ghost" id="confirmCancel">取消</button>
   </div>
-</div>
+</wa-dialog>
 
 <!-- ===== 任务进度 ===== -->
 <div class="prog" id="prog">
@@ -412,12 +406,9 @@
 </div>
 
 <!-- ===== 下载队列（独立抽屉：进行中 / 已完成 / 失败） ===== -->
-<div class="drawer" id="dlDrawer" data-qtab="active">
-  <div class="sheet">
-    <div class="dq-head">
-      <div class="ui-title"><span class="ui-kicker">DOWNLOADS</span><h3>下载队列</h3><div class="sub" id="dlHead">–</div></div>
-      <button type="button" class="ui-x" id="dlClose" title="关闭">×</button>
-    </div>
+<wa-drawer id="dlDrawer" class="wa-dq" label="下载队列" placement="end" data-qtab="active">
+  <div class="dq-body">
+    <div class="dq-summary"><span class="sub" id="dlHead">–</span></div>
     <div class="dq-tabs" id="dqTabs">
       <button class="dq-tab on" data-qtab="active">进行中 <em id="dqTabActive">0</em></button>
       <button class="dq-tab" data-qtab="done">已完成 <em id="dqTabDone">0</em></button>
@@ -444,17 +435,17 @@
         <div class="dq" id="dlCancelList"></div>
       </section>
     </div>
-    <div class="dq-tools">
-      <button id="dlPause" disabled>⏸ 全部暂停</button>
-      <button class="ghost" id="dlCancelAll">全部取消</button>
-      <button class="ghost" id="dlClearDone" title="只清理队列里的完成记录，不删文件、不改台账">清理已完成</button>
-      <button class="ghost" id="dlRetry" title="把失败的条目重新加入下载队列" hidden>重试失败</button>
-      <span class="sub">并发</span>
-      <select id="dlConc" style="padding:2px 4px" title="同时下载的文件数（1-16）"></select>
-      <span class="dq-foot-note">失败记录不会自动清空</span>
-    </div>
   </div>
-</div>
+  <div slot="footer" class="dq-tools">
+    <button id="dlPause" disabled>⏸ 全部暂停</button>
+    <button class="ghost" id="dlCancelAll">全部取消</button>
+    <button class="ghost" id="dlClearDone" title="只清理队列里的完成记录，不删文件、不改台账">清理已完成</button>
+    <button class="ghost" id="dlRetry" title="把失败的条目重新加入下载队列" hidden>重试失败</button>
+    <span class="sub">并发</span>
+    <select id="dlConc" style="padding:2px 4px" title="同时下载的文件数（1-16）"></select>
+    <span class="dq-foot-note">失败记录不会自动清空</span>
+  </div>
+</wa-drawer>
 
 <!-- ===== 回收站 ===== -->
 <div class="drawer" id="binDrawer">
@@ -474,14 +465,9 @@
 </div>
 
 <!-- ===== 合集（弹窗：浏览 + 维护） ===== -->
-<div class="lightbox" id="colBrowser">
+<wa-dialog id="colBrowser" class="wa-colb" label="合集">
   <div class="colb-box">
-    <div class="colb-head">
-      <div class="ui-title"><span class="ui-kicker">COLLECTIONS</span><h3>合集</h3></div>
-      <div class="colb-tabs" id="colbTabs"></div>
-      <span class="spacer"></span>
-      <button type="button" class="ui-x" id="colbClose" title="关闭">×</button>
-    </div>
+    <div class="colb-tabs" id="colbTabs"></div>
     <div class="colb-tools">
       <input id="colbNew" placeholder="新合集名称" maxlength="60" style="width:130px">
       <div class="colorpick compact" id="colbNewPalette" title="新合集颜色"></div>
@@ -499,52 +485,45 @@
     </div>
     <div class="colb-body" id="colbBody"></div>
   </div>
-</div>
+</wa-dialog>
 
 <!-- ===== 下载确认 ===== -->
-<div class="lightbox" id="dlConfirm">
+<wa-dialog id="dlConfirm" class="wa-dlc" label="开始下载">
   <div class="dlc-box">
-    <div class="ui-head">
-      <div class="ui-title"><span class="ui-kicker">DOWNLOAD</span><h3>开始下载</h3></div>
-      <button type="button" class="ui-x" id="dlcX" data-ui-close="#dlcCancel" title="关闭">×</button>
-    </div>
     <div class="sub" id="dlcInfo" style="line-height:1.9">–</div>
-    <div style="display:flex;align-items:center;gap:8px;margin-top:12px">
+    <div class="dlc-limit">
       <span class="sub">本次下载</span>
-      <input type="number" id="dlcLimit" min="1" step="1" style="width:90px">
+      <input type="number" id="dlcLimit" min="1" step="1">
       <span class="sub">条（留空 = 全部）</span>
     </div>
-    <div class="sub" id="dlcHint" style="margin-top:8px;color:var(--dim)">–</div>
-    <div class="actions" style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:14px">
-      <button id="dlcStart">开始下载</button>
-      <button class="ghost" id="dlcCancel">取消</button>
-    </div>
+    <div class="sub" id="dlcHint">–</div>
   </div>
-</div>
+  <div slot="footer" class="coledit-actions">
+    <button id="dlcStart">开始下载</button>
+    <button class="ghost" id="dlcCancel">取消</button>
+  </div>
+</wa-dialog>
 
-<div class="lightbox" id="colPick">
+<wa-dialog id="colPick" class="wa-col-pick" label="加入合集">
   <div class="colpick-box">
-    <div class="ui-head">
-      <div class="ui-title"><span class="ui-kicker">COLLECTIONS</span><h3>加入合集 <span class="sub" id="colPickCount"></span></h3></div>
-      <button type="button" class="ui-x" id="colPickX" data-ui-close="#colPickCancel" title="关闭">×</button>
-    </div>
+    <div class="colpick-summary" id="colPickCount"></div>
     <div class="col-list" id="colPickList"></div>
-    <div style="display:flex;gap:6px;margin-top:12px">
-      <input id="colPickNew" placeholder="新建合集名称" style="flex:1" maxlength="60">
+    <div class="colpick-new">
+      <input id="colPickNew" placeholder="新建合集名称" maxlength="60">
       <button id="colPickCreate">新建并加入</button>
     </div>
-    <div class="actions single" style="margin-top:10px">
-      <button class="ghost" id="colPickCancel">取消</button>
-    </div>
   </div>
-</div>
+  <div slot="footer" class="coledit-actions">
+    <button class="ghost" id="colPickCancel">取消</button>
+  </div>
+</wa-dialog>
 
 <!-- ===== 合集编辑（预览/抽卡里的合集标签点开） ===== -->
-<div class="lightbox" id="colEdit">
+<wa-dialog id="colEdit" class="wa-col-edit" label="合集编辑">
   <div class="coledit-box">
-    <div class="cedit-head">
-      <div class="ui-title"><span class="ui-kicker">COLLECTIONS</span><h3>合集编辑 <span class="sub" id="colEditCount"></span></h3></div>
-      <button class="pmeta-x" id="colEditX" type="button" title="关闭">×</button>
+    <div class="coledit-preview">
+      <span class="colchip" id="colEditPreview">合集</span>
+      <span class="sub" id="colEditCount"></span>
     </div>
     <div class="field">
       <label class="sub">名称</label>
@@ -552,26 +531,20 @@
     </div>
     <div class="field">
       <label class="sub">颜色</label>
-      <div class="coledit-preview"><span class="colchip" id="colEditPreview">合集</span></div>
       <div class="colorpick" id="colEditPalette"></div>
     </div>
-    <div class="coledit-actions">
-      <button id="colEditSave">保存</button>
-      <button class="ghost" id="colEditCancel">取消</button>
-      <button class="ghost" id="colEditRemove">移出当前条目</button>
-      <button class="ghost danger" id="colEditDelete">删除合集</button>
-    </div>
   </div>
-</div>
+  <div slot="footer" class="coledit-actions">
+    <button id="colEditSave">保存</button>
+    <button class="ghost" id="colEditCancel">取消</button>
+    <button class="ghost" id="colEditRemove">移出当前条目</button>
+    <button class="ghost danger" id="colEditDelete">删除合集</button>
+  </div>
+</wa-dialog>
 
 <!-- ===== 预览灯箱 ===== -->
-<div class="lightbox" id="lightbox">
+<wa-dialog id="lightbox" class="wa-pv" label="条目详情">
   <div class="box">
-    <div class="pmeta-bar lb-head">
-      <span class="pmeta-kicker">条目详情</span>
-      <span class="pmeta-hint" id="lbNavHint"></span>
-      <button class="pmeta-x" id="lbCloseTop" type="button" title="关闭（Esc）">×</button>
-    </div>
     <div class="lbMedia" id="lbMedia">
       <img id="lbImg" alt="" title="点击用浏览器播放">
       <video id="lbVideo" controls playsinline preload="metadata" hidden></video>
@@ -581,6 +554,7 @@
       <span class="lbCount" id="lbCount"></span>
     </div>
     <div class="meta">
+      <div class="pv-topline" id="lbNavHint"></div>
       <h3 id="lbToken">–</h3>
       <div class="mtoken" id="lbTokenSub"></div>
       <div class="big mstats" id="lbMeta"></div>
@@ -591,20 +565,15 @@
         <button class="ghost" id="lbClose">关闭</button>
       </div>
     </div>
-    <div class="kbd-hint lb-foot">空格 播放/暂停 · 长按 2× · ←/→ 5s · ↑/↓ 音量 · F 全屏 · M 静音 · Ctrl+←/→ 切换 · Esc 关闭</div>
     <button class="lbNav prev" id="lbPrev" title="上一项（Ctrl+←）">‹</button>
     <button class="lbNav next" id="lbNext" title="下一项（Ctrl+→）">›</button>
   </div>
-</div>
+  <div slot="footer" class="kbd-hint lb-foot">空格 播放/暂停 · 长按 2× · ←/→ 5s · ↑/↓ 音量 · F 全屏 · M 静音 · Ctrl+←/→ 切换 · Esc 关闭</div>
+</wa-dialog>
 
 <!-- ===== 抽卡（与预览同一套布局） ===== -->
-<div class="lightbox" id="gacha">
+<wa-dialog id="gacha" class="wa-pv" label="抽卡">
   <div class="box">
-    <div class="pmeta-bar lb-head">
-      <span class="pmeta-kicker">抽卡</span>
-      <span class="pmeta-hint">随机一条 · 再抽换一条</span>
-      <button class="pmeta-x" id="gCloseTop" type="button" title="关闭（Esc）">×</button>
-    </div>
     <div class="lbMedia" id="gMedia">
       <img id="gImg" alt="" title="点击用浏览器播放">
       <video id="gVideo" controls playsinline preload="metadata" hidden></video>
@@ -613,6 +582,7 @@
       <span class="speed-badge seek-badge" id="gSeek" hidden></span>
     </div>
     <div class="meta">
+      <div class="pv-topline">随机一条 · 再抽换一条</div>
       <h3 id="gTok">–</h3>
       <div class="mtoken" id="gTokenSub"></div>
       <div class="big mstats" id="gInfo"></div>
@@ -625,9 +595,9 @@
       </div>
       <div class="sub" id="gRateHint" style="font-size:11px">点星星打分，或按 1–5；R 再抽，Esc 关闭</div>
     </div>
-    <div class="kbd-hint lb-foot">空格 播放/暂停 · 长按 2× · ←/→ 5s · ↑/↓ 音量 · F 全屏 · Esc 关闭</div>
   </div>
-</div>
+  <div slot="footer" class="kbd-hint lb-foot">空格 播放/暂停 · 长按 2× · ←/→ 5s · ↑/↓ 音量 · F 全屏 · Esc 关闭</div>
+</wa-dialog>
 
 <div class="ctxmenu" id="ctxmenu"></div>
 <div id="toast"></div>

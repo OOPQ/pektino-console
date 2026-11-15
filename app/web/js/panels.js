@@ -1,6 +1,6 @@
 /* panels.js — 灯箱、抽卡、设置抽屉、SSE、键盘
    灯箱与抽卡共用同一套布局：img + .meta 网格、同一个 fitMedia()、同一份 info 行 */
-import { $, state, api, toast, fmtMB, fmtNum, stTag, starsInner, emit, onEvent, escHtml } from './core.js';
+import { $, state, api, toast, fmtMB, fmtNum, stTag, starsInner, emit, onEvent, escHtml, openOverlay, closeOverlay } from './core.js';
 import { render, visible } from './table.js';
 import { doPlay, toggleMulti } from './rows.js';
 import { siteUrl, copyText, setRating } from './actions.js';
@@ -454,7 +454,7 @@ export function openLightbox(tk, opts = {}) {
   lbPlaying = false;
   stopPlayer('lb');
   lbPaint(tk);
-  $('#lightbox').classList.add('on');
+  openOverlay('#lightbox');
   // 从下载队列进来：直接开播（预览封面 + 视频立即播放）
   if (opts.autoplay && r.file_name) playToken('lb', tk);
 }
@@ -470,14 +470,14 @@ export function navLightbox(delta) {
   if (wasPlaying && target && target.file_name) playToken('lb', tk, { quiet: true });
 }
 
-const closeLightbox = () => {
+function cleanupLightbox() {
   const v = $('#lbVideo');
   // 画中画里还在播：关掉灯箱但别停视频，让画中画继续
   if (isPip(v)) { lbPlaying = false; }
   else stopPlayer('lb');
-  $('#lightbox').classList.remove('on');
   state.LB_TOKEN = null;
-};
+}
+const closeLightbox = () => { closeOverlay('#lightbox'); cleanupLightbox(); };
 
 /* ================= 抽卡 ================= */
 function gachaPool() {
@@ -521,7 +521,7 @@ export function drawCard() {
   renderGRate(+r.rating || 0);
   paintPreviewDownload('g', r);
   refreshPreviewCols('g');
-  $('#gacha').classList.add('on');
+  openOverlay('#gacha');
 }
 
 async function rateGacha(v) {
@@ -551,12 +551,12 @@ async function rateLightbox(v) {
   toast(val ? `已打 ${val} 星` : '已清除评分', 1800);
 }
 
-const closeGacha = () => {
+function cleanupGacha() {
   const v = $('#gVideo');
   if (isPip(v)) { gPlaying = false; }
   else stopPlayer('g');
-  $('#gacha').classList.remove('on');
-};
+}
+const closeGacha = () => { closeOverlay('#gacha'); cleanupGacha(); };
 
 /* ================= SSE ================= */
 export function connectSse() {
@@ -575,8 +575,10 @@ export function connectSse() {
 export function initPanels() {
   /* 灯箱 */
   $('#lbClose').onclick = closeLightbox;
-  $('#lbCloseTop').onclick = closeLightbox;
-  $('#lightbox').onclick = e => { if (isBlankPreviewTarget(e.target)) closeLightbox(); };
+  ['wa-hide', 'wa-after-hide'].forEach(ev => $('#lightbox').addEventListener(ev, () => {
+    $('#lightbox').classList.remove('on');
+    cleanupLightbox();
+  }));
   // 点封面/播放浮层/空白处：原地切到浏览器内播放（没下载的条目直接忽略；视频控件区域除外）
   $('#lbImg').onclick = e => {
     e.stopPropagation();
@@ -613,8 +615,10 @@ export function initPanels() {
   $('#btnGacha').onclick = drawCard;
   $('#gAgain').onclick = drawCard;
   $('#gClose').onclick = closeGacha;
-  $('#gCloseTop').onclick = closeGacha;
-  $('#gacha').onclick = e => { if (isBlankPreviewTarget(e.target)) closeGacha(); };
+  ['wa-hide', 'wa-after-hide'].forEach(ev => $('#gacha').addEventListener(ev, () => {
+    $('#gacha').classList.remove('on');
+    cleanupGacha();
+  }));
   const gachaCanPlay = () => {
     const r = state.ROWS.find(x => x.token === state.GACHA_TOKEN);
     return !!(r && r.file_name);
@@ -714,14 +718,13 @@ export function initPanels() {
       // 合集编辑/选择弹窗可能盖在预览之上：先关它们，再关预览
       if ($('#colEdit').classList.contains('on')) { $('#colEditCancel').click(); return; }
       if ($('#colPick').classList.contains('on')) { $('#colPickCancel').click(); return; }
+      if ($('#dlConfirm').classList.contains('on')) { closeOverlay('#dlConfirm'); return; }
       if ($('#scrapeModal').classList.contains('on')) $('#scrapeModal').classList.remove('on');
       else if ($('#gacha').classList.contains('on')) closeGacha();
       else if ($('#lightbox').classList.contains('on')) closeLightbox();
-      else if ($('#dlDrawer').classList.contains('on')) $('#dlDrawer').classList.remove('on');
+      else if ($('#dlDrawer').classList.contains('on')) closeOverlay('#dlDrawer');
       else if ($('#binDrawer').classList.contains('on')) $('#binDrawer').classList.remove('on');
-      else if ($('#colBrowser').classList.contains('on')) $('#colBrowser').classList.remove('on');
-      else if ($('#dlConfirm').classList.contains('on')) $('#dlConfirm').classList.remove('on');
-      else if ($('#colPick').classList.contains('on')) $('#colPick').classList.remove('on');
+      else if ($('#colBrowser').classList.contains('on')) closeOverlay('#colBrowser');
       else if ($('#drawer').classList.contains('on')) $('#drawer').classList.remove('on');
       else if ($('#ctxmenu').classList.contains('on')) emit('close-ctx');
       else if (state.MULTI) toggleMulti();

@@ -1,5 +1,5 @@
 /* collections.js — 合集：弹窗内浏览（卡片墙）+ 维护 */
-import { $, state, api, toast, confirmDialog, escHtml, emit } from './core.js';
+import { $, state, api, toast, confirmDialog, escHtml, emit, openOverlay, closeOverlay } from './core.js';
 import { render, cardHtml } from './table.js';
 import { onRowClick } from './rows.js';
 
@@ -68,7 +68,7 @@ export async function openCollections() {
   $('#colbStatus').value = 'all';
   browserQuery = '';
   browserStatus = 'all';
-  $('#colBrowser').classList.add('on');
+  openOverlay('#colBrowser');
   await loadCollections();
   const cols = state.COLLECTIONS || [];
   if (!cols.length) {
@@ -82,7 +82,7 @@ export async function openCollections() {
 }
 
 function closeBrowser() {
-  $('#colBrowser').classList.remove('on');
+  closeOverlay('#colBrowser');
   browserCol = null;
   browserRows = [];
 }
@@ -188,12 +188,12 @@ export function openCollectionEditor(id, opts = {}) {
   $('#colEditRemove').hidden = !editToken;
   paintColorPicker($('#colEditPalette'), editColor, c => { editColor = c; updateEditPreview(); });
   updateEditPreview();
-  $('#colEdit').classList.add('on');
+  openOverlay('#colEdit');
   setTimeout(() => { try { $('#colEditName').focus(); } catch { } }, 30);
 }
 
 function closeCollectionEditor() {
-  $('#colEdit').classList.remove('on');
+  closeOverlay('#colEdit');
   editCol = null;
   editToken = '';
   editColor = COL_COLORS[0];
@@ -326,7 +326,7 @@ export function openCollectionPicker(tokens) {
   $('#colPickCount').textContent = `(${pickTokens.length} 条)`;
   $('#colPickNew').value = '';
   renderPickList();
-  $('#colPick').classList.add('on');
+  openOverlay('#colPick');
   loadCollections();
 }
 
@@ -336,7 +336,7 @@ export async function openCollectionPickerForToken(token) {
   pickTokens = [token];
   $('#colPickCount').textContent = '（点「加入 / 移出」切换）';
   $('#colPickNew').value = '';
-  $('#colPick').classList.add('on');
+  openOverlay('#colPick');
   await fetchCollectionsForToken(token);
   renderPickList();
 }
@@ -381,14 +381,13 @@ function renderPickList() {
 function closePick() {
   pickTokens = [];
   pickMode = 'add';
-  $('#colPick').classList.remove('on');
+  closeOverlay('#colPick');
 }
 
 /* ---------- 初始化 ---------- */
 export function initCollections() {
   $('#btnCollections').onclick = openCollections;
-  $('#colbClose').onclick = closeBrowser;
-  $('#colBrowser').onclick = e => { if (e.target.id === 'colBrowser') closeBrowser(); };
+  ['wa-hide', 'wa-after-hide'].forEach(ev => $('#colBrowser').addEventListener(ev, () => $('#colBrowser').classList.remove('on')));
   $('#colbApply').onclick = () => {
     if (!browserCol) return;
     const col = { id: browserCol.id, name: browserCol.name };
@@ -408,8 +407,7 @@ export function initCollections() {
 
   /* 预览/抽卡里的合集标签编辑器 */
   $('#colEditCancel').onclick = closeCollectionEditor;
-  $('#colEditX').onclick = closeCollectionEditor;
-  $('#colEdit').onclick = e => { if (e.target.id === 'colEdit') closeCollectionEditor(); };
+  ['wa-hide', 'wa-after-hide'].forEach(ev => $('#colEdit').addEventListener(ev, () => $('#colEdit').classList.remove('on')));
   $('#colEditSave').onclick = saveCollectionEditor;
   $('#colEditRemove').onclick = removeFromCollectionEditor;
   $('#colEditDelete').onclick = deleteFromCollectionEditor;
@@ -433,7 +431,7 @@ export function initCollections() {
 
   /* 选择弹窗 */
   $('#colPickCancel').onclick = closePick;
-  $('#colPick').onclick = e => { if (e.target.id === 'colPick') closePick(); };
+  ['wa-hide', 'wa-after-hide'].forEach(ev => $('#colPick').addEventListener(ev, () => $('#colPick').classList.remove('on')));
   $('#colPickList').addEventListener('click', async e => {
     const tg = e.target.closest('[data-pick-toggle]');
     if (tg) {

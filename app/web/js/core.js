@@ -26,6 +26,24 @@ if (LEGACY_FLAGS.includes(PREFS.status)) {
 if (!PREFS.flag) PREFS.flag = 'none';
 export const savePrefs = () => localStorage.setItem(KEY, JSON.stringify(PREFS));
 
+/* ---------- 浮层开关（兼容原来的 .on 与 Web Awesome 的 open 属性） ---------- */
+export function overlayOpen(sel) {
+  const el = document.querySelector(sel);
+  return !!el && (el.hasAttribute('open') || el.classList.contains('on'));
+}
+export function openOverlay(sel) {
+  const el = document.querySelector(sel);
+  if (!el) return;
+  el.classList.add('on');
+  if (el.localName && el.localName.startsWith('wa-')) el.setAttribute('open', '');
+}
+export function closeOverlay(sel) {
+  const el = document.querySelector(sel);
+  if (!el) return;
+  el.classList.remove('on');
+  if (el.localName && el.localName.startsWith('wa-')) el.removeAttribute('open');
+}
+
 /* ---------- 全局状态 ---------- */
 export const state = {
   ROWS: [], STATS: {}, SOURCES: [],
@@ -149,8 +167,8 @@ export function confirmDialog(message, opts = {}) {
   const modal = $('#confirmModal');
   if (!modal) return Promise.resolve(window.confirm(message));
   return new Promise(resolve => {
-    const title = $('#confirmTitle'), msg = $('#confirmMsg'), ok = $('#confirmOk'), cancel = $('#confirmCancel');
-    title.textContent = opts.title || '请确认';
+    const msg = $('#confirmMsg'), ok = $('#confirmOk'), cancel = $('#confirmCancel');
+    modal.setAttribute('label', opts.title || '请确认');
     msg.textContent = message;
     ok.textContent = opts.okText || '确认';
     ok.className = opts.danger ? 'danger' : 'primary';
@@ -160,9 +178,9 @@ export function confirmDialog(message, opts = {}) {
       if (done) return;
       done = true;
       document.removeEventListener('keydown', onKey, true);
-      modal.removeEventListener('click', onBackdrop);
+      modal.removeEventListener('wa-hide', onHide);
       ok.onclick = null; cancel.onclick = null;
-      modal.classList.remove('on');
+      closeOverlay('#confirmModal');
       try { if (prev && prev.focus) prev.focus(); } catch { }
       resolve(val);
     };
@@ -170,12 +188,12 @@ export function confirmDialog(message, opts = {}) {
       if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); finish(false); }
       else if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); finish(true); }
     };
-    const onBackdrop = e => { if (e.target === modal) finish(false); };
+    const onHide = () => finish(false);
     document.addEventListener('keydown', onKey, true);
-    modal.addEventListener('click', onBackdrop);
+    modal.addEventListener('wa-hide', onHide);
     ok.onclick = () => finish(true);
     cancel.onclick = () => finish(false);
-    modal.classList.add('on');
+    openOverlay('#confirmModal');
     setTimeout(() => { try { (opts.danger ? cancel : ok).focus(); } catch { } }, 30);
   });
 }

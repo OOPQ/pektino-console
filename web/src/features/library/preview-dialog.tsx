@@ -357,7 +357,7 @@ export function PreviewDialog({ rows, token, autoplay = false, media, onClose, o
     let pct = Math.max(0, Math.min(1, (clientX - rect.left) / Math.max(1, rect.width)))
     let time = pct * totalDuration
     if (snapshots.length && totalDuration > 0) {
-      const threshold = Math.max(0.7, totalDuration * 0.006)
+      const threshold = Math.max(0.6, Math.min(3, totalDuration * 0.004))
       const nearest = snapshots.reduce((best, s) => Math.abs(s.time - time) < Math.abs(best.time - time) ? s : best, snapshots[0])
       if (Math.abs(nearest.time - time) <= threshold) {
         time = nearest.time

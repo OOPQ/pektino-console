@@ -73,7 +73,8 @@ function Save-Ledger {
     $dir = Split-Path $Path -Parent
     if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
     $tmp = "$Path.tmp"
-    @($Rows) | Select-Object $script:LedgerColumns | Export-Csv -Path $tmp -NoTypeInformation -Encoding UTF8
+    $outRows = if ($null -ne $SnapshotRows) { @($SnapshotRows) } else { @($Rows) }
+    $outRows | Select-Object $script:LedgerColumns | Export-Csv -Path $tmp -NoTypeInformation -Encoding UTF8
     Move-Item -Path $tmp -Destination $Path -Force
     Touch-Ledger
 }

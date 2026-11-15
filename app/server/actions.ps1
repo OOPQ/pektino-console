@@ -240,7 +240,7 @@ function Invoke-Scan {
         $coverMissing = [int]$prev.coverMissing
         $coverMissingAt = $prev.coverMissingAt
     } else {
-        $coverMissing = (Get-CoverMissingList).Count + (Get-LocalCoverMissingCount)
+        $coverMissing = (Get-CoverMissingTotalCount)
         $coverMissingAt = (Get-Date).ToString('s')
     }
     $State.Scan = [pscustomobject]@{
@@ -315,6 +315,11 @@ function Start-Scrape {
     try { Write-SourceProgress -Path $ProgressFile -Phase 'starting' -Done 0 -Total 0 -Started (Get-Date) } catch { }
     $proxy = if ($Config -and $Config.proxy) { [string]$Config.proxy } else { '' }
     $qiseCookie = if ($Config -and $Config.qiseCookie) { [string]$Config.qiseCookie } else { '' }
+    # 每轮抓取都追加到 .scrape.csv.log；超过 5MB 先清掉，避免长期运行撑大 data 目录
+    $scrapeLog = $out + '.log'
+    if ((Test-Path -LiteralPath $scrapeLog) -and ((Get-Item -LiteralPath $scrapeLog).Length -gt 5MB)) {
+        Remove-Item -LiteralPath $scrapeLog -Force -ErrorAction SilentlyContinue
+    }
     $job = Start-Job -ScriptBlock {
         param($ps, $source, $rank, $pages, $limit, $out, $prog, $cov, $thm, $kn, $threads, $proxy, $qiseCookie, $url, $hd)
         $p = @{ Source = $source; Rank = $rank; Page = $pages; Out = $out; ProgressFile = $prog; CoverDir = $cov; ThumbDir = $thm; Threads = $threads }

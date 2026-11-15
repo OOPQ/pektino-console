@@ -756,6 +756,10 @@ function Write-FileLog {
     try {
         $dir = Split-Path $LogFile -Parent
         if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
+        # 日志无轮转会越积越大；超过 5MB 换成 .1（只留一份，避免占空间）
+        if ((Test-Path -LiteralPath $LogFile) -and ((Get-Item -LiteralPath $LogFile).Length -gt 5MB)) {
+            Move-Item -LiteralPath $LogFile -Destination "$LogFile.1" -Force -ErrorAction SilentlyContinue
+        }
         Add-Content -Path $LogFile -Value ("[{0}] {1}" -f (Get-Date -Format 'yyyy-MM-dd HH:mm:ss'), $Message) -Encoding UTF8
     } catch { }
 }

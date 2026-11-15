@@ -367,6 +367,28 @@ function Start-Curl($item, $part, $log) {
         -RedirectStandardError $log -RedirectStandardOutput ($log + '.out') -ErrorAction Stop
 }
 
+function Test-Mp4Complete([string]$Path) {
+    <#  轻量完整性判断：mp4 必须有 moov box（faststart 在前 2MB，普通文件在尾部）。
+        PS 5.1 的 Start-Process -PassThru 不带 -Wait 时 ExitCode 永远是空的，
+        所以不能只靠退出码判断 ffmpeg 是否成功；这里用输出文件本身兜底。  #>
+    try {
+        if (-not (Test-Path -LiteralPath $Path)) { return $false }
+        $fs = [IO.File]::Open($Path, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::ReadWrite)
+        try {
+            if ($fs.Length -le 0) { return $false }
+            $probe = [int][Math]::Min([int64]2097152, $fs.Length)
+            $buf = New-Object byte[] $probe
+            [void]$fs.Read($buf, 0, $probe)
+            if ([Text.Encoding]::ASCII.GetString($buf).IndexOf('moov') -ge 0) { return $true }
+            $tail = [int][Math]::Min([int64]2097152, $fs.Length)
+            [void]$fs.Seek(-$tail, [IO.SeekOrigin]::End)
+            $buf2 = New-Object byte[] $tail
+            [void]$fs.Read($buf2, 0, $tail)
+            return ([Text.Encoding]::ASCII.GetString($buf2).IndexOf('moov') -ge 0)
+        } finally { $fs.Dispose() }
+    } catch { return $false }
+}
+
 function Complete-Item($tk) {
     $s = $states[$tk]
     $fileDir = if ($s.dir) { $s.dir } else { $Dir }
@@ -378,6 +400,11 @@ function Complete-Item($tk) {
         Move-Item -Path $part -Destination $final -Force
         $s.state = 'done'
         $s.bytes = (Get-Item $final).Length
+        # 成功后清掉这一条的临时诊断文件；失败时保留 .log/.probe 方便排查
+        $logBase = Join-Path $workDir ('.dl-' + $tk + '.log')
+        foreach ($tmp in @($logBase, "$logBase.out", "$logBase.m3u8", "$logBase.probe")) {
+            Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue
+        }
     } catch {
         $s.state = 'failed'
         $s.error = "改名失败: $($_.Exception.Message)"
@@ -606,10 +633,13 @@ try {
             }
 
             if ($j.proc.HasExited) {
-                # 成功判定：退出码 0 或 大小正好等于远端 Content-Length。
-                # HLS 不能只看「文件非空」：网络中断时 ffmpeg 非 0 退出但已写入几 MB，
-                # 那样会把截断的视频改名成 .mp4 并记 done，之后永远不会重下。
-                $complete = ($j.proc.ExitCode -eq 0) -or ($j.expected -gt 0 -and $size -eq $j.expected)
+                # 成功判定：退出码 0（部分环境可用）、大小正好等于远端 Content-Length，
+                # 或 HLS 输出已经包含 moov box（ffmpeg 只在正常收尾时才写 moov）。
+                # 不能只看「文件非空」：网络中断时 ffmpeg 会留下几 MB 截断文件，
+                # 那样会把坏片改名成 .mp4 并记 done，之后永远不会重下。
+                $complete = ($j.proc.ExitCode -eq 0) -or
+                    ($j.expected -gt 0 -and $size -eq $j.expected) -or
+                    ($j.hls -and $size -gt 0 -and (Test-Mp4Complete $j.part))
                 if ($complete -and $size -gt 0) {
                     Complete-Item $tk
                 } else {

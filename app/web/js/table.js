@@ -1,5 +1,5 @@
 /* table.js — 过滤 / 排序 / 分页 / 表格渲染 / 列显隐 / KPI 快捷筛选 */
-import { $, PREFS, savePrefs, state, onEvent, toast, stTag, fmtMB, starsHtml, starsInner, escHtml } from './core.js';
+import { $, PREFS, savePrefs, state, onEvent, emit, toast, stTag, fmtMB, starsHtml, starsInner, escHtml } from './core.js';
 
 export const COLS = [
   { key: 'cover', label: '封面' }, { key: 'title', label: '标题' }, { key: 'rank', label: '排名' }, { key: 'duration', label: '时长' },
@@ -208,6 +208,15 @@ function renderGallery(rows, active) {
 
 /* ---------- 渲染 ---------- */
 export function render(allRows) {
+  // 行集合/筛选/排序/分页变化时通知选择模块重置 Shift 锚点；收藏/评分这类原地修改不重置
+  const viewSig = [
+    state.ROWS.length, state.SORT.key, state.SORT.dir,
+    state.FILTER.status, state.FILTER.source, state.FILTER.flag, state.FILTER.res, state.FILTER.minDur, state.FILTER.q,
+    state.PAGE, state.PER, state.SHOW_ADDED ? 1 : 0,
+    state.COL_FILTER ? state.COL_FILTER.id : ''
+  ].join('|');
+  if (render._sig !== undefined && render._sig !== viewSig) emit('view-change');
+  render._sig = viewSig;
   applyColWidths();
   // load() 已经算过一次筛选/排序，这里接收结果避免同一轮轮询重复全表排序
   const all = allRows || visible();

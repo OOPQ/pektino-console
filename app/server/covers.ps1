@@ -104,6 +104,13 @@ function Get-CoverMissingCount {
     return (Get-CoverMissingList).Count
 }
 
+function Test-CoverPresent {
+    <#  封面文件存在且不是坏图（>1KB）；本地/远程两条补封面路径共用  #>
+    param([string]$Token)
+    $f = Join-Path $CoverDir ($Token + '.jpg')
+    return ((Test-Path -LiteralPath $f) -and ((Get-Item -LiteralPath $f).Length -gt 1024))
+}
+
 function Get-LocalCoverMissingCount {
     <#  本地已有视频、但 cache\covers 里没有可用封面的条目数（自动补封面的触发条件之一）  #>
     $n = 0
@@ -111,17 +118,35 @@ function Get-LocalCoverMissingCount {
         if (-not $r.file_name) { continue }
         $tk = [string]$r.token
         if (-not (Test-SafeTokenName $tk)) { continue }
-        $f = Join-Path $CoverDir ($tk + '.jpg')
-        if ((Test-Path -LiteralPath $f) -and ((Get-Item -LiteralPath $f).Length -gt 1024)) { continue }
+        if (Test-CoverPresent $tk) { continue }
         $n++
     }
     return $n
 }
 
+function Get-CoverMissingTotalCount {
+    <#  缺封面条目总数（按 token 去重）：同时有 url 和本地文件的条目只算一次。
+        以前是 Get-CoverMissingList + Get-LocalCoverMissingCount 相加，重复条目会被算两遍。  #>
+    $seen = @{}
+    foreach ($r in @($State.Ledger)) {
+        $tk = [string]$r.token
+        if (-not $tk -or $seen.ContainsKey($tk)) { continue }
+        # 远程可补：token 是纯 ASCII、有详情页 url、且没有 .missing 标记
+        $remote = ($tk -match '^[A-Za-z0-9_\-]+$') -and $r.url -and
+            -not (Test-Path (Join-Path $CoverDir ($tk + '.missing')))
+        # 本地可补：有本地文件、token 可安全用于文件名
+        $local = $r.file_name -and (Test-SafeTokenName $tk)
+        if (-not ($remote -or $local)) { continue }
+        if (Test-CoverPresent $tk) { continue }
+        $seen[$tk] = $true
+    }
+    return $seen.Count
+}
+
 function Repair-Covers {
     <#
       补齐缺失/损坏的封面：重新取详情页的 JSON-LD thumbnailUrl，再下载图片。
-      - 并发 8，限流 Limit 条，默认 40
+      - 逐条处理（主循环是单线程，一次请求最多处理 Limit 条，默认 40）
       - 拿不到封面地址或图片 404 时写 <token>.missing 标记，避免反复重试
       - 修完顺带补缩略图
     #>
@@ -155,7 +180,8 @@ function Repair-Covers {
             Touch-State
             Write-Log 'cover' "封面自动修复：用视频帧补 $localFixed 张（本地）"
         }
-        $leftLocal = (Get-CoverMissingList).Count
+        # 只修了本地视频帧：剩余缺口要按“本地有文件但没封面”来算，不能复用远程缺封面列表
+        $leftLocal = (Get-LocalCoverMissingCount)
         return [pscustomobject]@{ ok = $true; fixed = $localFixed; local = $localFixed; failed = 0; missing = $leftLocal; scanned = $localTried }
     }
 
@@ -222,7 +248,7 @@ function Repair-Covers {
         try { [void](Update-Thumbs -CoverDir $CoverDir -ThumbDir $ThumbDir) } catch { }
     }
     Touch-State
-    $left = (Get-CoverMissingList).Count
+    $left = (Get-CoverMissingTotalCount)
     Write-Log 'cover' "封面修复：补 $fixedAll 张（其中视频帧 $localFixed），失败 $failed，确认无封面 $dead，仍缺 $left"
     return [pscustomobject]@{ ok = $true; fixed = $fixedAll; local = $localFixed; failed = $failed; missing = $left; scanned = ($localTried + $candidates.Count) }
 }

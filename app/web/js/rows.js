@@ -12,14 +12,17 @@ let LAST_IDX = null, LAST_TOKEN = null, SHIFT_DOWN = false;
 
 // 排序/筛选/刷新后可见顺序会变，旧的索引不再可靠 → 用 token 重新定位
 onEvent('reload', () => { LAST_IDX = null; LAST_TOKEN = null; });
+onEvent('view-change', () => { LAST_IDX = null; LAST_TOKEN = null; });
 
 function handleSelect(cb, shift) {
   const tk = cb.dataset.tk, idx = parseInt(cb.dataset.idx);
   // 用上一次点击的 token 在当前可见列表里重新算下标，避免排序后选错区间
   let lastIdx = LAST_IDX;
-  if (shift && LAST_TOKEN) {
-    const vi = visible().findIndex(x => x.token === LAST_TOKEN);
-    if (vi >= 0) lastIdx = vi;
+  if (shift) {
+    // 上一次点击的行已经不在当前可见列表里（筛选/排序/翻页后）→ 退化为单选，
+    // 否则会拿旧下标和新下标取区间，把中间大量没看见的行加进选择集。
+    const vi = LAST_TOKEN ? visible().findIndex(x => x.token === LAST_TOKEN) : -1;
+    lastIdx = vi >= 0 ? vi : null;
   }
   if (shift && lastIdx !== null && !isNaN(idx)) {
     const lo = Math.min(lastIdx, idx), hi = Math.max(lastIdx, idx);
